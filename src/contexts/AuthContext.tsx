@@ -324,7 +324,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Only update if values actually changed
       const currentData = _.pick(user, Object.keys(userData));
       if (!_.isEqual(userData, currentData)) {
-        console.log('Updating user context with new data:', userData); // Debug log
+        // console.log('Updating user context with new data:', userData); // Debug log
         const updatedUser = { ...user, ...userData };
         setUser(updatedUser);
         localStorage.setItem("user", JSON.stringify(updatedUser));

@@ -17,7 +17,6 @@ const App = () => {
   
   // Define an array of authentication-related paths for easier scalability
   const authPages = [
-    "/",
     "/onboarding",
     "/login",
     "/verify-otp",

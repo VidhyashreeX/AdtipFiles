@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, Settings, LogOut } from "lucide-react";
+import { ArrowLeft, Settings, LogOut, Play } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import ProfileStats from "../components/ProfileStats";
@@ -17,6 +17,7 @@ import {
   DialogFooter,
   DialogClose,
 } from "@/components/ui/dialog";
+import { toast } from "sonner";
 
 interface UserChannel {
   id: number;
@@ -262,13 +263,37 @@ const Profile = () => {
                      {userVideos.map((video: any, index: number) => (
                        <div
                          key={`video-${index}`}
-                         className="aspect-video bg-gray-200 rounded relative overflow-hidden cursor-pointer"
+                         className="aspect-video bg-gray-200 rounded relative overflow-hidden cursor-pointer group"
                          onClick={() => {
-                           // You can add navigation to video player here
                            console.log('Video clicked:', video);
+                           // Play/pause the video
+                           const videoElement = document.querySelector(`video[src="${video.video_link}"]`) as HTMLVideoElement;
+                           if (videoElement) {
+                             if (videoElement.paused) {
+                               videoElement.play();
+                             } else {
+                               videoElement.pause();
+                             }
+                           }
                          }}
                        >
-                         {video.video_Thumbnail ? (
+                         {video.video_Thumbnail && video.video_link ? (
+                           <div className="w-full h-full relative">
+                             <video
+                               src={video.video_link}
+                               controls
+                               className="w-full h-full object-cover"
+                               preload="metadata"
+                             />
+                             
+                             {/* Play Overlay */}
+                             <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                               <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                                 <Play className="w-6 h-6 text-white ml-1" />
+                               </div>
+                             </div>
+                           </div>
+                         ) : video.video_Thumbnail ? (
                            <img
                              src={video.video_Thumbnail}
                              alt={video.name || 'Video thumbnail'}
@@ -293,13 +318,42 @@ const Profile = () => {
                      {userShorts.map((short: any, index: number) => (
                        <div
                          key={`short-${index}`}
-                         className="aspect-video bg-gray-200 rounded relative overflow-hidden cursor-pointer"
+                         className="aspect-video bg-gray-200 rounded relative overflow-hidden cursor-pointer group"
                          onClick={() => {
-                           // You can add navigation to short player here
                            console.log('Short clicked:', short);
+                           // Play/pause the short
+                           const videoElement = document.querySelector(`video[src="${short.video_link}"]`) as HTMLVideoElement;
+                           if (videoElement) {
+                             if (videoElement.paused) {
+                               videoElement.play();
+                             } else {
+                               videoElement.pause();
+                             }
+                           }
                          }}
                        >
-                         {short.video_Thumbnail ? (
+                         {short.video_Thumbnail && short.video_link ? (
+                           <div className="w-full h-full relative">
+                             <video
+                               src={short.video_link}
+                               controls
+                               className="w-full h-full object-cover"
+                               preload="metadata"
+                             />
+                             
+                             {/* Play Overlay */}
+                             <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                               <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                                 <Play className="w-6 h-6 text-white ml-1" />
+                               </div>
+                             </div>
+                             
+                             {/* Short Badge */}
+                             <div className="absolute top-2 left-2 bg-adtip-teal text-white px-2 py-1 rounded text-xs font-medium">
+                               Short
+                             </div>
+                           </div>
+                         ) : short.video_Thumbnail ? (
                            <img
                              src={short.video_Thumbnail}
                              alt={short.name || 'Short thumbnail'}
@@ -336,7 +390,7 @@ const Profile = () => {
                  onWithdraw={(amount) => {
                    console.log('Withdrawing amount:', amount);
                    // TODO: Implement withdrawal logic
-                   alert(`Withdrawal request for ₹${amount.toLocaleString()} submitted successfully!`);
+                   toast.success(`Withdrawal request for ₹${amount.toLocaleString()} submitted successfully!`);
                  }}
                />
              </TabsContent>

@@ -6,6 +6,7 @@ import { createChannel } from '../services/channelService';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { toast } from 'sonner';
 
 const CreateChannel = () => {
   const [name, setName] = useState('');
@@ -19,7 +20,7 @@ const CreateChannel = () => {
       updateUser({ channelId }); // Update context
       navigate(location.state?.returnTo || '/home'); // Return to previous page
     } catch (error: any) {
-      alert('Channel creation failed: ' + (error?.message || error));
+      toast.error('Channel creation failed: ' + (error?.message || error));
     }
   };
 

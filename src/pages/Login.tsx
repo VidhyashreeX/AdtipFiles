@@ -78,7 +78,7 @@ const Login = () => {
           <img src="/logo.png" alt="AdTip Logo" className="h-16 w-16" />
         </div>
 
-        <h1 className="text-2xl font-bold mb-2 text-center text-gray-900">
+        <h1 className="text-2xl font-bold mb-2 text-center text-black">
           Welcome to AdTip
         </h1>
 

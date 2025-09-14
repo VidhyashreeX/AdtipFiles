@@ -1,7 +1,7 @@
 import React from 'react';
 
 const AddFunds: React.FC = () => {
-  const API_BASE_URL = 'http://localhost:7082/api';
+  const API_BASE_URL = `${import.meta.env.VITE_API_URL}/api`;
   const AUTH_TOKEN =
     'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjo1MDgxNiwiZW1haWwiOiJ2aXZla0BnbWFpbC5jb20iLCJpYXQiOjE3NDUyNDg2NzUsImV4cCI6MTc3Njc4NDY3NX0.CP2hoyHw7dOjB8A6uIifbdfNsztf0Pt1BSw8pEdM92Q';
   const USER_ID = 4586;

@@ -86,7 +86,7 @@ const apiData = [
   {
     category: "Reels and Video Management",
     apis: [
-      { method: "POST", path: "/uploadshot", description: "Upload a short video" },
+      { method: "POST", path: "/uploadcontent", description: "Upload content (videos, shorts, posts)" },
       { method: "GET", path: "/getvideos/:userid/:categoryid/:offset", description: "Get videos by user and category" },
       { method: "GET", path: "/getrecentlyuploadedvideo/:userid", description: "Get recently uploaded videos" },
       { method: "GET", path: "/getUserVideoViewLikeDetails/:userId/:page", description: "Get video view and like details" },

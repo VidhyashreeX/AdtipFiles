@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+  import { useState, useEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import SubmissionForm from "@/components/ui/SubmissionForm"; // adjust path if needed
@@ -18,10 +18,10 @@ const plans = [
     category: "Creator Packs",
     options: [
       { label: "Free Premium Plan", price: 0 }, // ✅ Free plan
-      { label: "Monthly Pack", price: 2500 },
-      { label: "Quaterly Pack", price: 6000 },
-      { label: "Half Yearly Pack", price: 12000 },
-      { label: "Yearly Pack", price: 22000 },
+      { label: "Monthly Pack", price: 5000 },
+      { label: "Quaterly Pack", price: 12000 },
+      { label: "Half Yearly Pack", price: 24000 },
+      { label: "Yearly Pack", price: 40000 },
     ],
     button: "Choose Plan",
     note: "After applying Referral Coupon\nYearly plan as per selected plan",
@@ -44,6 +44,14 @@ const ChoosePlan = () => {
   const [showFreePlanForm, setShowFreePlanForm] = useState(false); // modal state
   const [myChannels, setMyChannels] = useState<{ name: string }[]>([]);
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Check if we should open creator packs directly
+  useEffect(() => {
+    if (location.state?.openCreatorPacks) {
+      setSelectedCategory(1); // Creator Packs is index 1
+    }
+  }, [location.state]);
 
   return (
     <>
@@ -133,12 +141,11 @@ const ChoosePlan = () => {
   {showFreePlanForm && (
    <SubmissionForm
   onSuccess={(formData) => {
-    setShowFreePlanForm(false);
+    // Don't close dialog immediately, let user see success message
+    // setShowFreePlanForm(false);
 
     // Optional local state
     setMyChannels([{ name: formData.name }]);
-
-  
 
     // 🔹 Tell the sidebar instantly (custom browser event)
     window.dispatchEvent(

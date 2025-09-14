@@ -30,7 +30,7 @@ import {
   SidebarGroupContent,
 } from "./sidebar-components";
 import SubmissionForm from "./SubmissionForm";
-const BASE_URL = import.meta.env.VITE_API_URL || 'https://api.adtip.in';
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:7082';
 
 const api = axios.create({
   baseURL: BASE_URL,
@@ -246,12 +246,14 @@ React.useEffect(() => {
       if (response.data?.data?.[0]?.channelId) {
         const channel = response.data.data[0];
         setChannelData(channel);
+        // Ensure channelId from backend wins over existing user state
         updateUser({ 
-          channelId: channel.channelId.toString(),
-          // Ensure all required user data is updated
-          ...user
+          ...user,
+          channelId: channel.channelId.toString()
         });
         localStorage.setItem("channels", JSON.stringify([channel]));
+      } else {
+        console.log('ℹ️ No channel found for user in backend response');
       }
     } catch (error) {
       console.error('Channel fetch error:', error);
@@ -263,8 +265,8 @@ React.useEffect(() => {
     }
   };
 
-  // Only fetch if no channelId exists
-  if (user?.id && !user?.channelId) {
+  // Always verify latest channel from backend on mount/open
+  if (user?.id) {
   fetchChannel();
   }
 }, [user?.id, user?.accessToken]); // Add accessToken to dependencies
@@ -284,14 +286,18 @@ const ecommerceItems = [
     : []),
   { to: "/follow", label: "Follow", icon: <Users className="h-5 w-5" /> },
   { to: user ? "/wallet" : "/login", label: "My Wallet", icon: <Wallet className="h-5 w-5" /> },
-  { to: "/become-seller-full", label: "Become Seller", icon: <Store className="h-5 w-5" />, external: true },
-  { to: "/post-ads", label: "Post Advertisers", icon: <BadgeDollarSign className="h-5 w-5" /> },
-  { to: "/premium", label: "Premium Upgrade", icon: <Crown className="h-5 w-5" /> },
-  { to: "/marketplace/my-orders", label: "My Orders", icon: <Package className="h-5 w-5" /> },
+  { to: "/become-seller-full", label: "Become Advertiser", icon: <Store className="h-5 w-5" />, external: true },
+  { to: "/post-ads", label: "Post Advertisements", icon: <BadgeDollarSign className="h-5 w-5" /> },
+  { 
+    to: "/chooseplan", 
+    state: { openCreatorPacks: true },
+    label: "Premium Upgrade", 
+    icon: <Crown className="h-5 w-5" /> 
+  },
+  { to: "/marketplace/my-orders", label: "My Ad Orders", icon: <Package className="h-5 w-5" /> },
   { to: "/marketplace/cart", label: "Cart", icon: <ShoppingCart className="h-5 w-5" /> },
   { to: "/marketplace/favorites", label: "Favorites", icon: <Heart className="h-5 w-5" /> },
-];
-
+  ];
 
   // Settings and Support items
   const supportItems = [
@@ -333,7 +339,9 @@ const [showLogoutDialog, setShowLogoutDialog] = React.useState(false);
             // Wait for both user and channel data to load
             if (!user || user.channelId === undefined) return;
             
-            if (!user.channelId) {
+            // Prefer backend-verified channelData
+            const hasChannel = !!(channelData?.channelId || user.channelId);
+            if (!hasChannel) {
               // User doesn't have a channel, show channel creation
               setShowChannelForm(true);
               setShowCreatePost(false);
@@ -353,13 +361,13 @@ const [showLogoutDialog, setShowLogoutDialog] = React.useState(false);
           ) : (
             <>
               <PlusCircle className="h-5 w-5" />
-              {user?.channelId ? "Upload Video" : "Create Channel"}
+              {user?.channelId ? "Upload Content" : "Create Channel"}
             </>
           )}
         </Button>
       </DialogTrigger>
 
-    {/* Step 1: Upload Video → SubmissionForm */}
+    {/* Step 1: Upload Content → SubmissionForm */}
 {!user?.channelId && showCreatePost && (
 <SubmissionForm
   onSuccess={(data) => {
@@ -384,13 +392,9 @@ const [showLogoutDialog, setShowLogoutDialog] = React.useState(false);
   <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
     <ChannelForm 
       onSave={(formData) => {
-        console.log('Full formData:', formData); // Debug log
         handleChannelCreated(formData);
         if (user && formData.channelId) {
-          console.log('Updating user context with channelId:', formData.channelId);
           updateUser({ channelId: formData.channelId });
-        } else {
-          console.warn('No channelId in formData or user not available');
         }
       }}
     />
@@ -430,7 +434,7 @@ const [showLogoutDialog, setShowLogoutDialog] = React.useState(false);
         }}
       >
         <div className="flex flex-col items-start">
-          <span className="font-semibold">Upload Video (TipTube)</span>
+          <span className="font-semibold">Upload Content (TipTube)</span>
           <span className="text-sm text-gray-500">Upload and monetize videos</span>
         </div>
       </Button>
@@ -503,23 +507,49 @@ const [showLogoutDialog, setShowLogoutDialog] = React.useState(false);
             <div className="px-2 py-1 text-xs font-medium text-sidebar-foreground/70">E-commerce</div>
           )}
           <SidebarGroupContent>
-            {ecommerceItems.map((item) => (
-              <Link
-                key={item.to}
-                to={item.to}
-                onClick={() => isMobile && setOpenMobile(false)}
-                className={cn(
-                  "flex items-center gap-3 rounded-lg px-0 py-3 text-gray-500 transition-all hover:text-gray-900",
-                  isCollapsed && !isMobile && "justify-center px-0",
-                  isActive(item.to) && "bg-gray-100 text-gray-900"
-                )}
-              >
-                {React.cloneElement(item.icon, { className: "h-6 w-6" })}
-                {(!isCollapsed || isMobile) && (
-                  <span className="text-sm font-medium">{item.label}</span>
-                )}
-              </Link>
-            ))}
+            {ecommerceItems.map((item) => {
+              // Handle items with state property using navigate
+              if (item.state) {
+                return (
+                  <button
+                    key={item.to}
+                    onClick={() => {
+                      navigate(item.to, { state: item.state });
+                      if (isMobile) setOpenMobile(false);
+                    }}
+                    className={cn(
+                      "flex items-center gap-3 rounded-lg px-0 py-3 text-gray-500 transition-all hover:text-gray-900 w-full text-left",
+                      isCollapsed && !isMobile && "justify-center px-0",
+                      isActive(item.to) && "bg-gray-100 text-gray-900"
+                    )}
+                  >
+                    {React.cloneElement(item.icon, { className: "h-6 w-6" })}
+                    {(!isCollapsed || isMobile) && (
+                      <span className="text-sm font-medium">{item.label}</span>
+                    )}
+                  </button>
+                );
+              }
+              
+              // Regular Link for items without state
+              return (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  onClick={() => isMobile && setOpenMobile(false)}
+                  className={cn(
+                    "flex items-center gap-3 rounded-lg px-0 py-3 text-gray-500 transition-all hover:text-gray-900",
+                    isCollapsed && !isMobile && "justify-center px-0",
+                    isActive(item.to) && "bg-gray-100 text-gray-900"
+                  )}
+                >
+                  {React.cloneElement(item.icon, { className: "h-6 w-6" })}
+                  {(!isCollapsed || isMobile) && (
+                    <span className="text-sm font-medium">{item.label}</span>
+                  )}
+                </Link>
+              );
+            })}
           </SidebarGroupContent>
         </SidebarGroup>
 

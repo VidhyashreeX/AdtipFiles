@@ -1,6 +1,7 @@
 import axios from "axios";
 
-const BASE_URL = import.meta.env.VITE_API_URL || 'https://api.adtip.in';
+// Use environment variable for API base URL
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:7082';
 
 const api = axios.create({
   baseURL: BASE_URL,
@@ -315,7 +316,7 @@ export async function apiGoogleSSO(token: string) {
 }
 
 export const uploadVideo = (formData: FormData, token: string) => {
-  return api.post(`${BASE_URL}/api/uploadshot`, formData, {
+  return api.post(`${BASE_URL}/api/uploadcontent`, formData, {
     headers: {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'multipart/form-data'

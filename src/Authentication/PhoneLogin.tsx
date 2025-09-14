@@ -36,7 +36,7 @@ const PhoneLogin: React.FC = () => {
   const [pincode, setPincode] = useState<string>("");
   const [geoLocationLoading, setGeoLocationLoading] = useState<boolean>(false);
 
-  const BASE_URL = import.meta.env.VITE_API_URL || 'https://api.adtip.in';
+  const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:7082';
 
   // Check if user is logged in on mount
   useEffect(() => {

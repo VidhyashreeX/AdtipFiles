@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import axios from "axios";
 
 const RAZORPAY_KEY = "rzp_test_ojNkCSTYuUL3w9"; // Replace with your Razorpay key
-const BASE_URL = "http://localhost:7082/api";
+const BASE_URL = `${import.meta.env.VITE_API_URL}/api`;
 
 export const loadRazorpayScript = () => {
   return new Promise((resolve) => {

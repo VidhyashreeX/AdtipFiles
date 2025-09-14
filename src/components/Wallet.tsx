@@ -5,6 +5,7 @@ import { ArrowLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import axios from "axios";
+import { toast } from "sonner";
 
 const BASE_URL = import.meta.env.VITE_API_URL?.endsWith("/api")
   ? import.meta.env.VITE_API_URL
@@ -26,7 +27,6 @@ const Wallet = () => {
 
   // Wait for AuthContext to initialize
   useEffect(() => {
-    console.log("Wallet user:", user);
     if (user === null && isAuthenticated === false) {
       return;
     }
@@ -43,7 +43,6 @@ const Wallet = () => {
       if (!userId || !token) return;
       try {
         setLoading(true);
-        console.log("Fetching wallet data with token:", token);
 
         // Fetch balance
         const balanceResponse = await axios.get(`${BASE_URL}/getfunds/${userId}`, {
@@ -52,23 +51,21 @@ const Wallet = () => {
             Authorization: `Bearer ${token}`,
           },
         });
-        console.log("getfunds response:", balanceResponse.data);
         if (balanceResponse.status === 200) {
           setBalance(parseFloat(balanceResponse.data.availableBalance) || 0);
         } else {
           throw new Error(`Unexpected response status: ${balanceResponse.status}`);
         }
 
-        // Fetch premium status
-        const premiumResponse = await axios.get(`${BASE_URL}/check-premium/${userId}`, {
+        // Fetch content-premium status
+        const premiumResponse = await axios.get(`${BASE_URL}/content-premium/status/${userId}`, {
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
         });
-        console.log("check-premium response:", premiumResponse.data);
         if (premiumResponse.status === 200) {
-          setIsPremium(premiumResponse.data.isPremium || false);
+          setIsPremium(premiumResponse.data.status === true);
         } else {
           throw new Error(`Unexpected response status: ${premiumResponse.status}`);
         }
@@ -98,18 +95,18 @@ const Wallet = () => {
       return;
     }
     if (Number(withdrawAmount) > balance) {
-      alert("Insufficient balance");
+      toast.error("Insufficient balance");
       return;
     }
     if (!selectedMethod) {
-      alert("Please select a withdrawal method");
+      toast.error("Please select a withdrawal method");
       return;
     }
     if (Number(withdrawAmount) < 50) {
-      alert("Minimum withdrawal amount is ₹50");
+      toast.error("Minimum withdrawal amount is ₹50");
       return;
     }
-    alert(`Withdrawal of ₹${withdrawAmount} initiated via ${selectedMethod}!`);
+    toast.success(`Withdrawal of ₹${withdrawAmount} initiated via ${selectedMethod}!`);
     navigate("/home");
   };
 
@@ -165,28 +162,28 @@ const Wallet = () => {
             <h3 className="text-lg font-medium mb-2">Loading subscription status...</h3>
           ) : isPremium ? (
             <>
-              <h3 className="text-lg font-medium mb-2">Premium Subscription Active</h3>
+              <h3 className="text-lg font-medium mb-2">Content Creator Premium Active</h3>
               <p className="text-gray-500 text-sm mb-4">
-                Enjoy enhanced features and higher earnings with your premium plan
+                Enjoy enhanced content creation features and higher earnings with your premium plan
               </p>
               <Button
                 className="teal-button"
-                onClick={() => navigate("/manage-subscription")}
+                onClick={() => navigate("/choose-plan", { state: { openCreatorPacks: true } })}
               >
                 Manage Subscription
               </Button>
             </>
           ) : (
             <>
-              <h3 className="text-lg font-medium mb-2">No Active Subscription Plan</h3>
+              <h3 className="text-lg font-medium mb-2">No Active Content Creator Plan</h3>
               <p className="text-gray-500 text-sm mb-4">
-                Upgrade to premium to enjoy better features and higher earnings
+                Upgrade to content creator premium to enjoy better features and higher earnings
               </p>
               <Button
                 className="teal-button"
-                onClick={() => navigate("/upgrade-premium")}
+                onClick={() => navigate("/choose-plan", { state: { openCreatorPacks: true } })}
               >
-                Upgrade Plan
+                Upgrade to Creator Plan
               </Button>
             </>
           )}
@@ -205,7 +202,7 @@ const Wallet = () => {
               <h3 className="font-semibold mb-4">Withdraw to</h3>
 
               <div className="space-y-3 mb-6">
-                {["PayTM", " Ascending", "Bank Transfer", "UPI"].map((method) => (
+                {["PayTM", "PhonePe", "Bank Transfer", "UPI"].map((method) => (
                   <div
                     key={method}
                     onClick={() => setSelectedMethod(method)}
@@ -219,9 +216,11 @@ const Wallet = () => {
                       className={`w-10 h-10 rounded-md flex items-center justify-center text-white font-bold ${
                         method === "PayTM"
                           ? "bg-blue-500"
+                          : method === "PhonePe"
+                          ? "bg-purple-500"
                           : method === "Bank Transfer"
                           ? "bg-green-500"
-                          : "bg-purple-500"
+                          : "bg-orange-500"
                       }`}
                     >
                       {method[0]}

@@ -214,7 +214,6 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
     }
 
     try {
-      console.info("Sending /api/getfunds request for userId:", userId);
 
       const response = await userAPI.getWalletBalance(String(userId!));
 
@@ -278,6 +277,9 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
 
 
 
+      // Declare requestParams outside try block for error logging
+      let requestParams: any = null;
+
       try {
         setLoading(true);
         setError(null);
@@ -317,7 +319,7 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
             setError("Post not found.");
             setHasMore(false);
           }
-          return; // IMPORTANT: Stop here, don’t load feed
+          return; // IMPORTANT: Stop here, don't load feed
         }
 
         // --------------------------
@@ -328,14 +330,20 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
         );
         const categoryId = categoryObj ? categoryObj.id : 0;
 
-
-
-        const response = await contentAPI.listPosts({
+        requestParams = {
           category: categoryId,
           page: shouldAppend ? page : 1,
           limit: 5,
           loggined_user_id: userId || 0,
+        };
+        
+        console.log('📤 Sending listPosts request:', requestParams);
+        console.log('📤 Request headers:', {
+          'Content-Type': 'application/json',
+          'Authorization': token ? `Bearer ${token}` : 'No token'
         });
+        
+        const response = await contentAPI.listPosts(requestParams);
 
         if (response.data.status) {
           const sanitizedPosts = response.data.data.map((post) => ({
@@ -369,6 +377,14 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
         }
       } catch (err: any) {
         if (err.name === "AbortError") return;
+        
+        console.error('❌ listPosts error:', {
+          status: err.response?.status,
+          data: err.response?.data,
+          message: err.message,
+          requestParams: requestParams
+        });
+        
         setError(
           err.message === "Network Error"
             ? "Unable to connect to the server. Please check your connection."
@@ -385,13 +401,8 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
       isAuthenticated,
       userId,
       token,
-      popularCategories,
       postId,
-      page,
-      loading,
-      hasMore,
-      selectedCategory,
-
+      selectedCategory
     ]
   );
     useEffect(() => {

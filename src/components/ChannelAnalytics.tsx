@@ -107,7 +107,7 @@ const ChannelAnalytics: React.FC<ChannelAnalyticsProps> = ({
               </svg>
             </div>
             <div className="ml-3">
-              <h3 className="text-sm font-medium text-blue-800">Demo Mode</h3>
+              <h3 className="text-sm font-medium text-black">Demo Mode</h3>
               <div className="mt-2 text-sm text-blue-700">
                 <p>This is a demonstration of the Channel Analytics component with sample data.</p>
               </div>
@@ -156,7 +156,7 @@ const ChannelAnalytics: React.FC<ChannelAnalyticsProps> = ({
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="p-4 bg-blue-50 rounded-lg">
-            <h4 className="font-medium text-blue-900 mb-2">View-Based Earnings</h4>
+            <h4 className="font-medium text-black mb-2">View-Based Earnings</h4>
             <div className="text-2xl font-bold text-blue-600">{formatCurrency(totalViewEarnings)}</div>
             <p className="text-sm text-blue-700 mt-1">
               Earnings from video views and engagement
@@ -164,7 +164,7 @@ const ChannelAnalytics: React.FC<ChannelAnalyticsProps> = ({
           </div>
           
           <div className="p-4 bg-green-50 rounded-lg">
-            <h4 className="font-medium text-green-900 mb-2">Paid Video Earnings</h4>
+            <h4 className="font-medium text-black mb-2">Paid Video Earnings</h4>
             <div className="text-2xl font-bold text-green-600">{formatCurrency(paidVideoEarnings)}</div>
             <p className="text-sm text-green-700 mt-1">
               Earnings from premium/paid video content
@@ -211,7 +211,7 @@ const ChannelAnalytics: React.FC<ChannelAnalyticsProps> = ({
         <div className="bg-gradient-to-r from-green-50 to-blue-50 p-6 rounded-lg border border-green-200">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h4 className="text-lg font-semibold text-green-800">Available for Withdrawal</h4>
+              <h4 className="text-lg font-semibold text-black">Available for Withdrawal</h4>
               <p className="text-sm text-green-600">Your withdrawable balance</p>
             </div>
             <div className="text-right">
@@ -229,7 +229,7 @@ const ChannelAnalytics: React.FC<ChannelAnalyticsProps> = ({
             <Button
               onClick={handleWithdraw}
               disabled={withdrawableBalance <= 0}
-              className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-medium"
+              className="bg-teal-600 hover:bg-teal-700 text-white w-full md:w-auto px-6 py-2 rounded-lg font-medium text-sm md:text-base"
             >
               {withdrawableBalance > 0 ? 'Withdraw Funds' : 'No Funds Available'}
             </Button>
@@ -245,7 +245,7 @@ const ChannelAnalytics: React.FC<ChannelAnalyticsProps> = ({
                 </svg>
               </div>
               <div className="ml-3">
-                <h3 className="text-sm font-medium text-yellow-800">Withdrawal Information</h3>
+                <h3 className="text-sm font-medium text-black">Withdrawal Information</h3>
                 <div className="mt-2 text-sm text-yellow-700">
                   <p>• Funds will be transferred to your registered bank account</p>
                   <p>• Please ensure your bank details are up to date</p>
@@ -263,7 +263,7 @@ const ChannelAnalytics: React.FC<ChannelAnalyticsProps> = ({
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="p-4 bg-blue-50 rounded-lg">
-            <h4 className="font-medium text-blue-900 mb-2">Earnings per View</h4>
+            <h4 className="font-medium text-black mb-2">Earnings per View</h4>
             <div className="text-2xl font-bold text-blue-600">
               {totalViews > 0 ? (totalViewEarnings / totalViews).toFixed(4) : 0}
             </div>
@@ -273,7 +273,7 @@ const ChannelAnalytics: React.FC<ChannelAnalyticsProps> = ({
           </div>
           
           <div className="p-4 bg-green-50 rounded-lg">
-            <h4 className="font-medium text-green-900 mb-2">Withdrawal Rate</h4>
+            <h4 className="font-medium text-black mb-2">Withdrawal Rate</h4>
             <div className="text-2xl font-bold text-green-600">
               {totalEarnings > 0 ? ((totalWithdrawn / totalEarnings) * 100).toFixed(1) : 0}%
             </div>

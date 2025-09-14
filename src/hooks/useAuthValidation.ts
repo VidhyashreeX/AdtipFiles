@@ -9,19 +9,12 @@ export const useAuthValidation = () => {
       const token = localStorage.getItem('UserLoggedIn');
       const storedUser = localStorage.getItem('user');
 
-      console.log('🔐 useAuthValidation - checking stored auth data:', {
-        hasToken: !!token,
-        hasUser: !!storedUser
-      });
-
       if (token && storedUser) {
         // No backend validation, just set user from localStorage
         setUser(JSON.parse(storedUser));
-        console.log('👤 User data set in context:', JSON.parse(storedUser));
       } else {
         // No valid auth data
         setUser(null);
-        console.log('🔐 No stored auth data found');
       }
     };
 

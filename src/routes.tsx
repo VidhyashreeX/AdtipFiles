@@ -46,6 +46,7 @@ import ChoosePlan from "./pages/ChoosePlan";
 import RazorpayCheckout from "@/pages/RazorpayCheckout";
 import Wallet from "./components/Wallet";
 import ChannelPage from "./pages/ChannelPage";
+import SearchResults from "./pages/SearchResults";
 
 const router = createBrowserRouter([
 	{
@@ -239,6 +240,10 @@ const router = createBrowserRouter([
 			{
 				path: "wallet",
 				element: <Wallet />,
+			},
+			{
+				path: "search",
+				element: <SearchResults />,
 			},
 			{
 				path: "*",

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Save, Camera, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,6 +6,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { UploadZone } from "@/components/ui/uploadzone";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
+import api from "../../services/api";
 
 interface ChannelFormProps {
   onSave?: (data: ChannelFormData) => void;
@@ -41,6 +43,7 @@ export interface Channel {
 }
 
 export function ChannelForm({ onSave, initialData }: ChannelFormProps) {
+  const { user } = useAuth();
   const [formData, setFormData] = useState<ChannelFormData>({
     channelName: initialData?.channelName || "",
     description: initialData?.description || "",
@@ -48,7 +51,40 @@ export function ChannelForm({ onSave, initialData }: ChannelFormProps) {
 
   const [coverImagePreview, setCoverImagePreview] = useState<string | null>(null);
   const [profileImagePreview, setProfileImagePreview] = useState<string | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
+  const [existingChannels, setExistingChannels] = useState<any[]>([]);
+  const [showChannelWarning, setShowChannelWarning] = useState(false);
   const maxDescriptionLength = 500;
+
+  // Check for existing channels when component mounts
+  useEffect(() => {
+    const checkExistingChannels = async () => {
+      if (!user?.id) return;
+
+      try {
+        const token = localStorage.getItem('UserLoggedIn');
+        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/getchannelbyuserid/${user.id}`, {
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token && { 'Authorization': `Bearer ${token}` }),
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          
+          if (data.status && data.data && data.data.length > 0) {
+            setExistingChannels(data.data);
+            setShowChannelWarning(true);
+          }
+        }
+      } catch (error) {
+        console.error('❌ Error checking existing channels:', error);
+      }
+    };
+
+    checkExistingChannels();
+  }, [user?.id]);
 
   const handleInputChange = (field: keyof ChannelFormData) => (
     event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -72,8 +108,57 @@ export function ChannelForm({ onSave, initialData }: ChannelFormProps) {
     reader.readAsDataURL(file);
   };
 
-  const handleSave = () => {
-    onSave?.(formData);
+  const handleSave = async () => {
+    if (!user?.id) {
+      console.error('No user ID available for channel creation');
+      return;
+    }
+
+    setIsCreating(true);
+    try {
+      // Create the channel via API - using direct fetch to ensure localhost
+      const token = localStorage.getItem('UserLoggedIn');
+
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/savemychannel`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` }),
+        },
+        body: JSON.stringify({
+          user_id: user.id,
+          name: formData.channelName,
+          description: formData.description,
+          // Add image uploads if needed
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const responseData = await response.json();
+
+      // Extract channelId from response
+      const channelId = responseData?.data?.[0]?.channelId || responseData?.channelId;
+      
+      if (channelId) {
+        // Update formData with the channelId
+        const updatedFormData = {
+          ...formData,
+          channelId: String(channelId)
+        };
+        
+        onSave?.(updatedFormData);
+      } else {
+        throw new Error('Channel creation failed - no channelId returned');
+      }
+    } catch (error) {
+      console.error('❌ Error creating channel:', error);
+      // You might want to show an error message to the user here
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   const isFormValid = formData.channelName.trim().length > 0;
@@ -82,6 +167,47 @@ export function ChannelForm({ onSave, initialData }: ChannelFormProps) {
     <div className="w-full flex flex-col space-y-6">
       {/* Title */}
       <h1 className="text-xl font-semibold text-center">Channel Settings</h1>
+
+      {/* Warning for existing channels */}
+      {showChannelWarning && existingChannels.length > 0 && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <div className="flex items-start">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-yellow-800">
+                Warning: You already have existing channels
+              </h3>
+              <div className="mt-2 text-sm text-yellow-700">
+                <p>You currently have {existingChannels.length} channel(s):</p>
+                <ul className="mt-2 list-disc list-inside space-y-1">
+                  {existingChannels.map((channel, index) => (
+                    <li key={index} className="font-medium">
+                      {channel.channelName} (ID: {channel.channelId})
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-2">
+                  Creating another channel will add to your existing channels. 
+                  Consider using your existing channel instead.
+                </p>
+              </div>
+              <div className="mt-3">
+                <button
+                  type="button"
+                  className="text-sm bg-yellow-100 text-yellow-800 px-3 py-1 rounded-md hover:bg-yellow-200 transition-colors"
+                  onClick={() => setShowChannelWarning(false)}
+                >
+                  I understand, continue creating
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Cover Image */}
       <div>
@@ -187,11 +313,11 @@ export function ChannelForm({ onSave, initialData }: ChannelFormProps) {
       {/* Submit Button */}
       <Button
         onClick={handleSave}
-        disabled={!isFormValid}
+        disabled={!isFormValid || isCreating}
         className="w-full h-12 font-semibold text-base shadow-form disabled:opacity-50"
       >
         <Save className="w-4 h-4 mr-2" />
-        Save Channel
+        {isCreating ? 'Creating Channel...' : 'Save Channel'}
       </Button>
     </div>
   );

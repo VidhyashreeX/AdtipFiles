@@ -5,11 +5,9 @@ import Navbar from "./components/Navbar";
 import { cn } from "./lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { SidebarProvider, useSidebar } from "./contexts/SidebarContext";
-import { useAuthValidation } from "@/hooks/useAuthValidation";
 import { useAuth } from "./contexts/AuthContext";
 
 const AppLayoutContent = () => {
-  useAuthValidation();
   const { isAuthenticated, authLoading } = useAuth();
   const isMobile = useIsMobile();
   const { isCollapsed } = useSidebar();
@@ -26,11 +24,7 @@ const AppLayoutContent = () => {
     );
   }
 
-  // Redirect to login if not authenticated
-  if (!isAuthenticated) {
-    console.log('🔐 User not authenticated, redirecting to login');
-    return <Navigate to="/login" replace />;
-  }
+  // Allow access regardless of authentication status
 
   return (
     <div className="min-h-screen bg-gray-50">

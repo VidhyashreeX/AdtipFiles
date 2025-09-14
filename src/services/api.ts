@@ -1,6 +1,7 @@
 import axios from 'axios';
 
-const BASE_URL = import.meta.env.VITE_API_URL || 'https://api.adtip.in';
+// Use environment variable for API base URL
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:7082';
 
 const api = axios.create({
   baseURL: BASE_URL,
@@ -236,8 +237,9 @@ export const contentAPI = {
   getShortById: (userId: string, shortId: string) =>
     api.get(`/api/getShortById/${userId}/${shortId}`),
 
-  checkPremium: (userId: string) =>
-    api.get(`/api/check-premium/${userId}`),
+  // Premium checks are handled exclusively via premiumService:
+  // - GET /api/user-premium-status/:userId
+  // - GET /api/content-premium/status/:userId
 };
 
 // User APIs
@@ -250,10 +252,13 @@ export const userAPI = {
 
   getAnalytics: (channelId: string) =>
     api.get(`/api/analytics/${channelId}`),
+
+  getChannelSubscribers: (channelId: string) =>
+    api.get(`/api/channel/${channelId}/subscribers`),
 };
 
 export const uploadVideo = (formData: FormData, token: string) => {
-  return api.post('/api/uploadshot', formData, {
+  return api.post('/api/uploadcontent', formData, {
     headers: {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'multipart/form-data'

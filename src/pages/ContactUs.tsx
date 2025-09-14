@@ -19,7 +19,7 @@ const ContactUs = () => {
       <div className="max-w-md mx-auto p-4">
         {/* Hero section */}
         <div className="text-center mb-8">
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">We're here to help</h2>
+          <h2 className="text-2xl font-bold text-black mb-2">We're here to help</h2>
           <p className="text-gray-600">
             Get in touch with our support team through any of these channels
           </p>
@@ -36,7 +36,7 @@ const ContactUs = () => {
                 <Mail className="h-5 w-5 text-blue-600" />
               </div>
               <div>
-                <h3 className="font-medium text-gray-800">Email Us</h3>
+                <h3 className="font-medium text-black">Email Us</h3>
                 <p className="text-sm text-gray-600">Send us your questions</p>
               </div>
             </div>
@@ -52,7 +52,7 @@ const ContactUs = () => {
           <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
             <div className="flex items-center mb-3">
               <Clock className="h-5 w-5 text-gray-600 mr-3" />
-              <h3 className="font-medium text-gray-800">Business Hours</h3>
+              <h3 className="font-medium text-black">Business Hours</h3>
             </div>
             <p className="text-sm text-gray-600 ml-8">Monday to Friday: 9 AM - 6 PM IST</p>
             <p className="text-sm text-gray-600 ml-8">Saturday: 10 AM - 2 PM IST</p>
@@ -63,7 +63,7 @@ const ContactUs = () => {
           <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
             <div className="flex items-center mb-3">
               <MapPin className="h-5 w-5 text-gray-600 mr-3" />
-              <h3 className="font-medium text-gray-800">Office Address</h3>
+              <h3 className="font-medium text-black">Office Address</h3>
             </div>
             <p className="text-sm text-gray-600 ml-8">
               AdTip Headquarters<br/>
