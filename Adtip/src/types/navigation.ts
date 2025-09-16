@@ -61,6 +61,8 @@ export type MainNavigatorParamList = {
   Story: {storyId: string};
   CreatePost: undefined;
   EditPost: { postId: number; currentTitle?: string; currentContent?: string };
+  CreateStatus: undefined;
+  ViewStatus: { userId: number; statuses: any[] };
   WatchAndEarn: undefined;
   Referral: undefined;
   TabHome: undefined; // Assuming these are part of MainNavigator, e.g., tabs
@@ -91,6 +93,12 @@ export type MainNavigatorParamList = {
     shortId?: string;
     initialIndex?: number;
     preloadedShorts?: any[];
+  };
+  // Live streaming screen types
+  LiveStream: {
+    mode?: 'host' | 'viewer';
+    meetingId?: string;
+    streamTitle?: string;
   };
   PlayToEarn: undefined;
   LudoGame: undefined;

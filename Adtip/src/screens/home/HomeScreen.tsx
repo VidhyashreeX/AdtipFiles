@@ -29,6 +29,8 @@ import PostWithComments from '../../components/home/PostWithComments';
 import { FeedFlatList } from '../../components/common/OptimizedFlatList';
 import SurveyBanner, { CPXResearchProvider as CPXResearchComponent } from '../../components/home/SurveyBanner';
 import { CPXResearchProvider } from '../../contexts/CPXResearchContext';
+import StatusStoriesRow, { StatusUser, StatusItem } from '../../components/home/StatusStoriesRow';
+import ActiveStreamsRow from '../../components/home/ActiveStreamsRow';
 
 // Enhanced Contexts & Services
 import {useTheme} from '../../contexts/ThemeContext';
@@ -58,6 +60,7 @@ import PostItem from '../../components/home/PostItem';
 import CategoryItem from '../../components/home/CategoryItem';
 import EarnCard from '../../components/home/EarnCard';
 import BannerCarousel from '../../components/home/BannerCarousel';
+import SurveyOfferwallSection from '../../components/home/SurveyOfferwallSection';
 
 import PremiumUpgradeAlert from '../../components/common/PremiumUpgradeAlert';
 import LoginPromptModal from '../../components/modals/LoginPromptModal';
@@ -419,6 +422,10 @@ const HomeScreen: React.FC = () => {
 
   // Premium upgrade alert state
   const [showPremiumUpgradeAlert, setShowPremiumUpgradeAlert] = useState(false);
+
+  // Status Stories state
+  const [statusUsers, setStatusUsers] = useState<StatusUser[]>([]);
+  const [statusLoading, setStatusLoading] = useState(false);
 
   // Log when HomeScreen mounts
   useEffect(() => {
@@ -855,6 +862,48 @@ const HomeScreen: React.FC = () => {
     setIsSearchActive(false);
     }, [navigation]);
 
+  // Status Stories handlers
+  const handleCreateStatus = useCallback(() => {
+    if (isGuest) {
+      showLoginPromptForAction('create status');
+      return;
+    }
+    // Navigate to status creation screen
+    (navigation as any).navigate('CreateStatus');
+  }, [isGuest, showLoginPromptForAction, navigation]);
+
+  const handleViewStatus = useCallback((userId: number, statuses: StatusItem[]) => {
+    if (isGuest) {
+      showLoginPromptForAction('view status');
+      return;
+    }
+    // Navigate to status viewer screen
+    (navigation as any).navigate('ViewStatus', { userId, statuses });
+  }, [isGuest, showLoginPromptForAction, navigation]);
+
+  // Fetch status stories when component mounts or user changes
+  useEffect(() => {
+    const fetchStatusStories = async () => {
+      if (isGuest || !user?.id) {
+        return;
+      }
+      
+      setStatusLoading(true);
+      try {
+        const response = await ApiService.get(`/api/paid-status/feed/${user.id}`);
+        if (response.status && response.data) {
+          setStatusUsers(response.data);
+        }
+      } catch (error) {
+        console.error('Error fetching status stories:', error);
+      } finally {
+        setStatusLoading(false);
+      }
+    };
+
+    fetchStatusStories();
+  }, [user?.id, isGuest]);
+
   // Debounce search query
   useEffect(() => {
     const timeoutId = setTimeout(() => {
@@ -1230,9 +1279,10 @@ const HomeScreen: React.FC = () => {
           <ScrollView style={styles.content} contentContainerStyle={[styles.scrollContent, {paddingBottom: contentPaddingBottom}]}>
 
             <CategoriesRow categories={[]} selectedCategory={null} onCategoryPress={handleCategoryPress} isLoading={true} />
-            {/* Rearranged banner sections: Carousel (first), Survey banners (second), Games section (third) */}
+            {/* Rearranged banner sections: Carousel (first), Survey banners (second), Survey Offerwalls (third), Games section (fourth) */}
             <BannerCarousel />
             <SurveyBanner isPremium={isPremium} onUpgrade={() => navigation.navigate('PremiumUser' as never)} renderCPXAtRoot={true} />
+            <SurveyOfferwallSection />
             <ExternalLinkBanner
               isPremium={isPremium}
               onUpgrade={() => navigation.navigate('PremiumUser' as never)}
@@ -1313,11 +1363,36 @@ const HomeScreen: React.FC = () => {
           }}
           ListHeaderComponent={() => (
             <>
+              {/* Status Stories Row - Instagram-like stories at the top */}
+              {!isGuest && (
+                <StatusStoriesRow
+                  statuses={statusUsers}
+                  currentUserId={user?.id}
+                  currentUserAvatar={user?.profile_image || undefined}
+                  currentUserName={user?.username || user?.name}
+                  onCreateStatus={handleCreateStatus}
+                  onViewStatus={handleViewStatus}
+                  isLoading={statusLoading}
+                />
+              )}
+
+              {/* Active Live Streams Row - Show ongoing live streams */}
+              <ActiveStreamsRow
+                onJoinStream={(meetingId, streamTitle) => {
+                  navigation.navigate('LiveStream' as never, {
+                    meetingId,
+                    isHost: false,
+                    streamTitle,
+                    mode: 'join'
+                  } as never);
+                }}
+              />
 
               <CategoriesRow categories={displayCategories} selectedCategory={selectedCategoryState} onCategoryPress={handleCategoryPress} isLoading={categoriesLoading} />
-              {/* Rearranged banner sections: Carousel (first), Survey banners (second), Games section (third) */}
+              {/* Rearranged banner sections: Carousel (first), Survey banners (second), Survey Offerwalls (third), Games section (fourth) */}
               <BannerCarousel onBannerPress={handleBannerPress} />
               <SurveyBanner isPremium={isPremium} onUpgrade={() => navigation.navigate('PremiumUser' as never)} renderCPXAtRoot={true} />
+              <SurveyOfferwallSection />
               <ExternalLinkBanner
                 isPremium={isPremium}
                 onUpgrade={() => navigation.navigate('PremiumUser' as never)}

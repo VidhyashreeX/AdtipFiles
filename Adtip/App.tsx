@@ -109,6 +109,120 @@ const AppNavigator = () => {
   // Memoize the initialization complete callback to prevent re-renders
   const handleInitializationComplete = useCallback(() => {
     Logger.debug('App', 'Ultra-fast initialization complete');
+    
+    // Check for persisted call state recovery (CRITICAL FOR OFFLINE CALLS)
+    setTimeout(async () => {
+      try {
+        Logger.debug('App', '🔄 Checking for persisted call state recovery...');
+        
+        const { default: CallStatePersistenceService } = await import('./src/services/calling/CallStatePersistenceService');
+        const persistenceService = CallStatePersistenceService.getInstance();
+        
+        // Initialize the service
+        await persistenceService.initialize();
+        
+        // Check for call recovery
+        const recoveredCall = await persistenceService.checkForCallRecovery({
+          maxCallAge: 120000, // 2 minutes
+          showMissedCallUI: true,
+          retryAttempts: 3
+        });
+
+        if (recoveredCall) {
+          if (recoveredCall.status === 'incoming') {
+            Logger.info('App', '🔄 Active call found for recovery - rejoining VideoSDK meeting:', {
+              sessionId: recoveredCall.sessionId,
+              callerName: recoveredCall.callerName,
+              callType: recoveredCall.callType
+            });
+
+            // Rejoin the VideoSDK meeting
+            try {
+              const { default: VideoSDKService } = await import('./src/services/videosdk/VideoSDKService');
+              const videoSDKService = VideoSDKService.getInstance();
+              
+              // Ensure VideoSDK is initialized
+              await videoSDKService.initialize();
+
+              // Initialize VideoSDK for recovery (don't auto-join, let user decide)
+              await videoSDKService.initialize();
+
+              // Update call status to active
+              await persistenceService.updateCallStatus('active', {
+                appState: 'foreground'
+              });
+
+              Logger.info('App', '✅ Call recovery successful - VideoSDK ready for meeting join');
+
+              // Navigate to meeting screen for recovery
+              const { navigationRef } = await import('./src/navigation/NavigationService');
+              if (navigationRef.current?.isReady()) {
+                navigationRef.current.navigate('Meeting', {
+                  meetingId: recoveredCall.meetingId,
+                  token: recoveredCall.token,
+                  callType: recoveredCall.callType,
+                  displayName: 'Me',
+                  isInitiator: false,
+                  recipientName: recoveredCall.callerName
+                });
+              }
+
+            } catch (rejoinError) {
+              Logger.error('App', '❌ Failed to rejoin recovered call:', rejoinError);
+              
+              // Mark call as missed since recovery failed
+              const errorMessage = rejoinError instanceof Error ? rejoinError.message : 'Recovery failed';
+              await persistenceService.updateCallStatus('missed');
+            }
+
+          } else if (recoveredCall.status === 'missed') {
+            Logger.info('App', '📵 Missed call found - showing missed call notification:', {
+              sessionId: recoveredCall.sessionId,
+              callerName: recoveredCall.callerName
+            });
+
+            // Show missed call notification
+            try {
+              const notifee = require('@notifee/react-native').default;
+              
+              // Create notification channel
+              const channelId = await notifee.createChannel({
+                id: 'missed_calls',
+                name: 'Missed Calls',
+                importance: 3, // DEFAULT
+                sound: 'default',
+              });
+
+              // Display missed call notification
+              await notifee.displayNotification({
+                title: '📞 Missed Call',
+                body: `Missed call from ${recoveredCall.callerName}`,
+                android: {
+                  channelId,
+                  pressAction: { id: 'default', launchActivity: 'default' },
+                  smallIcon: 'ic_notification',
+                },
+                data: {
+                  type: 'missed_call',
+                  callerName: recoveredCall.callerName,
+                  callType: recoveredCall.callType
+                }
+              });
+
+              Logger.info('App', '✅ Missed call notification displayed');
+            } catch (missedCallError) {
+              Logger.error('App', '❌ Failed to show missed call notification:', missedCallError);
+            }
+          }
+        } else {
+          Logger.debug('App', '✅ No persisted call state found - normal app start');
+        }
+
+      } catch (error) {
+        Logger.error('App', '❌ Call state recovery failed:', error);
+        // Don't block app startup on recovery failure
+      }
+    }, 2000); // Delay to ensure services are ready
   }, []);
 
   // ✅ SIMPLIFIED: Deep linking now handled in UltraFastLoader
@@ -507,12 +621,12 @@ function App(): React.JSX.Element {
   // Ensure ad is ready with throttling to prevent excessive calls
   useEffect(() => {
     // Only force load if we haven't loaded an ad in the last 2 minutes
-    const lastForceLoad = Date.now() - (global.lastAdForceLoad || 0);
+    const lastForceLoad = Date.now() - ((global as any).lastAdForceLoad || 0);
     const FORCE_LOAD_COOLDOWN = 2 * 60 * 1000; // 2 minutes
 
     if (!adLoaded && lastForceLoad > FORCE_LOAD_COOLDOWN) {
       Logger.debug('App', 'Ensuring app open ad is loaded');
-      global.lastAdForceLoad = Date.now();
+      (global as any).lastAdForceLoad = Date.now();
       forceLoadAd();
     }
   }, [adLoaded, forceLoadAd]);

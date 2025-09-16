@@ -72,6 +72,15 @@ export const TIP_CALLS_ENDPOINTS = {
   VIDEO_CALL_HISTORY: '/api/video-call/history', // + '/:userId'
 };
 
+// Live Stream endpoints
+export const LIVE_STREAM_ENDPOINTS = {
+  START_STREAM: '/api/live-stream/start',
+  END_STREAM: '/api/live-stream/end',
+  JOIN_STREAM: '/api/live-stream/join',
+  SEND_TIP: '/api/live-stream/tip',
+  GET_ACTIVE_STREAMS: '/api/live-stream/active',
+};
+
 // Firebase Cloud Functions endpoints
 export const FCM_ENDPOINTS = {
   INITIATE_CALL: '/api/call/initiate-call',

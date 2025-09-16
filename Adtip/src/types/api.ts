@@ -952,3 +952,93 @@ export interface ChatMessage {
 export interface ChatConversation {
   messages: ChatMessage[];
 }
+
+// Live Stream interfaces
+export interface StartLiveStreamRequest {
+  user_id: number;
+  meeting_id: string;
+  title: string;
+  cost_per_minute: number;
+  viewer_reward_per_minute?: number;
+  is_private?: boolean;
+}
+
+export interface StartLiveStreamResponse {
+  success: boolean;
+  message: string;
+  data?: {
+    meeting_id: string;
+    title: string;
+    cost_per_minute: number;
+  };
+}
+
+export interface EndLiveStreamRequest {
+  user_id: number;
+  meeting_id: string;
+}
+
+export interface EndLiveStreamResponse {
+  success: boolean;
+  message: string;
+  data?: {
+    stream_duration: number;
+    total_earnings: number;
+  };
+}
+
+export interface JoinLiveStreamRequest {
+  user_id: number;
+  meeting_id: string;
+}
+
+export interface JoinLiveStreamResponse {
+  success: boolean;
+  message: string;
+  data?: {
+    meeting_id: string;
+    viewer_count: number;
+  };
+}
+
+export interface SendTipRequest {
+  user_id: number;
+  meeting_id: string;
+  amount: number;
+  message?: string;
+}
+
+export interface SendTipResponse {
+  success: boolean;
+  message: string;
+  data?: {
+    tip_amount: number;
+    remaining_balance: number;
+  };
+}
+
+export interface GetActiveStreamsRequest {
+  page?: number;
+  limit?: number;
+}
+
+export interface GetActiveStreamsResponse {
+  success: boolean;
+  message: string;
+  data?: {
+    streams: Array<{
+      id: number;
+      meeting_id: string;
+      title: string;
+      viewer_count: number;
+      streamer_name: string;
+      start_time: string;
+    }>;
+    pagination: {
+      page: number;
+      limit: number;
+      total: number;
+      pages: number;
+    };
+  };
+}

@@ -197,13 +197,14 @@ messaging().setBackgroundMessageHandler(async remoteMessage => {
   }
 });
 
-// ENHANCED CALL MESSAGE HANDLER WITH SERVICE ORCHESTRATION FOR KILLED STATE
+// ENHANCED CALL MESSAGE HANDLER WITH PERSISTENCE AND SERVICE ORCHESTRATION FOR KILLED STATE
 // Uses Service Orchestrator to ensure all services are properly initialized
 async function handleBackgroundCallMessage(remoteMessage) {
   const startTime = Date.now();
+  let callPersistenceService = null;
 
   try {
-    console.log('[Index] 📞 Handling call message in killed state with enhanced service orchestration');
+    console.log('[Index] 📞 Handling call message in killed state with enhanced service orchestration and persistence');
 
     // Re-parse for safety (in case upstream handler didn't flatten fully)
     const data = remoteMessage.data || {};
@@ -228,6 +229,37 @@ async function handleBackgroundCallMessage(remoteMessage) {
       meetingId: meetingId ? 'present' : 'missing',
       token: token ? 'present' : 'missing'
     });
+
+    // Step 0: Initialize and save call state for persistence (CRITICAL FOR OFFLINE RECOVERY)
+    console.log('[Index] 💾 Initializing call state persistence...');
+    try {
+      const { default: CallStatePersistenceService } = await import('./src/services/calling/CallStatePersistenceService');
+      callPersistenceService = CallStatePersistenceService.getInstance();
+      await callPersistenceService.initialize();
+
+      // Save call state IMMEDIATELY for offline recovery
+      const callStateSaved = await callPersistenceService.saveCallState({
+        sessionId,
+        callerName,
+        callType,
+        meetingId,
+        token,
+        callerId: data.callerId || info?.callerId,
+        receiverId: data.receiverId || info?.receiverId,
+        channelName: data.channelName || info?.channelName,
+        fcmMessageId: remoteMessage.messageId,
+        status: 'incoming'
+      });
+
+      if (callStateSaved) {
+        console.log('[Index] ✅ Call state persisted successfully for offline recovery');
+      } else {
+        console.warn('[Index] ⚠️ Failed to persist call state - continuing without persistence');
+      }
+    } catch (persistenceError) {
+      console.error('[Index] ❌ Call persistence initialization failed:', persistenceError);
+      // Continue without persistence - don't let this block the call
+    }
 
     // Step 1: Initialize Service Orchestrator for killed state wake-up
     console.log('[Index] 🚀 Starting enhanced killed state wake-up sequence...');
@@ -261,31 +293,70 @@ async function handleBackgroundCallMessage(remoteMessage) {
     await new Promise(resolve => setTimeout(resolve, 1500)); // 1.5 second delay
     console.log('[Index] ✅ Initialization delay complete');
 
-    // Step 3: Display call notification using NotifeeCallHandler
-    console.log('[Index] 📞 Displaying call notification...');
-    const { default: NotifeeCallHandler } = await import('./src/services/notification/NotifeeCallHandler');
-    const handler = NotifeeCallHandler.getInstance();
+    // Step 3: Display call notification with retry mechanism
+    console.log('[Index] 📞 Displaying call notification with retry logic...');
+    
+    let notificationSuccess = false;
+    let lastError = null;
+    const maxRetries = 3;
 
-    // Initialize if not already done (critical for killed state)
-    if (!handler.isReady) {
-      await handler.initialize();
-      console.log('[Index] ✅ NotifeeCallHandler initialized for killed state');
+    // Try NotifeeCallHandler with retry logic
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`[Index] 📞 Attempt ${attempt}/${maxRetries}: Using NotifeeCallHandler`);
+        
+        const { default: NotifeeCallHandler } = await import('./src/services/notification/NotifeeCallHandler');
+        const handler = NotifeeCallHandler.getInstance();
+
+        // Initialize if not already done (critical for killed state)
+        if (!handler.isReady) {
+          await handler.initialize();
+          console.log('[Index] ✅ NotifeeCallHandler initialized for killed state');
+        }
+
+        // Display the incoming call notification
+        const success = await handler.displayIncomingCall({
+          sessionId,
+          callerName,
+          callType,
+          meetingId,
+          token
+        });
+
+        if (success) {
+          notificationSuccess = true;
+          console.log(`[Index] ✅ NotifeeCallHandler succeeded on attempt ${attempt}`);
+          break;
+        } else {
+          throw new Error(`NotifeeCallHandler returned false on attempt ${attempt}`);
+        }
+
+      } catch (error) {
+        lastError = error;
+        console.warn(`[Index] ⚠️ NotifeeCallHandler attempt ${attempt} failed:`, error.message);
+        
+        if (attempt < maxRetries) {
+          // Wait before retry with exponential backoff
+          const retryDelay = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
+          console.log(`[Index] ⏳ Waiting ${retryDelay}ms before retry...`);
+          await new Promise(resolve => setTimeout(resolve, retryDelay));
+        }
+      }
     }
 
-    // Display the incoming call notification
-    const success = await handler.displayIncomingCall({
-      sessionId,
-      callerName,
-      callType,
-      meetingId,
-      token
-    });
-
-    if (success) {
+    if (notificationSuccess) {
       const totalDuration = Date.now() - startTime;
-      console.log('[Index] ✅ Call notification displayed successfully', { duration: totalDuration });
+      console.log('[Index] ✅ Call notification displayed successfully with persistence', { duration: totalDuration });
+      
+      // Update call state to indicate notification was displayed
+      if (callPersistenceService) {
+        await callPersistenceService.updateCallStatus('incoming', { 
+          appState: 'background',
+          notificationDisplayed: true 
+        });
+      }
     } else {
-      throw new Error('NotifeeCallHandler failed to display notification');
+      throw new Error(`All NotifeeCallHandler attempts failed. Last error: ${lastError?.message}`);
     }
 
   } catch (error) {
@@ -293,8 +364,21 @@ async function handleBackgroundCallMessage(remoteMessage) {
     console.error('[Index] ❌ Enhanced killed state processing failed:', {
       error,
       duration: totalDuration,
-      sessionId
+      sessionId: data?.sessionId || 'unknown'
     });
+
+    // Update call state to indicate failure for recovery later
+    if (callPersistenceService) {
+      try {
+        await callPersistenceService.updateCallStatus('incoming', { 
+          appState: 'background',
+          notificationDisplayed: false,
+          error: error.message
+        });
+      } catch (persistError) {
+        console.error('[Index] ❌ Failed to update call state with error:', persistError);
+      }
+    }
 
     // Fallback to direct notification if NotifeeCallHandler fails
     try {

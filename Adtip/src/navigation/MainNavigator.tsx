@@ -73,6 +73,10 @@ import TestCallScreen from '../screens/TestCallScreen';
 // Import BlockedUsersScreen
 import BlockedUsersScreen from '../screens/blocklist/BlockedUsersScreen';
 
+// Add Status screens
+import CreateStatusScreen from '../screens/status/CreateStatusScreen';
+import ViewStatusScreen from '../screens/status/ViewStatusScreen';
+
 // Add AddFundsScreen import
 import AddFundsScreen from '../screens/wallet/AddFundsScreen';
 
@@ -122,6 +126,9 @@ import PermissionsScreen from '../screens/settings/PermissionsScreen';
 import InstagramProfileScreen from '../screens/profile/InstagramProfileScreen';
 import PostViewerScreen from '../screens/profile/PostViewerScreen';
 import FollowersFollowingScreen from '../screens/profile/FollowersFollowingScreen';
+
+// Import LiveStreamScreen
+import LiveStreamScreen from '../screens/live/LiveStreamScreen';
 
 // Profile component wrapper to avoid inline function
 const ProfileScreenWrapper: React.FC<{
@@ -325,6 +332,30 @@ const MainNavigator = () => {
         options={slideUpTransitionConfig}
       />
       <Stack.Screen name="PromotePost" component={PromotePostScreen} />
+      
+      {/* Status screens */}
+      <Stack.Screen
+        name="CreateStatus"
+        component={CreateStatusScreen}
+        options={slideUpTransitionConfig}
+      />
+      <Stack.Screen
+        name="ViewStatus"
+        component={ViewStatusScreen}
+        options={{
+          presentation: 'fullScreenModal',
+          headerShown: false,
+          gestureEnabled: false,
+          animation: 'fade',
+        }}
+      />
+      
+      {/* Live streaming with slide up animation */}
+      <Stack.Screen
+        name="LiveStream"
+        component={LiveStreamScreen}
+        options={slideUpTransitionConfig}
+      />
       
       {/* Media viewing with custom transitions */}
       <Stack.Screen name="VideoPreview" component={VideoPreviewScreen} />

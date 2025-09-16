@@ -12,6 +12,8 @@ import {
   Dimensions,
 } from 'react-native';
 import {useNavigation} from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { MainNavigatorParamList } from '../../types/navigation';
 import Icon from 'react-native-vector-icons/Feather';
 import Animated, {
   useSharedValue,
@@ -45,7 +47,7 @@ const CreateContentModal: React.FC<CreateContentModalProps> = React.memo(({
   onClose,
 }) => {
   const {colors, isDarkMode} = useTheme();
-  const navigation = useNavigation();
+  const navigation = useNavigation<NativeStackNavigationProp<MainNavigatorParamList>>();
   const {isGuest, exitGuestMode} = useAuth();
 
   // Local state for login prompt instead of using global useGuestGuard
@@ -348,30 +350,32 @@ const CreateContentModal: React.FC<CreateContentModalProps> = React.memo(({
                 <TouchableOpacity
                   style={[
                     styles.option,
-                    styles.disabledOption, // Add disabled style
                     {
-                      backgroundColor: isDarkMode ? colors.gray[900] : colors.gray[50],
+                      backgroundColor: isDarkMode ? colors.surface : colors.white,
                       borderWidth: isDarkMode ? 1 : 0,
-                      borderColor: isDarkMode ? colors.gray[800] : 'transparent',
+                      borderColor: isDarkMode ? colors.border : 'transparent',
                     }
                   ]}
-                  onPress={() => {}} // Disable the press handler
-                  disabled={true} // Make it disabled
+                  onPress={() => {
+                    onClose();
+                    navigation.navigate('LiveStream', { mode: 'host' });
+                  }}
+                  activeOpacity={0.8}
                 >
                   <View
                     style={[
                       styles.iconContainer,
-                      {backgroundColor: colors.gray[400]}, // Use gray color for disabled state
+                      {backgroundColor: '#FF6B6B'}, // Red color for live streaming
                     ]}>
                     <Icon name="wifi" size={24} color={colors.white} />
                   </View>
-                  <Text style={[styles.optionText, {color: colors.text.tertiary}]}>
-                    Start Stream - Coming Soon!
+                  <Text style={[styles.optionText, {color: colors.text.primary}]}>
+                    Start Live Stream
                   </Text>
                   <Icon
                     name="chevron-right"
                     size={20}
-                    color={colors.gray[400]}
+                    color={colors.text.tertiary}
                   />
                 </TouchableOpacity>
               </View>

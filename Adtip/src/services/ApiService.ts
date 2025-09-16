@@ -54,6 +54,16 @@ import {
   ExploreContentResponse,
   GetUserDataRequest,
   GetUserDataResponse,
+  StartLiveStreamRequest,
+  StartLiveStreamResponse,
+  EndLiveStreamRequest,
+  EndLiveStreamResponse,
+  JoinLiveStreamRequest,
+  JoinLiveStreamResponse,
+  SendTipRequest,
+  SendTipResponse,
+  GetActiveStreamsRequest,
+  GetActiveStreamsResponse,
 } from '../types/api';
 
 // Interfaces moved from inside the class
@@ -415,6 +425,143 @@ apiClient.interceptors.response.use(
  * API Service for handling network requests with Firebase v22.2.1 integration
  */
 export default class ApiService {
+  /**
+   * Test text-only status creation (for debugging server issues)
+   */
+  static async createTextStatus({ content, created_by }: {
+    content: string;
+    created_by: number;
+  }) {
+    try {
+      const response = await apiClient.post('/api/addStatus', {
+        content,
+        content_type: 'text',
+        created_by,
+      });
+      return response.data;
+    } catch (error: any) {
+      console.error('Error in createTextStatus:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Upload status with media (image/video) using multipart/form-data
+   */
+  static async uploadStatus({ content, content_type, created_by, media }: {
+    content: string;
+    content_type: 'text' | 'image' | 'video';
+    created_by: number;
+    media?: { uri: string; type: string; name: string };
+  }) {
+    try {
+      console.log('🚀 Starting uploadStatus with params:', {
+        content: content.substring(0, 50) + (content.length > 50 ? '...' : ''),
+        content_type,
+        created_by,
+        hasMedia: !!media,
+        mediaDetails: media ? {
+          name: media.name,
+          type: media.type,
+          uriPrefix: media.uri.substring(0, 20) + '...'
+        } : null
+      });
+
+      const formData = new FormData();
+      formData.append('content', content);
+      formData.append('content_type', content_type);
+      formData.append('created_by', String(created_by));
+      
+      if (media) {
+        // Check if it's a valid file URI
+        if (!media.uri || (!media.uri.startsWith('file://') && !media.uri.startsWith('content://') && !media.uri.startsWith('data:'))) {
+          throw new Error(`Invalid media URI: ${media.uri}`);
+        }
+        
+        // Properly format the file object for React Native FormData
+        const file = {
+          uri: media.uri,
+          type: media.type,
+          name: media.name,
+        } as any;
+        
+        formData.append('media_file', file);
+        
+        // Also add media metadata as separate fields that backend might expect
+        formData.append('media_type', media.type);
+        formData.append('media_name', media.name);
+        
+        console.log('📎 Uploading status with media:', {
+          content_type,
+          media_name: media.name,
+          media_type: media.type,
+          media_uri_type: media.uri.split('://')[0] + '://',
+          file_object: file
+        });
+      } else {
+        console.log('📝 Uploading text-only status');
+      }
+      
+      // Use apiClient to ensure Authorization header is added
+      const response = await apiClient.post('/api/addStatus', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+        timeout: 120000, // Increased timeout for video uploads
+        onUploadProgress: (progressEvent) => {
+          if (progressEvent.total) {
+            const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+            console.log(`Upload Progress: ${percentCompleted}%`);
+          }
+        },
+      });
+      
+      console.log('Status upload response:', response.data);
+      return response.data;
+    } catch (error: any) {
+      console.error('Error in uploadStatus:', error);
+      console.error('Error details:', {
+        message: error.message,
+        status: error.response?.status,
+        data: error.response?.data,
+        config: {
+          url: error.config?.url,
+          method: error.config?.method,
+          headers: error.config?.headers,
+        }
+      });
+      
+      // If it's a server error (500) and we have media, try without media as fallback
+      if (error.response?.status === 500 && media && content.trim()) {
+        console.log('Attempting fallback: uploading status without media due to server error');
+        try {
+          const fallbackFormData = new FormData();
+          fallbackFormData.append('content', content);
+          fallbackFormData.append('content_type', 'text');
+          fallbackFormData.append('created_by', String(created_by));
+          
+          const fallbackResponse = await apiClient.post('/api/addStatus', fallbackFormData, {
+            headers: {
+              'Content-Type': 'multipart/form-data',
+            },
+            timeout: 60000,
+          });
+          
+          console.log('Fallback status upload successful:', fallbackResponse.data);
+          // Return success but inform that media couldn't be uploaded
+          return {
+            ...fallbackResponse.data,
+            warning: 'Status created but media upload failed due to server error'
+          };
+        } catch (fallbackError) {
+          console.error('Fallback also failed:', fallbackError);
+          // Continue to throw the original error
+        }
+      }
+      
+      throw error;
+    }
+  }
   /**
    * Check network connectivity to the API server
    */
@@ -3460,4 +3607,108 @@ export default class ApiService {
     }
   }
   */
+
+  // ==============================
+  // LIVE STREAM METHODS
+  // ==============================
+
+  /**
+   * Start a new live stream
+   */
+  static async startLiveStream(data: StartLiveStreamRequest): Promise<StartLiveStreamResponse> {
+    try {
+      console.log('[ApiService] 🎥 Starting live stream with data:', data);
+      
+      const response = await apiClient.post(
+        ApiEndpoints.LIVE_STREAM_ENDPOINTS.START_STREAM,
+        data
+      );
+      
+      console.log('[ApiService] 🎥 Live stream started successfully:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('[ApiService] 🚨 Error starting live stream:', error);
+      throw this.handleError(error);
+    }
+  }
+
+  /**
+   * End an active live stream
+   */
+  static async endLiveStream(data: EndLiveStreamRequest): Promise<EndLiveStreamResponse> {
+    try {
+      console.log('[ApiService] ⏹️  Ending live stream with data:', data);
+      
+      const response = await apiClient.post(
+        ApiEndpoints.LIVE_STREAM_ENDPOINTS.END_STREAM,
+        data
+      );
+      
+      console.log('[ApiService] ⏹️  Live stream ended successfully:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('[ApiService] 🚨 Error ending live stream:', error);
+      throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Join a live stream as a viewer
+   */
+  static async joinLiveStream(data: JoinLiveStreamRequest): Promise<JoinLiveStreamResponse> {
+    try {
+      console.log('[ApiService] 👁️  Joining live stream with data:', data);
+      
+      const response = await apiClient.post(
+        ApiEndpoints.LIVE_STREAM_ENDPOINTS.JOIN_STREAM,
+        data
+      );
+      
+      console.log('[ApiService] 👁️  Joined live stream successfully:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('[ApiService] 🚨 Error joining live stream:', error);
+      throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Send a tip to the streamer
+   */
+  static async sendTip(data: SendTipRequest): Promise<SendTipResponse> {
+    try {
+      console.log('[ApiService] 💰 Sending tip with data:', data);
+      
+      const response = await apiClient.post(
+        ApiEndpoints.LIVE_STREAM_ENDPOINTS.SEND_TIP,
+        data
+      );
+      
+      console.log('[ApiService] 💰 Tip sent successfully:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('[ApiService] 🚨 Error sending tip:', error);
+      throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Get list of active live streams
+   */
+  static async getActiveStreams(params: GetActiveStreamsRequest = {}): Promise<GetActiveStreamsResponse> {
+    try {
+      console.log('[ApiService] 📺 Getting active streams with params:', params);
+      
+      const response = await apiClient.get(
+        ApiEndpoints.LIVE_STREAM_ENDPOINTS.GET_ACTIVE_STREAMS,
+        { params }
+      );
+      
+      console.log('[ApiService] 📺 Active streams retrieved successfully:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('[ApiService] 🚨 Error getting active streams:', error);
+      throw this.handleError(error);
+    }
+  }
 }

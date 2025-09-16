@@ -1,0 +1,238 @@
+// src/services/LiveStreamService.ts - Service for live streaming API calls
+
+import ApiService from './ApiService';
+import { Logger } from '../utils/ProductionLogger';
+
+export interface StreamConfig {
+  title: string;
+  cost_per_minute: number;
+  viewer_reward_per_minute?: number;
+  is_private?: boolean;
+}
+
+export interface TipData {
+  amount: number;
+  message?: string;
+}
+
+export interface LiveStreamResponse {
+  success: boolean;
+  message: string;
+  data?: any;
+}
+
+class LiveStreamService {
+  /**
+   * Start a new live stream
+   */
+  static async startStream(userId: number, meetingId: string, config: StreamConfig): Promise<LiveStreamResponse> {
+    try {
+      console.log('[LiveStreamService] Starting live stream:', { userId, meetingId, config });
+
+      const response = await ApiService.startLiveStream({
+        user_id: userId,
+        meeting_id: meetingId,
+        title: config.title,
+        cost_per_minute: config.cost_per_minute,
+        viewer_reward_per_minute: config.viewer_reward_per_minute || 0,
+        is_private: config.is_private || false
+      });
+
+      console.log('[LiveStreamService] Stream started successfully:', response);
+      return {
+        success: true,
+        message: 'Stream started successfully',
+        data: response.data
+      };
+
+    } catch (error) {
+      console.error('[LiveStreamService] Failed to start stream:', error);
+      return {
+        success: false,
+        message: (error as any)?.response?.data?.message || (error as any)?.message || 'Failed to start stream'
+      };
+    }
+  }
+
+  /**
+   * End an active live stream
+   */
+  static async endStream(userId: number, meetingId: string): Promise<LiveStreamResponse> {
+    try {
+      console.log('[LiveStreamService] Ending live stream:', { userId, meetingId });
+
+      const response = await ApiService.endLiveStream({
+        user_id: userId,
+        meeting_id: meetingId
+      });
+
+      console.log('[LiveStreamService] Stream ended successfully:', response);
+      return {
+        success: true,
+        message: 'Stream ended successfully',
+        data: response.data
+      };
+
+    } catch (error) {
+      console.error('[LiveStreamService] Failed to end stream:', error);
+      return {
+        success: false,
+        message: (error as any)?.response?.data?.message || (error as any)?.message || 'Failed to end stream'
+      };
+    }
+  }
+
+  /**
+   * Join a live stream as viewer
+   */
+  static async joinStream(userId: number, meetingId: string): Promise<LiveStreamResponse> {
+    try {
+      console.log('[LiveStreamService] Joining live stream:', { userId, meetingId });
+
+      const response = await ApiService.joinLiveStream({
+        user_id: userId,
+        meeting_id: meetingId
+      });
+
+      console.log('[LiveStreamService] Joined stream successfully:', response);
+      return {
+        success: true,
+        message: 'Joined stream successfully',
+        data: response.data
+      };
+
+    } catch (error) {
+      console.error('[LiveStreamService] Failed to join stream:', error);
+      return {
+        success: false,
+        message: (error as any)?.response?.data?.message || (error as any)?.message || 'Failed to join stream'
+      };
+    }
+  }
+
+  /**
+   * Send tip to streamer
+   */
+  static async sendTip(userId: number, meetingId: string, tipData: TipData): Promise<LiveStreamResponse> {
+    try {
+      console.log('[LiveStreamService] Sending tip:', { userId, meetingId, tipData });
+
+      const response = await ApiService.sendTip({
+        user_id: userId,
+        meeting_id: meetingId,
+        amount: tipData.amount,
+        message: tipData.message || ''
+      });
+
+      console.log('[LiveStreamService] Tip sent successfully:', response);
+      return {
+        success: true,
+        message: 'Tip sent successfully',
+        data: response.data
+      };
+
+    } catch (error) {
+      console.error('[LiveStreamService] Failed to send tip:', error);
+      return {
+        success: false,
+        message: (error as any)?.response?.data?.message || (error as any)?.message || 'Failed to send tip'
+      };
+    }
+  }
+
+  /**
+   * Get active live streams
+   */
+  static async getActiveStreams(page: number = 1, limit: number = 20): Promise<LiveStreamResponse> {
+    try {
+      console.log('[LiveStreamService] Getting active streams:', { page, limit });
+
+      const response = await ApiService.getActiveStreams({ page, limit });
+
+      console.log('[LiveStreamService] Retrieved active streams:', response);
+      return {
+        success: true,
+        message: 'Active streams retrieved successfully',
+        data: response.data
+      };
+
+    } catch (error) {
+      console.error('[LiveStreamService] Failed to get active streams:', error);
+      return {
+        success: false,
+        message: (error as any)?.response?.data?.message || (error as any)?.message || 'Failed to get active streams'
+      };
+    }
+  }
+
+  /**
+   * Validate stream configuration
+   */
+  static validateStreamConfig(config: StreamConfig): { valid: boolean; error?: string } {
+    if (!config.title || config.title.trim().length === 0) {
+      return { valid: false, error: 'Stream title is required' };
+    }
+
+    if (config.title.trim().length > 255) {
+      return { valid: false, error: 'Stream title must be less than 255 characters' };
+    }
+
+    if (!config.cost_per_minute || config.cost_per_minute < 1 || config.cost_per_minute > 1000) {
+      return { valid: false, error: 'Cost per minute must be between 1-1000' };
+    }
+
+    if (config.viewer_reward_per_minute && (config.viewer_reward_per_minute < 0 || config.viewer_reward_per_minute > 100)) {
+      return { valid: false, error: 'Viewer reward must be between 0-100' };
+    }
+
+    return { valid: true };
+  }
+
+  /**
+   * Validate tip amount
+   */
+  static validateTipAmount(amount: number): { valid: boolean; error?: string } {
+    if (!amount || amount < 1 || amount > 1000) {
+      return { valid: false, error: 'Tip amount must be between 1-1000' };
+    }
+
+    return { valid: true };
+  }
+
+  /**
+   * Format stream duration
+   */
+  static formatDuration(minutes: number): string {
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+
+    if (hours > 0) {
+      return `${hours}h ${mins}m`;
+    }
+
+    return `${mins}m`;
+  }
+
+  /**
+   * Format currency amount
+   */
+  static formatCurrency(amount: number): string {
+    return `₹${amount.toFixed(2)}`;
+  }
+
+  /**
+   * Calculate streaming cost
+   */
+  static calculateStreamingCost(durationMinutes: number, costPerMinute: number): number {
+    return Math.ceil(durationMinutes) * costPerMinute;
+  }
+
+  /**
+   * Calculate viewer rewards
+   */
+  static calculateViewerReward(watchMinutes: number, rewardPerMinute: number): number {
+    return Math.floor(watchMinutes) * rewardPerMinute;
+  }
+}
+
+export default LiveStreamService;
