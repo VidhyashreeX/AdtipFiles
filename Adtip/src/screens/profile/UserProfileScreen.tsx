@@ -31,6 +31,7 @@ import { CallType } from '../../stores/callStoreSimplified';
 import Header from '../../components/common/Header';
 import { ProfileFastImage } from '../../utils/FastImageOptimizer';
 import VideoThumbnail from '../../components/common/VideoThumbnail';
+import { useCustomBackHandler } from '../../hooks/useCustomBackHandler';
 
 const AVATAR_SIZE = 80; // Reduced to match ProfileScreen
 const GRID_SPACING = 1;
@@ -95,6 +96,12 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
 
 
   const isOwnProfile = currentUser?.id === userId;
+
+  // Dynamic back button handling
+  const handleCustomBack = useCustomBackHandler({
+    screenType: 'profile',
+    fallbackRoute: 'Home'
+  });
 
   useEffect(() => {
     // Handle userId updates from navigation params
@@ -549,7 +556,7 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
         showPremium={false}
         leftComponent={
           <TouchableOpacity
-            onPress={() => navigation.goBack()}
+            onPress={handleCustomBack}
             style={{ padding: 8 }}
           >
             <Icon name="arrow-left" size={24} color={colors.text.primary} />

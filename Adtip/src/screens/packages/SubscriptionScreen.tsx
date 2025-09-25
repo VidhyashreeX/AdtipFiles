@@ -104,12 +104,51 @@ const SubscriptionScreen = () => {
 
       console.log('Razorpay options:', options);
       RazorpayCheckout.open(options)
-        .then((data: any) => {
-            // Payment is successful, webhook will handle database storage
-            Alert.alert('Success', 'Your subscription is being processed! You will be notified once it is active.');
-            navigation.goBack();
+        .then(async (data: any) => {
+            try {
+              console.log('🔄 [SubscriptionScreen] Payment completed, verifying...', data);
+              
+              // Verify payment first
+              const verificationResult = await ApiService.verifySubscriptionPayment({
+                razorpay_payment_id: data.razorpay_payment_id,
+                razorpay_subscription_id: data.razorpay_subscription_id,
+                razorpay_signature: data.razorpay_signature,
+                user_id: user.id,
+                plan_id: selectedPlanId
+              });
+              
+              if (!verificationResult.status) {
+                throw new Error('Payment verification failed');
+              }
+              
+              console.log('✅ [SubscriptionScreen] Payment verified successfully');
+              
+              // Only navigate on successful verification
+              Alert.alert(
+                'Success', 
+                'Your premium subscription has been activated successfully!',
+                [
+                  {
+                    text: 'OK',
+                    onPress: () => {
+                      // Navigate to premium success or back to profile
+                      navigation.navigate('PremiumUser');
+                    }
+                  }
+                ]
+              );
+              
+            } catch (error: any) {
+              console.error('❌ [SubscriptionScreen] Payment verification failed:', error);
+              Alert.alert(
+                'Payment Verification Failed', 
+                'Your payment was processed but verification failed. Please contact support.',
+                [{ text: 'OK' }]
+              );
+            }
         })
         .catch((error: any) => {
+            console.error('❌ [SubscriptionScreen] Payment failed:', error);
             // Show user-friendly messages for payment cancelled or failed
             if (
               error?.code === 'BAD_REQUEST_ERROR' &&

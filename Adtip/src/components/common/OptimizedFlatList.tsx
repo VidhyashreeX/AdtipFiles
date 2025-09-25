@@ -1,7 +1,8 @@
-import React, { memo, useMemo, useCallback } from 'react';
-import { FlatList, FlatListProps, ListRenderItem } from 'react-native';
+import React, { memo, useMemo, useCallback, useRef, useEffect } from 'react';
+import { FlatList, FlatListProps, ListRenderItem, InteractionManager } from 'react-native';
 import { createOptimizedFlatListProps, createKeyExtractor, createFixedHeightLayout, createGridLayout } from '../../utils/PerformanceUtils';
 import { Logger } from '../../utils/ProductionLogger';
+import { useMemoryTracking } from '../../utils/MemoryLeakDetector';
 
 // Optimization presets
 export type OptimizationPreset = 'FEED' | 'GRID' | 'CHAT' | 'SEARCH' | 'USER_LIST' | 'CUSTOM';
@@ -46,6 +47,21 @@ function OptimizedFlatList<T>({
   numColumns,
   ...restProps
 }: OptimizedFlatListProps<T>) {
+  
+  // Memory leak prevention
+  const flatListRef = useRef<FlatList<T>>(null);
+  const componentName = debugName || 'OptimizedFlatList';
+  useMemoryTracking(componentName);
+  
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      // Clear any pending render operations
+      if (flatListRef.current) {
+        flatListRef.current = null;
+      }
+    };
+  }, []);
   
   // Create optimized key extractor
   const keyExtractor = useMemo(() => {
@@ -146,6 +162,7 @@ function OptimizedFlatList<T>({
 
   return (
     <FlatList
+      ref={flatListRef}
       data={data}
       renderItem={memoizedRenderItem}
       numColumns={numColumns}
@@ -156,7 +173,7 @@ function OptimizedFlatList<T>({
 }
 
 // Export memoized component
-export default memo(OptimizedFlatList) as <T>(props: OptimizedFlatListProps<T>) => JSX.Element;
+export default memo(OptimizedFlatList) as <T>(props: OptimizedFlatListProps<T>) => React.ReactElement;
 
 // Export specific optimized components for common use cases
 export const FeedFlatList = <T,>(props: Omit<OptimizedFlatListProps<T>, 'preset'>) => (
@@ -181,7 +198,7 @@ export const UserListFlatList = <T,>(props: Omit<OptimizedFlatListProps<T>, 'pre
 
 // Hook for creating optimized render items
 export const useOptimizedRenderItem = <T,>(
-  renderFunction: (item: T, index: number) => JSX.Element,
+  renderFunction: (item: T, index: number) => React.ReactElement,
   dependencies: any[] = []
 ) => {
   return useCallback(({ item, index }: { item: T; index: number }) => {

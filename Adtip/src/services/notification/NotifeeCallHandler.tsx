@@ -287,7 +287,8 @@ class NotifeeCallHandler {
             sessionId: params.sessionId,
             direction: 'incoming',
             type: params.callType,
-            callerName: params.callerName
+            callerName: params.callerName,
+            fromKilledState: params.context === 'background' // Flag for killed state handling
           }
         });
 
@@ -296,7 +297,8 @@ class NotifeeCallHandler {
             sessionId: params.sessionId,
             callerName: params.callerName,
             callType: params.callType,
-            context: params.context
+            context: params.context,
+            fromKilledState: params.context === 'background'
           });
         } else {
           throw new Error('Navigation to meeting screen failed');

@@ -3711,4 +3711,62 @@ export default class ApiService {
       throw this.handleError(error);
     }
   }
+
+  /**
+   * Verify subscription payment
+   */
+  static async verifySubscriptionPayment(data: {
+    razorpay_payment_id: string;
+    razorpay_subscription_id: string;
+    razorpay_signature: string;
+    user_id: number;
+    plan_id: string;
+  }): Promise<any> {
+    try {
+      console.log('[ApiService] ✅ Verifying subscription payment:', data);
+      const response = await this.post('/api/verify-subscription-payment', data);
+      console.log('[ApiService] ✅ Payment verification response:', response);
+      return response;
+    } catch (error) {
+      console.error('[ApiService] ❌ Error verifying subscription payment:', error);
+      throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Get content creator status
+   */
+  static async getContentCreatorStatus(userId: number): Promise<any> {
+    try {
+      console.log('[ApiService] 👑 Getting content creator status for user:', userId);
+      const response = await this.get(`/api/content-creator-status/${userId}`);
+      console.log('[ApiService] 👑 Content creator status response:', response);
+      return response;
+    } catch (error) {
+      console.error('[ApiService] ❌ Error getting content creator status:', error);
+      throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Verify content creator subscription payment
+   */
+  static async verifyContentCreatorSubscriptionPayment(data: {
+    razorpay_payment_id: string;
+    razorpay_subscription_id: string;
+    razorpay_signature: string;
+    user_id: number;
+    plan_id: string;
+  }): Promise<any> {
+    try {
+      console.log('[ApiService] ✅ Verifying content creator subscription payment:', data);
+      const response = await this.post('/api/verify-content-creator-subscription-payment', data);
+      console.log('[ApiService] ✅ Content creator payment verification response:', response);
+      return response;
+    } catch (error) {
+      console.error('[ApiService] ❌ Error verifying content creator subscription payment:', error);
+      throw this.handleError(error);
+    }
+  }
+
 }

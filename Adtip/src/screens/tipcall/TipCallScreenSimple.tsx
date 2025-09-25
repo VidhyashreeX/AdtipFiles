@@ -49,6 +49,7 @@ import Logger from '../../utils/logger'
 
 // Import premium access utilities
 import { checkPremiumAccess, logPremiumAccessAttempt } from '../../utils/premiumAccessUtils'
+import { useCustomBackHandler } from '../../hooks/useCustomBackHandler'
 import PremiumAccessModal from '../../components/modals/PremiumAccessModal'
 
 const { width: screenWidth } = Dimensions.get('window')
@@ -374,6 +375,12 @@ const TipCallScreenSimple = () => {
     }
   }, [premiumData])
   // --------------------------------------------------
+
+  // Dynamic back button handling for call screen
+  const handleCustomBack = useCustomBackHandler({
+    screenType: 'call',
+    fallbackRoute: 'Home'
+  });
 
   // -------------------- DND -------------------------
   const [isDndEnabled, setIsDndEnabled] = useState<boolean>(!!user?.dnd)
@@ -936,11 +943,7 @@ const TipCallScreenSimple = () => {
     setPendingCallData(null)
   }, [])
 
-  // Handle profile press
-  const handleProfilePress = useCallback((userId: number) => {
-    // Navigate to user profile
-    (navigation as any).navigate('Profile', { userId });
-  }, [navigation])
+  // Profile navigation now handled consistently through openProfile modal
 
   // Handle blocking a user
   const handleBlockUser = useCallback(
@@ -1048,9 +1051,9 @@ const TipCallScreenSimple = () => {
     setIsSearchActive(false)
     setSearchQuery('')
     setLiveSearchQuery('')
-    // Navigate to user profile or show actions
-    handleProfilePress(contact.id)
-  }, [handleProfilePress])
+    // Use same modal approach as regular contacts to ensure correct profile display
+    openProfile(contact.id)
+  }, [openProfile])
 
   // Handle load more contacts (pagination)
   const handleLoadMore = useCallback(() => {

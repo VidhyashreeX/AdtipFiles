@@ -643,13 +643,41 @@ const FCMChatScreen: React.FC = () => {
     console.log('[FCMChatScreen] Input focused, auto-scroll handled by library');
   }, []);
 
-  // Handle sending message
+  // Get chat features based on premium status
+  const getChatFeatures = useCallback(() => {
+    return {
+      canSendMedia: isPremium || true, // Basic feature for all
+      canSendVoiceNotes: isPremium,
+      canVideoCall: isPremium,
+      canVoiceCall: isPremium || true, // Allow for all with rate limits
+      maxFileSize: isPremium ? 100 * 1024 * 1024 : 25 * 1024 * 1024, // 100MB vs 25MB
+      maxMessageLength: isPremium ? 5000 : 1000 // Premium users can send longer messages
+    };
+  }, [isPremium]);
+
+  // Handle sending message with premium checks
   const handleSendMessage = useCallback(async () => {
     if (!messageText.trim() || !conversationId || sending) {
       return;
     }
 
     const messageToSend = messageText.trim();
+    const chatFeatures = getChatFeatures();
+
+    // Check message length limits
+    if (messageToSend.length > chatFeatures.maxMessageLength) {
+      if (!isPremium) {
+        setPremiumFeature('chat');
+        setShowPremiumPopup(true);
+        return;
+      } else {
+        Alert.alert(
+          'Message Too Long', 
+          `Message exceeds the maximum length of ${chatFeatures.maxMessageLength} characters.`
+        );
+        return;
+      }
+    }
 
     // Animate send button
     animateSendButton();
@@ -674,7 +702,21 @@ const FCMChatScreen: React.FC = () => {
     } finally {
       setSending(false);
     }
-  }, [messageText, conversationId, sending, sendMessage, animateSendButton]);
+  }, [messageText, conversationId, sending, sendMessage, animateSendButton, getChatFeatures, isPremium]);
+
+  // Handle media attachment (placeholder for future implementation)
+  const handleMediaAttachment = useCallback(() => {
+    const chatFeatures = getChatFeatures();
+    
+    if (!chatFeatures.canSendMedia && !isPremium) {
+      setPremiumFeature('chat');
+      setShowPremiumPopup(true);
+      return;
+    }
+
+    // TODO: Implement media picker and upload with size limits
+    Alert.alert('Coming Soon', 'Media sharing will be available in a future update.');
+  }, [getChatFeatures, isPremium]);
 
   // Refresh functionality removed since KeyboardAvoiderScrollView doesn't support pull-to-refresh
 

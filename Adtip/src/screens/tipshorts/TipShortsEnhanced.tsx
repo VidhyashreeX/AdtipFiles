@@ -14,6 +14,7 @@ import {
   ViewToken,
   Alert,
   AppState,
+  RefreshControl,
 } from 'react-native';
 import Animated, {
   useSharedValue,

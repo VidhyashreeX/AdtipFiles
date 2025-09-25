@@ -1486,34 +1486,44 @@ const MeetingScreenSimple = () => {
   const isMountedRef = useRef(true)
   const [videoSDKReady, setVideoSDKReady] = React.useState(false)
 
-  // Initialize session from route parameters if not already set (for deep links)
+  // Initialize session from route parameters if not already set (for deep links and killed state)
   useEffect(() => {
     if (!session && route.params) {
       const { meetingId, token, callData, callType, recipientName } = route.params;
 
-      if (meetingId && token && callData?.sessionId) {
-        logCall('[MeetingScreenSimple]', 'Initializing session from deep link route params', {
-          sessionId: callData.sessionId,
+      if (meetingId && token) {
+        // Handle both callData.sessionId and direct sessionId for backward compatibility
+        const sessionId = callData?.sessionId || `session-${Date.now()}`;
+        
+        logCall('[MeetingScreenSimple]', 'Initializing session from route params (killed state or deep link)', {
+          sessionId,
           meetingId,
           hasToken: !!token,
-          direction: callData.direction,
-          type: callData.type || callType
+          direction: callData?.direction || 'incoming',
+          type: callData?.type || callType,
+          fromKilledState: callData?.fromKilledState || false
         });
 
-        // Initialize session in call store
+        // Initialize session in call store with enhanced data
         actions.setSession({
-          sessionId: callData.sessionId,
+          sessionId,
           meetingId,
           token,
           peerId: 'unknown', // Will be updated when participants join
-          peerName: callData.callerName || recipientName || 'Unknown Caller',
-          direction: callData.direction || 'incoming',
-          type: callData.type || callType || 'video',
-          startedAt: Date.now()
+          peerName: callData?.callerName || recipientName || 'Unknown Caller',
+          direction: callData?.direction || 'incoming',
+          type: callData?.type || callType || 'voice',
+          startedAt: Date.now(),
+          fromKilledState: callData?.fromKilledState || false
         });
 
-        // Set appropriate status for incoming calls
-        if (callData.direction === 'incoming' || !callData.direction) {
+        // Set appropriate status for killed state and normal incoming calls
+        if (callData?.fromKilledState) {
+          // For killed state, go directly to connecting since user already accepted
+          actions.setStatus('connecting');
+          logCall('[MeetingScreenSimple]', 'Killed state call detected - setting status to connecting');
+        } else if (callData?.direction === 'incoming' || !callData?.direction) {
+          // For normal incoming calls
           actions.setStatus('connecting');
         }
       } else {
@@ -1561,7 +1571,7 @@ const MeetingScreenSimple = () => {
 
   const callIsActive = status === 'in_call' || status === 'connecting' || status === 'outgoing'
 
-  // Initialize VideoSDK before creating MeetingProvider
+  // Initialize VideoSDK before creating MeetingProvider - Enhanced for killed state
   useEffect(() => {
     const initializeVideoSDK = async () => {
       if (!sessionIsValid || !callIsActive) {
@@ -1574,11 +1584,20 @@ const MeetingScreenSimple = () => {
 
         const status = videoSDK.getInitializationStatus()
         const isFirstTimeOrColdStart = videoSDK.isFirstTimeOrColdStart()
+        const isFromKilledState = session?.fromKilledState || false
 
-        if (!status.initialized || !status.websocketReady || isFirstTimeOrColdStart) {
-          logVideoSDK('MeetingScreenSimple', 'VideoSDK not ready or first-time/cold start, ensuring initialization', {
+        logVideoSDK('MeetingScreenSimple', 'VideoSDK initialization context', {
+          status,
+          isFirstTimeOrColdStart,
+          isFromKilledState,
+          sessionId: session?.sessionId
+        })
+
+        if (!status.initialized || !status.websocketReady || isFirstTimeOrColdStart || isFromKilledState) {
+          logVideoSDK('MeetingScreenSimple', 'VideoSDK needs initialization', {
             status,
-            isFirstTimeOrColdStart
+            isFirstTimeOrColdStart,
+            isFromKilledState
           })
 
           const success = await videoSDK.ensureInitialized()
@@ -1588,14 +1607,52 @@ const MeetingScreenSimple = () => {
             return
           }
 
-          // Wait for WebSocket to be ready with enhanced timeout for first-time users
-          const timeout = isFirstTimeOrColdStart ? 15000 : 8000
+          // Enhanced timeout handling for killed state and different scenarios
+          let timeout = 8000 // Default timeout
+          
+          if (isFromKilledState) {
+            timeout = 20000 // 20 seconds for killed state - apps need more time to fully initialize
+            logVideoSDK('MeetingScreenSimple', 'Using extended timeout for killed state initialization')
+          } else if (isFirstTimeOrColdStart) {
+            timeout = 15000 // 15 seconds for first-time users
+            logVideoSDK('MeetingScreenSimple', 'Using extended timeout for first-time/cold start')
+          }
+
           logVideoSDK('MeetingScreenSimple', `Waiting for VideoSDK WebSocket to be ready (timeout: ${timeout}ms)...`)
-          const websocketReady = await videoSDK.waitForWebSocketReady(timeout)
+          
+          // Retry logic for WebSocket readiness with progressive delays
+          let websocketReady = false;
+          const maxRetries = isFromKilledState ? 5 : 3;
+          
+          for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            logVideoSDK('MeetingScreenSimple', `WebSocket ready attempt ${attempt}/${maxRetries}`)
+            
+            websocketReady = await videoSDK.waitForWebSocketReady(timeout / maxRetries)
+            
+            if (websocketReady) {
+              logVideoSDK('MeetingScreenSimple', `WebSocket ready on attempt ${attempt}`)
+              break;
+            }
+            
+            if (attempt < maxRetries) {
+              const retryDelay = isFromKilledState ? 2000 : 1000;
+              logVideoSDK('MeetingScreenSimple', `WebSocket not ready, retrying in ${retryDelay}ms...`)
+              await new Promise(resolve => setTimeout(resolve, retryDelay))
+            }
+          }
 
           if (!websocketReady) {
-            logError('MeetingScreenSimple', 'WebSocket failed to become ready within timeout')
-            return
+            logError('MeetingScreenSimple', `WebSocket failed to become ready after ${maxRetries} attempts`, {
+              isFromKilledState,
+              sessionId: session?.sessionId
+            })
+            
+            // For killed state, don't give up - try to proceed anyway
+            if (isFromKilledState) {
+              logVideoSDK('MeetingScreenSimple', 'Killed state: Proceeding despite WebSocket not ready')
+            } else {
+              return
+            }
           }
         }
 
@@ -1603,12 +1660,19 @@ const MeetingScreenSimple = () => {
         setVideoSDKReady(true)
       } catch (error) {
         logError('MeetingScreenSimple', 'VideoSDK initialization error', error)
-        setVideoSDKReady(false)
+        
+        // For killed state, be more lenient with errors
+        if (session?.fromKilledState) {
+          logVideoSDK('MeetingScreenSimple', 'Killed state: Setting videoSDKReady to true despite error to allow meeting join attempt')
+          setVideoSDKReady(true)
+        } else {
+          setVideoSDKReady(false)
+        }
       }
     }
 
     initializeVideoSDK()
-  }, [sessionIsValid, callIsActive])
+  }, [sessionIsValid, callIsActive, session?.fromKilledState])
 
   // Debug logging for state changes
   useEffect(() => {

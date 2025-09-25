@@ -29,6 +29,7 @@ interface CallStateData {
   status: 'incoming' | 'active' | 'ended' | 'missed';
   fcmMessageId?: string;
   appState: 'background' | 'killed' | 'foreground';
+  fromKilledState?: boolean; // flag to indicate if call was initiated from killed state
 }
 
 interface CallRecoveryOptions {

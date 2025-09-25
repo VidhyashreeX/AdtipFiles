@@ -23,8 +23,11 @@ import { useTheme } from '../../contexts/ThemeContext';
 
 // Import API service
 import ApiService from '../../services/ApiService';
-import CloudflareUploadService from '../../services/CloudflareUploadService';
 import { handleProfileImageUploadResult, createFreshProfileImageUrl } from '../../utils/ProfileImageUtils';
+
+// Import enhanced validation and image upload
+import { validateProfile, ValidationError, formatValidationErrors } from '../../utils/profileValidation';
+import { updateProfileImage } from '../../utils/profileImageUpload';
 
 // Define navigation param list
 type RootStackParamList = {
@@ -132,6 +135,10 @@ const EditProfile: React.FC = () => {
   // Modal states
   const [showProfessionModal, setShowProfessionModal] = useState(false);
   const [showLanguageModal, setShowLanguageModal] = useState(false);
+
+  // Validation states
+  const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   // Initialize DOB from user data
   useEffect(() => {
@@ -282,15 +289,83 @@ const EditProfile: React.FC = () => {
     }
   };
 
+  // Handle profile image update
+  const handleProfileImageUpdate = async (): Promise<void> => {
+    try {
+      setLoading(true);
+      
+      const result = await updateProfileImage();
+      
+      if (result.success && result.imageUrl) {
+        // Update user profile with new image
+        if (user?.id) {
+          const imageUpdateResult = await ApiService.updateUser({
+            id: user.id,
+            profile_image: result.imageUrl
+          } as any);
+
+          if (imageUpdateResult.data?.status === 200) {
+            // Update local user data
+            updateUserDetails({
+              id: user.id,
+              profile_image: result.imageUrl
+            } as any);
+            
+            Alert.alert('Success', 'Profile picture updated successfully!');
+          } else {
+            Alert.alert('Error', 'Failed to save profile picture. Please try again.');
+          }
+        }
+      } else if (result.error) {
+        Alert.alert('Upload Failed', result.error);
+      }
+    } catch (error) {
+      console.error('[EditProfile] Profile image update error:', error);
+      Alert.alert('Error', 'Failed to update profile picture. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSave = async (): Promise<void> => {
     if (!user?.id) {
       Alert.alert('Error', 'User not found');
       return;
     }
 
-    // Validate profession selection
-    if (profession === 'Select your profession' || profession === '') {
-      Alert.alert('Error', 'Please select your profession');
+    // Clear previous validation errors
+    setValidationErrors([]);
+    setFieldErrors({});
+
+    // Comprehensive validation
+    const profileData = {
+      name: name.trim(),
+      email: email.trim(),
+      bio: bio.trim(),
+      profession,
+      gender,
+      dateOfBirth: dob ? dob.toISOString() : '',
+      mobile_number: user?.mobile_number || ''
+    };
+
+    const errors = validateProfile(profileData);
+
+    if (errors.length > 0) {
+      setValidationErrors(errors);
+      
+      // Create field-specific error map
+      const fieldErrorMap: Record<string, string> = {};
+      errors.forEach(error => {
+        fieldErrorMap[error.field] = error.message;
+      });
+      setFieldErrors(fieldErrorMap);
+
+      // Show validation summary
+      Alert.alert(
+        'Validation Error',
+        formatValidationErrors(errors),
+        [{ text: 'OK' }]
+      );
       return;
     }
     
@@ -377,6 +452,46 @@ const EditProfile: React.FC = () => {
     }
   };
 
+  // Real-time field validation helpers
+  const validateField = (fieldName: string, value: string): void => {
+    const newFieldErrors = { ...fieldErrors };
+    
+    switch (fieldName) {
+      case 'name':
+        const nameValidation = validateProfile({ name: value, email: '', bio: '', profession: '', gender: '', dateOfBirth: '', mobile_number: ''} ).find(e => e.field === 'name');
+        if (nameValidation) {
+          newFieldErrors.name = nameValidation.message;
+        } else {
+          delete newFieldErrors.name;
+        }
+        break;
+        
+      case 'email':
+        if (value.trim()) {
+          const emailValidation = validateProfile({ name: '', email: value, bio: '', profession: '', gender: '', dateOfBirth: '', mobile_number: ''} ).find(e => e.field === 'email');
+          if (emailValidation) {
+            newFieldErrors.email = emailValidation.message;
+          } else {
+            delete newFieldErrors.email;
+          }
+        } else {
+          delete newFieldErrors.email;
+        }
+        break;
+        
+      case 'bio':
+        const bioValidation = validateProfile({ name: '', email: '', bio: value, profession: '', gender: '', dateOfBirth: '', mobile_number: ''} ).find(e => e.field === 'bio');
+        if (bioValidation) {
+          newFieldErrors.bio = bioValidation.message;
+        } else {
+          delete newFieldErrors.bio;
+        }
+        break;
+    }
+    
+    setFieldErrors(newFieldErrors);
+  };
+
   if (fetchingData) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -417,16 +532,24 @@ const EditProfile: React.FC = () => {
               styles.input,
               {
                 backgroundColor: colors.surface,
-                borderColor: colors.border,
+                borderColor: fieldErrors.name ? colors.error : colors.border,
                 color: colors.text.primary,
               }
             ]}
             value={name}
-            onChangeText={setName}
+            onChangeText={(text) => {
+              setName(text);
+              validateField('name', text);
+            }}
             placeholder="Enter your full name"
             placeholderTextColor={colors.text.light}
             editable={!loading}
           />
+          {fieldErrors.name && (
+            <Text style={[styles.errorText, { color: colors.error }]}>
+              {fieldErrors.name}
+            </Text>
+          )}
         </View>
 
         {/* Email */}
@@ -437,17 +560,25 @@ const EditProfile: React.FC = () => {
               styles.input,
               {
                 backgroundColor: colors.surface,
-                borderColor: colors.border,
+                borderColor: fieldErrors.email ? colors.error : colors.border,
                 color: colors.text.primary,
               }
             ]}
             value={email}
-            onChangeText={setEmail}
+            onChangeText={(text) => {
+              setEmail(text);
+              validateField('email', text);
+            }}
             placeholder="Enter your email"
             placeholderTextColor={colors.text.light}
             keyboardType="email-address"
             editable={!loading}
           />
+          {fieldErrors.email && (
+            <Text style={[styles.errorText, { color: colors.error }]}>
+              {fieldErrors.email}
+            </Text>
+          )}
         </View>
 
         {/* About/Bio */}
@@ -459,18 +590,26 @@ const EditProfile: React.FC = () => {
               styles.textArea,
               {
                 backgroundColor: colors.surface,
-                borderColor: colors.border,
+                borderColor: fieldErrors.bio ? colors.error : colors.border,
                 color: colors.text.primary,
               }
             ]}
             value={bio}
-            onChangeText={setBio}
+            onChangeText={(text) => {
+              setBio(text);
+              validateField('bio', text);
+            }}
             placeholder="Tell us about yourself"
             placeholderTextColor={colors.text.light}
             multiline
             numberOfLines={3}
             editable={!loading}
           />
+          {fieldErrors.bio && (
+            <Text style={[styles.errorText, { color: colors.error }]}>
+              {fieldErrors.bio}
+            </Text>
+          )}
         </View>
 
         {/* Date of Birth */}
@@ -932,6 +1071,11 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  errorText: {
+    fontSize: 12,
+    marginTop: 4,
+    fontStyle: 'italic',
   },
 });
 

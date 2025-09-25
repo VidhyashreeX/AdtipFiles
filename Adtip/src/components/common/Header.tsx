@@ -151,11 +151,11 @@ const Header: React.FC<HeaderProps> = ({
       // If onSearchSubmit is provided, use it (for navigation)
       onSearchSubmit('');
     } else {
-      // Default behavior: activate search input
-      setIsSearchActive(true);
-      setTimeout(() => searchInputRef.current?.focus(), 50);
+      // Default behavior: navigate to SearchScreen
+      console.log('🔍 [Header] Navigating to SearchScreen');
+      (navigation as any).navigate('SearchScreen');
     }
-  }, [onSearchSubmit]);
+  }, [onSearchSubmit, navigation]);
 
   // Determine if we should show the built-in search input
   const shouldShowBuiltInSearch = useMemo(() => {
@@ -406,7 +406,12 @@ const Header: React.FC<HeaderProps> = ({
                   />
                 </TouchableOpacity>
               ) : (
-                <TouchableOpacity onPress={handleSearchIconPress} style={[styles.iconButton, {marginLeft: sizes.iconSpacing /2}]}>
+                <TouchableOpacity 
+                  onPress={handleSearchIconPress} 
+                  style={[styles.iconButton, {marginLeft: sizes.iconSpacing /2}]}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  activeOpacity={0.7}
+                >
                   <Icon name="search" size={sizes.iconSize} color={colors.text.secondary} />
                 </TouchableOpacity>
               )

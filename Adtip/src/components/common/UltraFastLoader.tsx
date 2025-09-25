@@ -227,6 +227,77 @@ const UltraFastLoader: React.FC<UltraFastLoaderProps> = ({
     }
   }, [isNavReady]);
 
+  // ✅ BACKUP KILLED STATE NOTIFICATION HANDLER
+  // This is a secondary check in case App.tsx handler misses the notification
+  useEffect(() => {
+    if (!isNavReady || !navigationRef.isReady()) return;
+
+    const checkForKilledStateNotification = async () => {
+      try {
+        // Only run this check once when navigation becomes ready
+        const hasChecked = await require('@react-native-async-storage/async-storage').default.getItem('killedStateNotificationChecked');
+        if (hasChecked) return;
+
+        const messaging = require('@react-native-firebase/messaging').default;
+        const initialNotification = await messaging().getInitialNotification();
+
+        if (initialNotification?.data?.type === 'incoming_call') {
+          Logger.info('UltraFastLoader', '🔥 BACKUP: Killed state notification detected in UltraFastLoader');
+
+          // Extract and validate FCM notification data with proper type safety
+          const rawData = initialNotification.data;
+          const meetingId = typeof rawData.meetingId === 'string' ? rawData.meetingId : '';
+          const token = typeof rawData.token === 'string' ? rawData.token : '';
+          const callerName = typeof rawData.callerName === 'string' ? rawData.callerName : '';
+          const rawCallType = typeof rawData.callType === 'string' ? rawData.callType : 'voice';
+          const callType: 'voice' | 'video' = rawCallType === 'video' ? 'video' : 'voice';
+          const sessionId = typeof rawData.sessionId === 'string' ? rawData.sessionId : '';
+
+          if (meetingId && token && callerName) {
+            Logger.info('UltraFastLoader', '🔥 BACKUP: Processing killed state notification');
+            
+            // Import navigation service
+            const { default: NavigationService } = await import('../../navigation/SimplifiedNavigationService');
+            
+            const navigationSuccess = NavigationService.navigateToMeeting({
+              meetingId,
+              token,
+              displayName: 'Me',
+              callType,
+              isInitiator: false,
+              recipientName: callerName,
+              callData: {
+                sessionId: sessionId || `backup-killed-state-${Date.now()}`,
+                direction: 'incoming',
+                type: callType,
+                callerName,
+                fromKilledState: true
+              }
+            });
+
+            if (navigationSuccess) {
+              Logger.info('UltraFastLoader', '✅ BACKUP: Successfully navigated to Meeting screen from killed state');
+            }
+          }
+        }
+
+        // Mark as checked to prevent duplicate processing
+        await require('@react-native-async-storage/async-storage').default.setItem('killedStateNotificationChecked', 'true');
+        
+        // Clear the flag after a delay to allow future notifications
+        setTimeout(async () => {
+          await require('@react-native-async-storage/async-storage').default.removeItem('killedStateNotificationChecked');
+        }, 30000); // 30 second window
+
+      } catch (error) {
+        Logger.error('UltraFastLoader', 'Backup killed state notification check failed:', error);
+      }
+    };
+
+    // Run backup check after a small delay to ensure App.tsx has had time to process
+    setTimeout(checkForKilledStateNotification, 2000);
+  }, [isNavReady]);
+
   // ✅ SIMPLIFIED: Initialization handled by state machine
   useEffect(() => {
     // Notify completion if callback provided

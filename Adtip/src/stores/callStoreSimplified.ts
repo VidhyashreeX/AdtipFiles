@@ -24,6 +24,7 @@ export interface CallSession {
   endedAt?: number
   duration?: number // call duration in seconds
   callId?: number // backend call record id for payment processing
+  fromKilledState?: boolean // flag to indicate if session was created from killed state
 }
 
 export interface MediaState {

@@ -110,9 +110,145 @@ const AppNavigator = () => {
   const handleInitializationComplete = useCallback(() => {
     Logger.debug('App', 'Ultra-fast initialization complete');
     
-    // Check for persisted call state recovery (CRITICAL FOR OFFLINE CALLS)
+    // CRITICAL FIX: Check for FCM notification from killed state first
     setTimeout(async () => {
       try {
+        Logger.debug('App', '🔥 Checking for killed state FCM notification...');
+        
+        const messaging = (await import('@react-native-firebase/messaging')).default;
+        const initialNotification = await messaging().getInitialNotification();
+        
+        if (initialNotification?.data?.type === 'incoming_call') {
+          Logger.info('App', '🔥 KILLED STATE NOTIFICATION DETECTED - Processing incoming call:', {
+            messageId: initialNotification.messageId,
+            data: initialNotification.data
+          });
+
+          // Extract and validate FCM notification data with proper type safety
+          const rawData = initialNotification.data;
+          const meetingId = typeof rawData.meetingId === 'string' ? rawData.meetingId : '';
+          const token = typeof rawData.token === 'string' ? rawData.token : '';
+          const callerName = typeof rawData.callerName === 'string' ? rawData.callerName : '';
+          const rawCallType = typeof rawData.callType === 'string' ? rawData.callType : 'voice';
+          const callType: 'voice' | 'video' = rawCallType === 'video' ? 'video' : 'voice';
+          const sessionId = typeof rawData.sessionId === 'string' ? rawData.sessionId : '';
+
+          // Validate required parameters for meeting join
+          if (meetingId && token && callerName) {
+            Logger.info('App', '🔥 Valid meeting parameters found, navigating directly to Meeting screen');
+
+            // Direct navigation to Meeting screen with all required parameters
+            const navigationService = await import('./src/navigation/SimplifiedNavigationService');
+            
+            // Give navigation container time to initialize in killed state
+            const tryNavigateToMeeting = async (attempts = 0) => {
+              const maxAttempts = 5;
+              const delay = 500 + (attempts * 300); // Increasing delay: 500ms, 800ms, 1100ms, etc.
+
+              if (attempts >= maxAttempts) {
+                Logger.error('App', '❌ Failed to navigate to Meeting after max attempts');
+                return false;
+              }
+
+              if (navigationService.navigationRef.isReady()) {
+                const navigationSuccess = navigationService.default.navigateToMeeting({
+                  meetingId,
+                  token,
+                  displayName: 'Me',
+                  callType: callType === 'video' ? 'video' : 'voice',
+                  isInitiator: false,
+                  recipientName: callerName,
+                  callData: {
+                    sessionId: sessionId || `killed-state-${Date.now()}`,
+                    direction: 'incoming',
+                    type: callType,
+                    callerName,
+                    fromKilledState: true // Flag to help meeting screen handle killed state differently
+                  }
+                });
+
+                if (navigationSuccess) {
+                  Logger.info('App', '✅ KILLED STATE: Successfully navigated to Meeting screen');
+                  
+                  // Initialize call state in the store for proper handling
+                  try {
+                    const { useCallStore } = await import('./src/stores/callStoreSimplified');
+                    const store = useCallStore.getState();
+                    
+                    store.actions.setSession({
+                      sessionId: sessionId || `killed-state-${Date.now()}`,
+                      meetingId,
+                      token,
+                      peerId: 'unknown',
+                      peerName: callerName,
+                      direction: 'incoming',
+                      type: callType === 'video' ? 'video' : 'voice',
+                      startedAt: Date.now()
+                    });
+                    
+                    // Set status to connecting since we're directly joining
+                    store.actions.setStatus('connecting');
+                    Logger.info('App', '✅ KILLED STATE: Call store initialized for incoming call');
+                    
+                  } catch (storeError) {
+                    Logger.error('App', '❌ Failed to initialize call store for killed state:', storeError);
+                  }
+
+                  // Save state to persistence service for backup
+                  try {
+                    const { default: CallStatePersistenceService } = await import('./src/services/calling/CallStatePersistenceService');
+                    const persistenceService = CallStatePersistenceService.getInstance();
+                    await persistenceService.initialize();
+                    
+                    await persistenceService.saveCallState({
+                      sessionId: sessionId || `killed-state-${Date.now()}`,
+                      callerName,
+                      callType,
+                      meetingId,
+                      token,
+                      status: 'active',
+                      appState: 'foreground',
+                      fromKilledState: true
+                    });
+                    
+                    Logger.info('App', '✅ KILLED STATE: Call state saved to persistence');
+                  } catch (persistError) {
+                    Logger.error('App', '❌ Failed to save killed state call to persistence:', persistError);
+                  }
+
+                  return true;
+                } else {
+                  Logger.warn('App', `🔥 Navigation attempt ${attempts + 1} failed, retrying...`);
+                  await new Promise(resolve => setTimeout(resolve, delay));
+                  return tryNavigateToMeeting(attempts + 1);
+                }
+              } else {
+                Logger.warn('App', `🔥 Navigation not ready yet, attempt ${attempts + 1}, retrying...`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                return tryNavigateToMeeting(attempts + 1);
+              }
+            };
+
+            // Start the navigation retry process
+            await tryNavigateToMeeting();
+            
+            // Skip the persistence recovery check since we handled killed state
+            return;
+
+          } else {
+            Logger.error('App', '❌ Invalid killed state notification parameters:', {
+              meetingId: meetingId ? 'present' : 'missing',
+              token: token ? 'present' : 'missing',
+              callerName: callerName ? 'present' : 'missing'
+            });
+            // Fall through to persistence recovery
+          }
+        } else {
+          Logger.debug('App', '🔄 No killed state notification found, checking persistence...');
+          // Fall through to persistence recovery
+        }
+
+        // Original persistence recovery logic (only if no killed state notification)
         Logger.debug('App', '🔄 Checking for persisted call state recovery...');
         
         const { default: CallStatePersistenceService } = await import('./src/services/calling/CallStatePersistenceService');
@@ -219,10 +355,10 @@ const AppNavigator = () => {
         }
 
       } catch (error) {
-        Logger.error('App', '❌ Call state recovery failed:', error);
+        Logger.error('App', '❌ Killed state/persistence recovery failed:', error);
         // Don't block app startup on recovery failure
       }
-    }, 2000); // Delay to ensure services are ready
+    }, 1500); // Reduced delay for faster killed state handling
   }, []);
 
   // ✅ SIMPLIFIED: Deep linking now handled in UltraFastLoader
