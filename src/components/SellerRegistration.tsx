@@ -6,10 +6,12 @@ import {
   ArrowRight, 
   Upload,
   ImageIcon,
-  CheckCircle
+  CheckCircle,
+  Loader2
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { apiCreateCompany } from '@/api';
+import CloudflareUploadService, { UploadProgress } from '@/services/CloudflareUploadService';
 
 interface FormData {
   companyName: string;
@@ -22,6 +24,8 @@ interface FormData {
   ctaButton: string;
   logo: File | null;
   banner: File | null;
+  logoUrl: string;
+  bannerUrl: string;
 }
 
 const STEPS = [
@@ -54,13 +58,104 @@ const SellerRegistration = () => {
     ctaButton: '',
     logo: null,
     banner: null,
+    logoUrl: '',
+    bannerUrl: '',
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<{logo: number, banner: number}>({logo: 0, banner: 0});
+  const [isUploading, setIsUploading] = useState<{logo: boolean, banner: boolean}>({logo: false, banner: false});
   const logoInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
+
+  // File upload handlers with Cloudflare R2 integration
+  const handleLogoUpload = async (file: File) => {
+    setIsUploading(prev => ({ ...prev, logo: true }));
+    setUploadProgress(prev => ({ ...prev, logo: 0 }));
+    
+    try {
+      const userData = JSON.parse(localStorage.getItem('UserData') || '{}');
+      const userId = userData.id || 'anonymous';
+      
+      const result = await CloudflareUploadService.uploadCompanyImage(
+        file,
+        'logo',
+        userId,
+        (progress: UploadProgress) => {
+          setUploadProgress(prev => ({ ...prev, logo: progress.percentage }));
+        }
+      );
+      
+      if (result.success) {
+        setFormData(prev => ({ 
+          ...prev, 
+          logo: file,
+          logoUrl: result.url 
+        }));
+        
+        toast({
+          title: "Success!",
+          description: "Company logo uploaded successfully!",
+        });
+      } else {
+        throw new Error(result.error || 'Upload failed');
+      }
+    } catch (error: any) {
+      console.error('Logo upload failed:', error);
+      toast({
+        title: "Upload Failed",
+        description: error.message || "Failed to upload logo. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploading(prev => ({ ...prev, logo: false }));
+    }
+  };
+
+  const handleBannerUpload = async (file: File) => {
+    setIsUploading(prev => ({ ...prev, banner: true }));
+    setUploadProgress(prev => ({ ...prev, banner: 0 }));
+    
+    try {
+      const userData = JSON.parse(localStorage.getItem('UserData') || '{}');
+      const userId = userData.id || 'anonymous';
+      
+      const result = await CloudflareUploadService.uploadCompanyImage(
+        file,
+        'banner',
+        userId,
+        (progress: UploadProgress) => {
+          setUploadProgress(prev => ({ ...prev, banner: progress.percentage }));
+        }
+      );
+      
+      if (result.success) {
+        setFormData(prev => ({ 
+          ...prev, 
+          banner: file,
+          bannerUrl: result.url 
+        }));
+        
+        toast({
+          title: "Success!",
+          description: "Company banner uploaded successfully!",
+        });
+      } else {
+        throw new Error(result.error || 'Upload failed');
+      }
+    } catch (error: any) {
+      console.error('Banner upload failed:', error);
+      toast({
+        title: "Upload Failed",
+        description: error.message || "Failed to upload banner. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploading(prev => ({ ...prev, banner: false }));
+    }
+  };
 
   const validateStep = (step: number): boolean => {
     const newErrors: Record<string, string> = {};
@@ -95,6 +190,16 @@ const SellerRegistration = () => {
 
   const handleSubmit = async () => {
     if (!validateStep(3)) return;
+    
+    // Check if uploads are still in progress
+    if (isUploading.logo || isUploading.banner) {
+      toast({
+        title: "Upload in Progress",
+        description: "Please wait for file uploads to complete before submitting.",
+        variant: "destructive"
+      });
+      return;
+    }
     
     setIsSubmitting(true);
     
@@ -304,7 +409,7 @@ const SellerRegistration = () => {
                   const files = Array.from(e.dataTransfer.files);
                   const imageFile = files.find(file => file.type.startsWith('image/'));
                   if (imageFile) {
-                    setFormData({ ...formData, logo: imageFile });
+                    handleLogoUpload(imageFile);
                   }
                 }}
                 onClick={() => logoInputRef.current?.click()}
@@ -316,18 +421,33 @@ const SellerRegistration = () => {
                   onChange={(e) => {
                     const file = e.target.files?.[0];
                     if (file) {
-                      setFormData({ ...formData, logo: file });
+                      handleLogoUpload(file);
                     }
                   }}
                   className="hidden"
+                  disabled={isUploading.logo}
                 />
-                {formData.logo ? (
+                {isUploading.logo ? (
+                  <div className="space-y-3">
+                    <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto">
+                      <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+                    </div>
+                    <p className="text-sm font-medium text-blue-600">Uploading logo...</p>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div 
+                        className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
+                        style={{ width: `${uploadProgress.logo}%` }}
+                      ></div>
+                    </div>
+                    <p className="text-xs text-gray-500">{uploadProgress.logo}% complete</p>
+                  </div>
+                ) : formData.logoUrl ? (
                   <div className="space-y-3">
                     <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
-                      <ImageIcon className="w-8 h-8 text-green-600" />
+                      <CheckCircle className="w-8 h-8 text-green-600" />
                     </div>
-                    <p className="text-sm font-medium text-green-600">{formData.logo.name}</p>
-                    <p className="text-xs text-gray-500">✅ Logo uploaded successfully</p>
+                    <p className="text-sm font-medium text-green-600">Logo uploaded successfully</p>
+                    <p className="text-xs text-gray-500">✅ Available at cloud storage</p>
                     <p className="text-xs text-blue-500 hover:text-blue-700 cursor-pointer">Click to change</p>
                   </div>
                 ) : (
@@ -364,7 +484,7 @@ const SellerRegistration = () => {
                   const files = Array.from(e.dataTransfer.files);
                   const imageFile = files.find(file => file.type.startsWith('image/'));
                   if (imageFile) {
-                    setFormData({ ...formData, banner: imageFile });
+                    handleBannerUpload(imageFile);
                   }
                 }}
                 onClick={() => bannerInputRef.current?.click()}
@@ -376,18 +496,33 @@ const SellerRegistration = () => {
                   onChange={(e) => {
                     const file = e.target.files?.[0];
                     if (file) {
-                      setFormData({ ...formData, banner: file });
+                      handleBannerUpload(file);
                     }
                   }}
                   className="hidden"
+                  disabled={isUploading.banner}
                 />
-                {formData.banner ? (
+                {isUploading.banner ? (
+                  <div className="space-y-3">
+                    <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto">
+                      <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+                    </div>
+                    <p className="text-sm font-medium text-blue-600">Uploading banner...</p>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div 
+                        className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
+                        style={{ width: `${uploadProgress.banner}%` }}
+                      ></div>
+                    </div>
+                    <p className="text-xs text-gray-500">{uploadProgress.banner}% complete</p>
+                  </div>
+                ) : formData.bannerUrl ? (
                   <div className="space-y-3">
                     <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
-                      <ImageIcon className="w-8 h-8 text-green-600" />
+                      <CheckCircle className="w-8 h-8 text-green-600" />
                     </div>
-                    <p className="text-sm font-medium text-green-600">{formData.banner.name}</p>
-                    <p className="text-xs text-gray-500">✅ Banner uploaded successfully</p>
+                    <p className="text-sm font-medium text-green-600">Banner uploaded successfully</p>
+                    <p className="text-xs text-gray-500">✅ Available at cloud storage</p>
                     <p className="text-xs text-blue-500 hover:text-blue-700 cursor-pointer">Click to change</p>
                   </div>
                 ) : (
@@ -485,9 +620,9 @@ const SellerRegistration = () => {
           ) : (
             <button
               onClick={handleSubmit}
-              disabled={isSubmitting}
+              disabled={isSubmitting || isUploading.logo || isUploading.banner}
               className={`flex items-center px-8 py-3 rounded-xl font-semibold shadow-lg transition-all duration-200 transform hover:-translate-y-0.5 ${
-                isSubmitting
+                isSubmitting || isUploading.logo || isUploading.banner
                   ? 'bg-gray-400 cursor-not-allowed'
                   : 'bg-gradient-to-r from-[#00dcaa] to-[#00b894] hover:from-[#00b894] hover:to-[#00a085] hover:shadow-xl'
               } text-white`}
@@ -496,6 +631,11 @@ const SellerRegistration = () => {
                 <>
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                   Creating Account...
+                </>
+              ) : isUploading.logo || isUploading.banner ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Uploading Files...
                 </>
               ) : (
                 <>
