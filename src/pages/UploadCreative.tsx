@@ -1,25 +1,107 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Upload, Wand2, Video, FileImage, Camera, Zap } from 'lucide-react';
+import { ArrowLeft, Upload, Wand2, Video, FileImage, Camera, Zap, Loader2 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { toast } from '@/hooks/use-toast';
+import { apiSaveSecondPageAdModel } from '@/api';
 
 const UploadCreative = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { selectedModel, campaignData } = location.state || {};
+  const { selectedModel, campaignData, adId, apiData } = location.state || {};
 
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [uploadedFileUrl, setUploadedFileUrl] = useState<string>('');
   const [showContentDetails, setShowContentDetails] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [contentData, setContentData] = useState({
     adTitle: '',
     adDescription: '',
     callToAction: ''
   });
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const uploadToCloudflare = async (file: File): Promise<string> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('folder', 'ads'); // Organize ad creatives in 'ads' folder
+    
+    try {
+      // Use the backend upload endpoint that handles Cloudflare
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:7082'}/api/uploadcontent`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('UserLoggedIn')}`
+        },
+        body: formData
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Upload failed: ${response.statusText}`);
+      }
+      
+      const result = await response.json();
+      
+      if (result.status === 200 && result.url) {
+        return result.url;
+      } else {
+        throw new Error(result.message || 'Upload failed');
+      }
+    } catch (error) {
+      console.error('Cloudflare upload error:', error);
+      throw error;
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
+    if (!file) return;
+
+    // Validate file type and size
+    const fileType = file.type.toLowerCase();
+    const isVideo = fileType.startsWith('video/');
+    const isImage = fileType.startsWith('image/');
+    
+    if (!isVideo && !isImage) {
+      toast({
+        title: "Invalid File Type",
+        description: "Please upload a video or image file.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Check file size (100MB max for videos, 5MB for images)
+    const maxSize = isVideo ? 100 * 1024 * 1024 : 5 * 1024 * 1024;
+    if (file.size > maxSize) {
+      toast({
+        title: "File Too Large",
+        description: `File size should be less than ${isVideo ? '100MB' : '5MB'}.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsUploading(true);
+    
+    try {
+      const uploadedUrl = await uploadToCloudflare(file);
       setUploadedFile(file);
+      setUploadedFileUrl(uploadedUrl);
       setShowContentDetails(true);
+      
+      toast({
+        title: "Upload Successful",
+        description: "Your creative has been uploaded successfully!",
+      });
+    } catch (error: any) {
+      console.error('Upload failed:', error);
+      toast({
+        title: "Upload Failed",
+        description: error.message || "Failed to upload file. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -31,15 +113,80 @@ const UploadCreative = () => {
     }));
   };
 
-  const handleNextPreview = () => {
-    navigate('/seller/preview-ad', {
-      state: {
-        selectedModel,
-        campaignData,
-        uploadedFile,
-        contentData
+  const handleNextPreview = async () => {
+    if (!uploadedFileUrl || !contentData.adTitle || !contentData.adDescription) {
+      toast({
+        title: "Missing Information",
+        description: "Please upload a creative and fill in all content details.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!adId) {
+      toast({
+        title: "Error",
+        description: "Campaign ID is missing. Please start over.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsLoading(true);
+    
+    try {
+      // Get user data
+      const userData = JSON.parse(localStorage.getItem('UserData') || '{}');
+      
+      // Prepare data for second page API call
+      const secondPageData = {
+        adId: adId,
+        adTitle: contentData.adTitle,
+        adDescription: contentData.adDescription,
+        adVideoPath: uploadedFileUrl,
+        adImagePath: uploadedFileUrl, // Use same URL for both video and image
+        cta: contentData.callToAction,
+        createdby: userData.id || '1'
+      };
+
+      console.log('Sending second page data:', secondPageData);
+      
+      const response = await apiSaveSecondPageAdModel(secondPageData);
+      
+      if (response.data?.status === 200) {
+        toast({
+          title: "Success!",
+          description: "Creative details saved successfully!",
+        });
+        
+        // Navigate to preview with all the data
+        navigate('/seller/preview-ad', {
+          state: {
+            selectedModel,
+            campaignData,
+            uploadedFile,
+            uploadedFileUrl,
+            contentData,
+            adId,
+            apiData
+          }
+        });
+      } else {
+        throw new Error(response.data?.message || 'Failed to save creative details');
       }
-    });
+      
+    } catch (error: any) {
+      console.error('Save creative failed:', error);
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to save creative details';
+      
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleAIGeneration = (type: string) => {
@@ -97,14 +244,25 @@ const UploadCreative = () => {
                       </p>
                       
                       <label className="inline-block">
-                        <div className="bg-white border-2 border-blue-300 text-blue-700 px-6 py-3 rounded-lg font-semibold hover:bg-blue-50 transition-colors cursor-pointer">
-                          Upload your creative
+                        <div className={`bg-white border-2 border-blue-300 text-blue-700 px-6 py-3 rounded-lg font-semibold hover:bg-blue-50 transition-colors cursor-pointer flex items-center justify-center gap-2 ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                          {isUploading ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              Uploading...
+                            </>
+                          ) : (
+                            <>
+                              <Upload className="w-4 h-4" />
+                              Upload your creative
+                            </>
+                          )}
                         </div>
                         <input 
                           type="file" 
                           accept="image/*,video/*" 
                           onChange={handleFileUpload}
                           className="hidden"
+                          disabled={isUploading}
                         />
                       </label>
                       
@@ -284,9 +442,17 @@ const UploadCreative = () => {
                 <button
                   type="button"
                   onClick={handleNextPreview}
-                  className="px-8 py-3 bg-[#00dcaa] text-white rounded-lg hover:bg-[#00b894] transition-colors font-semibold"
+                  disabled={isLoading}
+                  className={`px-8 py-3 bg-[#00dcaa] text-white rounded-lg hover:bg-[#00b894] transition-colors font-semibold flex items-center gap-2 ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
-                  Next: Preview Ad
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    'Next: Preview Ad'
+                  )}
                 </button>
               )}
             </div>

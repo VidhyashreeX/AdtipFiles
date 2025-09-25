@@ -8,6 +8,8 @@ import {
   ImageIcon,
   CheckCircle
 } from 'lucide-react';
+import { toast } from '@/hooks/use-toast';
+import { apiCreateCompany } from '@/api';
 
 interface FormData {
   companyName: string;
@@ -97,38 +99,49 @@ const SellerRegistration = () => {
     setIsSubmitting(true);
     
     try {
-      // Create FormData for file uploads
-      const submitData = new FormData();
+      // Create company using the backend API
+      const response = await apiCreateCompany(formData);
       
-      // Add all form fields
-      Object.entries(formData).forEach(([key, value]) => {
-        if (value instanceof File) {
-          submitData.append(key, value);
-        } else if (value) {
-          submitData.append(key, value.toString());
-        }
-      });
-
-      // Here you would typically send to your backend
-      // const response = await fetch('/api/seller/register', {
-      //   method: 'POST',
-      //   body: submitData,
-      // });
-
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      if (response.data && response.data.status === 200) {
+        // Store company info in localStorage for later use
+        const companyData = response.data.data[0];
+        localStorage.setItem('selectedCompany', JSON.stringify(companyData));
+        
+        toast({
+          title: "Success!",
+          description: "Company registration completed successfully! Welcome to AdTip.",
+        });
+        
+        // Navigate to seller dashboard on success
+        navigate('/seller/dashboard', { 
+          state: { 
+            message: 'Seller registration completed successfully! Welcome to AdTip.',
+            newSeller: true,
+            companyData: companyData
+          }
+        });
+      } else {
+        throw new Error(response.data?.message || 'Registration failed');
+      }
       
-      // Navigate to seller dashboard on success
-      navigate('/seller/dashboard', { 
-        state: { 
-          message: 'Seller registration completed successfully! Welcome to AdTip.',
-          newSeller: true 
-        }
-      });
-      
-    } catch (error) {
+    } catch (error: any) {
       console.error('Registration failed:', error);
-      setErrors({ submit: 'Registration failed. Please try again.' });
+      
+      // Handle specific backend error
+      let errorMessage = error.response?.data?.message || error.message || 'Registration failed. Please try again.';
+      
+      if (errorMessage.includes('coverimage is not defined')) {
+        errorMessage = 'Server configuration error. Please contact support or try again later.';
+        console.error('Backend bug detected: coverimage variable not defined in SQL query. This is a backend issue that needs to be fixed.');
+      }
+      
+      setErrors({ submit: errorMessage });
+      
+      toast({
+        title: "Registration Failed",
+        description: errorMessage,
+        variant: "destructive",
+      });
     } finally {
       setIsSubmitting(false);
     }

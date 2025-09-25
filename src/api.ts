@@ -32,8 +32,148 @@ api.interceptors.response.use(
   }
 );
 
+// Company Registration API
+export const apiCreateCompany = async (companyData: any) => {
+  const token = localStorage.getItem('UserLoggedIn');
+  const formData = new FormData();
+  
+  // Add required user ID
+  const userData = JSON.parse(localStorage.getItem('UserData') || '{}');
+  formData.append('createdby', userData.id || '1');
+  
+  // Map frontend fields to backend expected fields with defaults
+  formData.append('name', companyData.companyName || '');
+  formData.append('email', companyData.email || '');
+  formData.append('phone', companyData.phone || '');
+  formData.append('location', companyData.location || '');
+  formData.append('about', companyData.description || '');
+  formData.append('website', companyData.website || '');
+  formData.append('industry', companyData.companyType || '');
+  formData.append('button', companyData.ctaButton || '');
+  
+  // Add media files
+  if (companyData.logo) {
+    formData.append('profileImage', companyData.logo);
+  }
+  if (companyData.banner) {
+    formData.append('coverImage', companyData.banner);
+  }
+
+  // Debug: Log the form data being sent
+  console.log('Sending company data:');
+  for (let [key, value] of formData.entries()) {
+    console.log(`${key}:`, value);
+  }
+
+  return axios.post(`${BASE_URL}/api/savecompany`, formData, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'multipart/form-data'
+    }
+  });
+};
+
+// Check if company name exists
+export const apiCheckCompanyNameExists = async (companyName: string) => {
+  const token = localStorage.getItem('UserLoggedIn');
+  return axios.get(`${BASE_URL}/api/checkcompanynameexist/${encodeURIComponent(companyName)}`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+};
+
+// Ad Model APIs
+export const apiGetAdModels = async () => {
+  return axios.get(`${BASE_URL}/api/getadmodels`);
+};
+
+export const apiGetTargetAreas = async () => {
+  const token = localStorage.getItem('UserLoggedIn');
+  return axios.get(`${BASE_URL}/api/gettargetareas`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+};
+
+export const apiGetTargetProfessions = async () => {
+  const token = localStorage.getItem('UserLoggedIn');
+  return axios.get(`${BASE_URL}/api/gettargetprofession`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+};
+
+export const apiGetButtons = async () => {
+  const token = localStorage.getItem('UserLoggedIn');
+  return axios.get(`${BASE_URL}/api/getbuttons`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+};
+
+// Ad Campaign Creation APIs - First Page
+export const apiSaveFirstPageAdModel = async (adData: any) => {
+  const token = localStorage.getItem('UserLoggedIn');
+  return axios.post(`${BASE_URL}/api/savefirstpageadmodel`, adData, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    }
+  });
+};
+
+// Ad Campaign Creation APIs - Second Page (with media upload)
+export const apiSaveSecondPageAdModel = async (adData: any, mediaFile?: File) => {
+  const token = localStorage.getItem('UserLoggedIn');
+  const formData = new FormData();
+  
+  // Add all ad data fields
+  Object.entries(adData).forEach(([key, value]) => {
+    if (value !== null && value !== undefined && value !== '') {
+      formData.append(key, value.toString());
+    }
+  });
+
+  // Add media file if provided
+  if (mediaFile) {
+    formData.append('adFile', mediaFile);
+  }
+
+  return axios.post(`${BASE_URL}/api/savesecondpageadmodel`, formData, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'multipart/form-data'
+    }
+  });
+};
+
+// Ad Campaign Creation APIs - Third Page
+export const apiSaveThirdPageAdModel = async (adData: any) => {
+  const token = localStorage.getItem('UserLoggedIn');
+  return axios.post(`${BASE_URL}/api/savethirdpageadmodel`, adData, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    }
+  });
+};
+
+// Get user's ads
+export const apiGetUserAds = async (userId: string) => {
+  const token = localStorage.getItem('UserLoggedIn');
+  return axios.get(`${BASE_URL}/api/getalladds/${userId}`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+};
+
 export async function apiSendOtp(mobileNumber: string) {
-  const url = `${BASE_URL}/otplogin`;
+  const url = `${BASE_URL}/api/otplogin`;
   try {
     // Validate mobile number
     if (!mobileNumber || mobileNumber.trim() === "") {
@@ -93,7 +233,7 @@ export async function apiSendOtp(mobileNumber: string) {
 }
 
 export async function apiVerifyOtp(mobile_number: string, otp: string, id: string) {
-  const url = `${BASE_URL}/otpverify`;
+  const url = `${BASE_URL}/api/otpverify`;
   try {
     // Validate inputs
     if (!mobile_number || !otp || !id) {
@@ -149,7 +289,7 @@ export async function apiSaveUserDetails(payload: {
   interests: number[];
   referal_code: string;
 }) {
-  const url = `${BASE_URL}/saveuserdetails`;
+  const url = `${BASE_URL}/api/saveuserdetails`;
   try {
     // Validate required fields
     const requiredFields = ['id', 'name', 'firstname', 'lastname', 'gender', 'dob', 'profession', 'maternal_status', 'address', 'emailId', 'longitude', 'latitude', 'pincode'];
@@ -214,7 +354,7 @@ export async function apiPing() {
 }
 
 export async function apiSendEmailOtp(email: string) {
-  const url = `${BASE_URL}/emailotp`;
+  const url = `${BASE_URL}/api/emailotp`;
   try {
     // Validate email
     if (!email || !email.includes('@')) {
@@ -258,7 +398,7 @@ export async function apiSendEmailOtp(email: string) {
 }
 
 export async function apiVerifyEmailOtp(email: string, otp: string, id: string) {
-  const url = `${BASE_URL}/emailotpverify`;
+  const url = `${BASE_URL}/api/emailotpverify`;
   try {
     // Validate inputs
     if (!email || !otp || !id) {
@@ -290,7 +430,7 @@ export async function apiVerifyEmailOtp(email: string, otp: string, id: string) 
 }
 
 export async function apiGoogleSSO(token: string) {
-  const url = `${BASE_URL}/googleauth`;
+  const url = `${BASE_URL}/api/googleauth`;
   try {
     const payload = {
       token,

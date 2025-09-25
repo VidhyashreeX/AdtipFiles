@@ -1,17 +1,20 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Monitor, Smartphone, Tablet, Tv, Eye, Target, BarChart3, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Monitor, Smartphone, Tablet, Tv, Eye, Target, BarChart3, ExternalLink, Loader2 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { toast } from '@/hooks/use-toast';
+import { apiSaveThirdPageAdModel } from '@/api';
 
 const PreviewAd = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { selectedModel, campaignData, uploadedFile, contentData } = location.state || {};
+  const { selectedModel, campaignData, uploadedFile, uploadedFileUrl, contentData, adId, apiData } = location.state || {};
 
   const [activePreviewDevice, setActivePreviewDevice] = useState('mobile');
   const [conversionGoal, setConversionGoal] = useState('Purchase');
   const [conversionValue, setConversionValue] = useState('');
   const [landingPageUrl, setLandingPageUrl] = useState('');
   const [facebookPixelId, setFacebookPixelId] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const [utmParameters, setUtmParameters] = useState({
     source: 'adtip',
     medium: selectedModel?.title?.toLowerCase().replace(/\s+/g, '_') || 'ad',
@@ -40,22 +43,80 @@ const PreviewAd = () => {
     }
   };
 
-  const handleAddToCart = () => {
-    navigate('/seller/ads-cart', {
-      state: {
-        adData: {
-          selectedModel,
-          campaignData,
-          uploadedFile,
-          contentData,
-          conversionGoal,
-          conversionValue,
-          landingPageUrl,
-          facebookPixelId,
-          utmParameters
-        }
+  const handleAddToCart = async () => {
+    if (!adId) {
+      toast({
+        title: "Error",
+        description: "Campaign ID is missing. Please start over.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsLoading(true);
+    
+    try {
+      // Get user data
+      const userData = JSON.parse(localStorage.getItem('UserData') || '{}');
+      
+      // Prepare data for third page API call
+      const thirdPageData = {
+        adId: adId,
+        landingUrl: landingPageUrl || 'https://theadtip.in',
+        conversionValue: parseFloat(conversionValue) || 0,
+        conversionGoal: conversionGoal,
+        facebookPixelId: facebookPixelId || '',
+        utmSource: utmParameters.source,
+        utmMedium: utmParameters.medium,
+        utmCampaign: utmParameters.campaign,
+        createdby: userData.id || '1'
+      };
+
+      console.log('Sending third page data:', thirdPageData);
+      
+      const response = await apiSaveThirdPageAdModel(thirdPageData);
+      
+      if (response.data?.status === 200) {
+        toast({
+          title: "Success!",
+          description: "Campaign created successfully and added to cart!",
+        });
+        
+        // Navigate to cart with all the data
+        navigate('/seller/ads-cart', {
+          state: {
+            adData: {
+              selectedModel,
+              campaignData,
+              uploadedFile,
+              uploadedFileUrl,
+              contentData,
+              adId,
+              apiData
+            },
+            conversionGoal,
+            conversionValue,
+            landingPageUrl,
+            facebookPixelId,
+            utmParameters
+          }
+        });
+      } else {
+        throw new Error(response.data?.message || 'Failed to save campaign tracking details');
       }
-    });
+      
+    } catch (error: any) {
+      console.error('Save tracking details failed:', error);
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to save tracking details';
+      
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -414,9 +475,17 @@ const PreviewAd = () => {
               <button
                 type="button"
                 onClick={handleAddToCart}
-                className="px-8 py-3 bg-[#00dcaa] text-white rounded-lg hover:bg-[#00b894] transition-colors font-semibold"
+                disabled={isLoading}
+                className={`px-8 py-3 bg-[#00dcaa] text-white rounded-lg hover:bg-[#00b894] transition-colors font-semibold flex items-center gap-2 ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
-                Add to Ad Cart
+                {isLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Saving Campaign...
+                  </>
+                ) : (
+                  'Add to Ad Cart'
+                )}
               </button>
             </div>
           </div>

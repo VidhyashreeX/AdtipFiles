@@ -1,6 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Plus } from 'lucide-react';
+import { ArrowLeft, Plus, Upload, CheckCircle, Loader2 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { toast } from '@/hooks/use-toast';
+import { 
+  apiSaveFirstPageAdModel, 
+  apiSaveSecondPageAdModel, 
+  apiSaveThirdPageAdModel,
+  apiGetTargetAreas,
+  apiGetTargetProfessions,
+  apiGetButtons
+} from '@/api';
 
 const ConfigureCampaign = () => {
   const navigate = useNavigate();
@@ -9,6 +18,13 @@ const ConfigureCampaign = () => {
 
   // Extract price from selectedModel (remove ₹ symbol and convert to number)
   const modelPrice = selectedModel?.price ? parseFloat(selectedModel.price.replace('₹', '')) : 0.20;
+
+  // State for API data and loading
+  const [isLoading, setIsLoading] = useState(false);
+  const [targetAreas, setTargetAreas] = useState<any[]>([]);
+  const [targetProfessions, setTargetProfessions] = useState<any[]>([]);
+  const [buttons, setButtons] = useState<any[]>([]);
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   const [formData, setFormData] = useState({
     // Basic Information
@@ -96,13 +112,154 @@ const ConfigureCampaign = () => {
     }));
   };
 
-  const handleContinue = () => {
-    navigate('/seller/upload-creative', { 
-      state: { 
-        selectedModel, 
-        campaignData: formData 
-      } 
-    });
+  // Load API data on component mount
+  useEffect(() => {
+    const loadApiData = async () => {
+      try {
+        const [areasRes, professionsRes, buttonsRes] = await Promise.all([
+          apiGetTargetAreas(),
+          apiGetTargetProfessions(),
+          apiGetButtons()
+        ]);
+        
+        if (areasRes.data?.status === 200) setTargetAreas(areasRes.data.data || []);
+        if (professionsRes.data?.status === 200) setTargetProfessions(professionsRes.data.data || []);
+        if (buttonsRes.data?.status === 200) setButtons(buttonsRes.data.data || []);
+      } catch (error) {
+        console.error('Failed to load API data:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load campaign options. Please refresh the page.",
+          variant: "destructive",
+        });
+      }
+    };
+    
+    loadApiData();
+  }, []);
+
+  // Load company data from localStorage
+  useEffect(() => {
+    const companyData = JSON.parse(localStorage.getItem('selectedCompany') || '{}');
+    if (companyData && companyData.id) {
+      setFormData(prev => ({
+        ...prev,
+        selectedCompany: companyData.name || '',
+        companyId: companyData.id.toString()
+      }));
+    }
+  }, []);
+
+  const validateForm = (): boolean => {
+    const newErrors: Record<string, string> = {};
+    
+    if (!formData.campaignName.trim()) newErrors.campaignName = 'Campaign name is required';
+    if (!formData.targetGender) newErrors.targetGender = 'Target gender is required';
+    if (!formData.targetMaritalStatus) newErrors.targetMaritalStatus = 'Marital status is required';
+    if (!formData.targetProfession) newErrors.targetProfession = 'Target profession is required';
+    
+    // Check if at least one target area is selected
+    const hasTargetArea = Object.values(formData.targetAreas).some(Boolean) || formData.customLocation.trim();
+    if (!hasTargetArea) newErrors.targetAreas = 'Select at least one target area';
+    
+    if (!formData.amountPerCustomer || parseFloat(formData.amountPerCustomer) <= 0) {
+      newErrors.amountPerCustomer = 'Amount per customer must be greater than 0';
+    }
+    if (!formData.customersPerDay || parseFloat(formData.customersPerDay) <= 0) {
+      newErrors.customersPerDay = 'Customers per day must be greater than 0';
+    }
+    if (!formData.campaignDuration || parseFloat(formData.campaignDuration) <= 0) {
+      newErrors.campaignDuration = 'Campaign duration must be greater than 0';
+    }
+    if (!formData.startDateTime) newErrors.startDateTime = 'Start date is required';
+    if (!formData.endDateTime) newErrors.endDateTime = 'End date is required';
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleContinue = async () => {
+    if (!validateForm()) {
+      toast({
+        title: "Validation Error",
+        description: "Please fill in all required fields correctly.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsLoading(true);
+    
+    try {
+      // Get user data
+      const userData = JSON.parse(localStorage.getItem('UserData') || '{}');
+      const companyData = JSON.parse(localStorage.getItem('selectedCompany') || '{}');
+      
+      // Prepare data for first page API call
+      const campaignApiData = {
+        campaignName: formData.campaignName,
+        companyName: companyData.name || formData.selectedCompany,
+        companyId: companyData.id || '1',
+        adModelId: selectedModel?.id || 1,
+        targetGender: formData.targetGender,
+        maritalStatus: formData.targetMaritalStatus,
+        targetLowerAge: parseInt(formData.targetAge?.split('-')[0] || '18'),
+        targetUpperAge: parseInt(formData.targetAge?.split('-')[1] || '65'),
+        targetProfessions: formData.targetProfession,
+        targetArea: Object.entries(formData.targetAreas)
+          .filter(([_, selected]) => selected)
+          .map(([area, _]) => area)
+          .concat(formData.customLocation ? [formData.customLocation] : [])
+          .join(','),
+        adwatchPerDay: parseInt(formData.watchesPerCustomerPerDay || '1'),
+        adPerdayPay: parseFloat(formData.amountPerCustomer || '0'),
+        adSpendPerDay: parseFloat(formData.amountPerDay || '0'),
+        adStartDate: formData.startDateTime,
+        adEndDate: formData.endDateTime,
+        adTime: '09:00',
+        adEndTime: '18:00',
+        adCustomerTargetPerDay: parseInt(formData.customersPerDay || '0'),
+        modelTypeName: selectedModel?.title || 'Skip Video Ad',
+        createdby: userData.id || '1'
+      };
+
+      console.log('Sending campaign data:', campaignApiData);
+      
+      const response = await apiSaveFirstPageAdModel(campaignApiData);
+      
+      if (response.data?.status === 200 && response.data.data?.[0]?.id) {
+        const adId = response.data.data[0].id;
+        
+        toast({
+          title: "Success!",
+          description: "Campaign details saved successfully!",
+        });
+        
+        // Navigate to upload creative with the ad ID
+        navigate('/seller/upload-creative', { 
+          state: { 
+            selectedModel, 
+            campaignData: formData,
+            adId: adId,
+            apiData: campaignApiData
+          } 
+        });
+      } else {
+        throw new Error(response.data?.message || 'Failed to save campaign details');
+      }
+      
+    } catch (error: any) {
+      console.error('Campaign creation failed:', error);
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to save campaign details';
+      
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
