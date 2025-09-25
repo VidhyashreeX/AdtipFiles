@@ -1,11 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import { MapPin, Users, Star, Globe, Phone, Mail, Package, FileText, TrendingUp, MessageSquare, Heart, Eye, X } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { 
+  apiGetCompanyList, 
+  apiGetProductList, 
+  apiGetCompanyPost, 
+  apiGetSellerOrders 
+} from '@/api';
+import { toast } from '@/hooks/use-toast';
 
 const SellerDashboard = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [showEditModal, setShowEditModal] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [companies, setCompanies] = useState<any[]>([]);
+  const [products, setProducts] = useState<any[]>([]);
+  const [posts, setPosts] = useState<any[]>([]);
+  const [orders, setOrders] = useState<any[]>([]);
+  const [selectedCompany, setSelectedCompany] = useState<any>(null);
   const [sellerInfo, setSellerInfo] = useState({
     companyName: 'TechVolt Inc.',
     email: 'contact@techvolt.com',
@@ -28,45 +41,95 @@ const SellerDashboard = () => {
     }
   }, [location.state]);
 
-  const products = [
-    {
-      id: 1,
-      name: 'New MacBook pro',
-      description: 'A MacBook is a laptop computer designed by Apple.',
-      image: null,
-      price: 999,
-      originalPrice: 1299,
-      discount: '23% OFF'
-    },
-    {
-      id: 2,
-      name: 'Samsung S23',
-      description: 'A Samsung Galaxy smartphone with advanced features.',
-      image: null,
-      price: 899,
-      originalPrice: 1099,
-      discount: '18% OFF'
-    }
-  ];
+  // Fetch seller dashboard data
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      setLoading(true);
+      try {
+        const userData = JSON.parse(localStorage.getItem('user') || '{}');
+        const userId = userData.id;
 
-  const posts = [
-    {
-      id: 1,
-      title: 'Apple MacBook Pro M2',
-      description: 'The new MacBook Pro is a beast. Supercharged for pros by the M1 Pro or M1 Max, this... thing delivers performance that pushes limits!',
-      image: null,
-      likes: 45,
-      brand: 'Apple'
-    },
-    {
-      id: 2,
-      title: 'Beats by Dre',
-      description: 'THE GAME STARTS HERE! Premium wireless headphones with superior sound quality.',
-      image: null,
-      likes: 32,
-      brand: 'Beats'
-    }
-  ];
+        if (!userId) {
+          toast({
+            title: "Error",
+            description: "User not found. Please log in again.",
+            variant: "destructive"
+          });
+          navigate('/login');
+          return;
+        }
+
+        // Fetch user's companies
+        const companiesResponse = await apiGetCompanyList(userId.toString());
+        if (companiesResponse.data && companiesResponse.data.status === 200) {
+          setCompanies(companiesResponse.data.data || []);
+          
+          // Use the first company as selected company, or the one from localStorage
+          const storedCompany = JSON.parse(localStorage.getItem('selectedCompany') || '{}');
+          const selectedComp = storedCompany.id ? 
+            companiesResponse.data.data.find((c: any) => c.id === storedCompany.id) || companiesResponse.data.data[0] :
+            companiesResponse.data.data[0];
+          
+          if (selectedComp) {
+            setSelectedCompany(selectedComp);
+            setSellerInfo({
+              companyName: selectedComp.name || '',
+              email: selectedComp.email || '',
+              phone: selectedComp.phone || '',
+              website: selectedComp.website || '',
+              address: selectedComp.location || '',
+              description: selectedComp.about || '',
+              logo: selectedComp.profileImage || null,
+              banner: selectedComp.coverImage || null
+            });
+
+            // Fetch products for selected company
+            const productsResponse = await apiGetProductList(selectedComp.id.toString());
+            if (productsResponse.data && productsResponse.data.status === 200) {
+              setProducts(productsResponse.data.data || []);
+            }
+
+            // Fetch posts for selected company
+            const postsResponse = await apiGetCompanyPost(selectedComp.id.toString());
+            if (postsResponse.data && postsResponse.data.status === 200) {
+              setPosts(postsResponse.data.data || []);
+            }
+          }
+        }
+
+        // Fetch seller orders
+        const ordersResponse = await apiGetSellerOrders(userId.toString());
+        if (ordersResponse.data && ordersResponse.data.status === 200) {
+          setOrders(ordersResponse.data.data || []);
+        }
+
+      } catch (error: any) {
+        console.error('Error fetching dashboard data:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load dashboard data. Please try again.",
+          variant: "destructive"
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDashboardData();
+  }, [navigate]);
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#f5f5ff] flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#00dcaa] mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#f5f5ff]">
       {/* Company Profile Header */}
@@ -114,12 +177,40 @@ const SellerDashboard = () => {
                   
                   {/* Company Title and Number */}
                   <div className="flex-1">
-                    <h1 className="text-3xl font-bold text-gray-900 mb-1">{sellerInfo.companyName}</h1>
+                    <div className="flex items-center space-x-3 mb-1">
+                      <h1 className="text-3xl font-bold text-gray-900">{sellerInfo.companyName}</h1>
+                      {companies.length > 1 && (
+                        <select 
+                          value={selectedCompany?.id || ''}
+                          onChange={(e) => {
+                            const companyId = parseInt(e.target.value);
+                            const company = companies.find(c => c.id === companyId);
+                            if (company) {
+                              setSelectedCompany(company);
+                              localStorage.setItem('selectedCompany', JSON.stringify(company));
+                              // Refresh data for new company
+                              window.location.reload();
+                            }
+                          }}
+                          className="text-sm bg-gray-100 border border-gray-200 rounded-lg px-3 py-1 focus:outline-none focus:ring-2 focus:ring-[#00dcaa]"
+                          title="Switch Company"
+                        >
+                          {companies.map((company) => (
+                            <option key={company.id} value={company.id}>
+                              {company.name}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
                     <div className="flex items-center space-x-2">
                       <span className="bg-gradient-to-r from-[#00dcaa] to-[#00b894] text-white px-3 py-1 rounded-full text-sm font-semibold">
                         #1 Seller
                       </span>
                       <span className="text-gray-500 text-sm">Verified Business</span>
+                      {companies.length > 1 && (
+                        <span className="text-blue-500 text-sm">({companies.length} companies)</span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -147,12 +238,18 @@ const SellerDashboard = () => {
                 </div>
                 
                 {/* Action Buttons */}
-                <div className="flex justify-center md:justify-start space-x-4">
+                <div className="flex justify-center md:justify-start space-x-3 flex-wrap gap-2">
                   <button 
                     onClick={() => navigate('/seller/edit-info', { state: { sellerData: sellerInfo } })}
                     className="bg-gradient-to-r from-[#00dcaa] to-[#00b894] text-white px-6 py-2.5 rounded-lg text-sm font-medium hover:from-[#00b894] hover:to-[#00a085] transition-all duration-200 shadow-md hover:shadow-lg"
                   >
                     Edit Info
+                  </button>
+                  <button 
+                    onClick={() => navigate('/seller/register')}
+                    className="bg-white border-2 border-blue-500 text-blue-500 hover:bg-blue-500 hover:text-white px-6 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 shadow-sm hover:shadow-md"
+                  >
+                    + New Company
                   </button>
                   <button 
                     onClick={() => navigate('/seller/ad-orders')}
@@ -183,17 +280,33 @@ const SellerDashboard = () => {
                 </button>
               </div>
               <div className="flex space-x-6 overflow-x-auto pb-4 scrollbar-hide">
-                {products.map((product) => (
+                {products.length > 0 ? products.map((product) => (
                   <div key={product.id} className="bg-white rounded-xl shadow-lg p-4 min-w-[240px] max-w-[240px] flex-shrink-0 border border-gray-100">
-                    <div className="w-full h-28 bg-gray-50 rounded-lg mb-3 flex items-center justify-center">
-                      <Package className="w-10 h-10 text-gray-400" />
+                    <div className="w-full h-28 bg-gray-50 rounded-lg mb-3 flex items-center justify-center overflow-hidden">
+                      {product.image || product.filename ? (
+                        <img 
+                          src={product.image || `https://api.adtip.in/api/photo/${product.filename}`}
+                          alt={product.name || product.title}
+                          className="w-full h-full object-cover rounded-lg"
+                        />
+                      ) : (
+                        <Package className="w-10 h-10 text-gray-400" />
+                      )}
                     </div>
-                    <h3 className="font-bold text-base text-gray-900 mb-2 truncate">{product.name}</h3>
-                    <p className="text-xs text-gray-600 mb-3 line-clamp-2">{product.description}</p>
+                    <h3 className="font-bold text-base text-gray-900 mb-2 truncate">{product.name || product.title}</h3>
+                    <p className="text-xs text-gray-600 mb-3 line-clamp-2">{product.description || product.details}</p>
                     <div className="flex items-center space-x-2 mb-3">
-                      <span className="text-lg font-bold text-[#00dcaa]">${product.price}</span>
-                      <span className="text-xs text-gray-400 line-through">${product.originalPrice}</span>
-                      <span className="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-medium">{product.discount}</span>
+                      <span className="text-lg font-bold text-[#00dcaa]">
+                        ${product.price || product.selprice || '0'}
+                      </span>
+                      {product.originalPrice && (
+                        <>
+                          <span className="text-xs text-gray-400 line-through">${product.originalPrice}</span>
+                          <span className="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-medium">
+                            {Math.round((1 - product.price / product.originalPrice) * 100)}% OFF
+                          </span>
+                        </>
+                      )}
                     </div>
                     <div className="space-y-2">
                       <button 
@@ -212,7 +325,20 @@ const SellerDashboard = () => {
                       </div>
                     </div>
                   </div>
-                ))}
+                )) : (
+                  <div className="flex items-center justify-center w-full py-12">
+                    <div className="text-center">
+                      <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                      <p className="text-gray-500 mb-4">No products yet</p>
+                      <button 
+                        onClick={() => navigate('/seller/add-product')}
+                        className="bg-[#00dcaa] text-white px-6 py-2 rounded-lg hover:bg-[#00c59a] transition-colors"
+                      >
+                        Add Your First Product
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="flex justify-center mt-6">
                 <button 
@@ -236,21 +362,33 @@ const SellerDashboard = () => {
                 </button>
               </div>
               <div className="flex space-x-6 overflow-x-auto pb-4 scrollbar-hide">
-                {posts.map((post) => (
+                {posts.length > 0 ? posts.map((post) => (
                   <div key={post.id} className="bg-white rounded-xl shadow-lg p-4 min-w-[240px] max-w-[240px] flex-shrink-0 border border-gray-100">
                     <div className="flex items-start space-x-2 mb-3">
-                      <div className="w-6 h-6 bg-black rounded-full flex items-center justify-center flex-shrink-0">
-                        <span className="text-white font-bold text-xs">{post.brand[0]}</span>
+                      <div className="w-6 h-6 bg-[#00dcaa] rounded-full flex items-center justify-center flex-shrink-0">
+                        <span className="text-white font-bold text-xs">
+                          {(selectedCompany?.name || 'C')[0]}
+                        </span>
                       </div>
                       <div className="flex-1 min-w-0">
-                        <span className="font-semibold text-sm text-gray-900 truncate block">{post.brand}</span>
+                        <span className="font-semibold text-sm text-gray-900 truncate block">
+                          {selectedCompany?.name || 'Company'}
+                        </span>
                       </div>
                     </div>
-                    <div className="w-full h-24 bg-gray-50 rounded-lg mb-3 flex items-center justify-center">
-                      <span className="text-gray-400 text-xs">Post Content</span>
+                    <div className="w-full h-24 bg-gray-50 rounded-lg mb-3 flex items-center justify-center overflow-hidden">
+                      {post.image || post.filename ? (
+                        <img 
+                          src={post.image || `https://api.adtip.in/api/photo/${post.filename}`}
+                          alt={post.title || post.name}
+                          className="w-full h-full object-cover rounded-lg"
+                        />
+                      ) : (
+                        <FileText className="w-8 h-8 text-gray-400" />
+                      )}
                     </div>
-                    <h3 className="font-bold text-base text-gray-900 mb-2 truncate">{post.title}</h3>
-                    <p className="text-xs text-gray-600 mb-3 line-clamp-2">{post.description}</p>
+                    <h3 className="font-bold text-base text-gray-900 mb-2 truncate">{post.title || post.name}</h3>
+                    <p className="text-xs text-gray-600 mb-3 line-clamp-2">{post.description || post.details}</p>
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center space-x-3">
                         <button className="flex items-center space-x-1 text-[#00dcaa] text-xs">
@@ -279,7 +417,20 @@ const SellerDashboard = () => {
                       </button>
                     </div>
                   </div>
-                ))}
+                )) : (
+                  <div className="flex items-center justify-center w-full py-12">
+                    <div className="text-center">
+                      <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                      <p className="text-gray-500 mb-4">No posts yet</p>
+                      <button 
+                        onClick={() => navigate('/seller/add-post')}
+                        className="bg-[#00dcaa] text-white px-6 py-2 rounded-lg hover:bg-[#00c59a] transition-colors"
+                      >
+                        Create Your First Post
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="flex justify-center mt-6">
                 <button 

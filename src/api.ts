@@ -1,7 +1,7 @@
 import axios from "axios";
 
 // Use environment variable for API base URL
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:7082';
+const BASE_URL = 'http://localhost:7082';
 
 const api = axios.create({
   baseURL: BASE_URL,
@@ -35,40 +35,38 @@ api.interceptors.response.use(
 // Company Registration API
 export const apiCreateCompany = async (companyData: any) => {
   const token = localStorage.getItem('UserLoggedIn');
-  const formData = new FormData();
   
   // Add required user ID
   const userData = JSON.parse(localStorage.getItem('UserData') || '{}');
-  formData.append('createdby', userData.id || '1');
   
-  // Map frontend fields to backend expected fields with defaults
-  formData.append('name', companyData.companyName || '');
-  formData.append('email', companyData.email || '');
-  formData.append('phone', companyData.phone || '');
-  formData.append('location', companyData.location || '');
-  formData.append('about', companyData.description || '');
-  formData.append('website', companyData.website || '');
-  formData.append('industry', companyData.companyType || '');
-  formData.append('button', companyData.ctaButton || '');
-  
-  // Add media files
-  if (companyData.logo) {
-    formData.append('profileImage', companyData.logo);
-  }
-  if (companyData.banner) {
-    formData.append('coverImage', companyData.banner);
-  }
+  // Create JSON payload for the new createCompany endpoint
+  const payload = {
+    createdby: userData.id || 1,
+    name: companyData.companyName || '',
+    email: companyData.email || '',
+    phone: companyData.phone || '',
+    location: companyData.location || '',
+    about: companyData.description || '',
+    website: companyData.website || '',
+    industry: companyData.companyType || '',
+    button: companyData.ctaButton || '',
+    // Send URLs directly - these will be stored as strings in the database
+    profileimage: companyData.logoUrl || '', // Logo URL
+    coverimage: companyData.bannerUrl || ''   // Banner URL
+  };
 
-  // Debug: Log the form data being sent
-  console.log('Sending company data:');
-  for (let [key, value] of formData.entries()) {
-    console.log(`${key}:`, value);
-  }
+  // Debug: Log the payload being sent
+  console.log('=== FRONTEND API CALL DEBUG ===');
+  console.log('Sending company payload:', JSON.stringify(payload, null, 2));
+  console.log('Token present:', !!token);
+  console.log('User ID:', userData.id);
+  console.log('Logo URL:', companyData.logoUrl);
+  console.log('Banner URL:', companyData.bannerUrl);
+  console.log('===============================');
 
-  return axios.post(`${BASE_URL}/api/savecompany`, formData, {
+  return axios.post(`${BASE_URL}/api/registercompany`, payload, {
     headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'multipart/form-data'
+      'Content-Type': 'application/json'
     }
   });
 };
@@ -460,6 +458,176 @@ export const uploadVideo = (formData: FormData, token: string) => {
     headers: {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'multipart/form-data'
+    }
+  });
+};
+
+// ============== SELLER DASHBOARD APIs ==============
+
+// Get all companies for a user (seller's companies)
+export const apiGetCompanyList = async (userId: string) => {
+  const token = localStorage.getItem('UserLoggedIn');
+  return axios.get(`${BASE_URL}/api/getcompanylist/${userId}`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+};
+
+// Get all companies in the system (for discovery)
+export const apiGetAllCompanyList = async (userId: string) => {
+  const token = localStorage.getItem('UserLoggedIn');
+  return axios.get(`${BASE_URL}/api/getallcompanylist/${userId}`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+};
+
+// Get specific company details
+export const apiGetCompany = async (companyId: string, userId: string) => {
+  const token = localStorage.getItem('UserLoggedIn');
+  return axios.get(`${BASE_URL}/api/getcompany/${companyId}/${userId}`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+};
+
+// Update company details
+export const apiUpdateCompany = async (companyData: any) => {
+  const token = localStorage.getItem('UserLoggedIn');
+  const formData = new FormData();
+  
+  // Add all fields to FormData
+  Object.keys(companyData).forEach(key => {
+    if (companyData[key] !== null && companyData[key] !== undefined) {
+      formData.append(key, companyData[key]);
+    }
+  });
+
+  return axios.post(`${BASE_URL}/api/updatecompany`, formData, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'multipart/form-data'
+    }
+  });
+};
+
+// Get products for a company
+export const apiGetProductList = async (companyId: string) => {
+  const token = localStorage.getItem('UserLoggedIn');
+  return axios.get(`${BASE_URL}/api/getProductlist/${companyId}`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+};
+
+// Get all products
+export const apiGetAllProducts = async () => {
+  const token = localStorage.getItem('UserLoggedIn');
+  return axios.get(`${BASE_URL}/api/getallproduct`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+};
+
+// Add new product
+export const apiAddProduct = async (productData: any) => {
+  const token = localStorage.getItem('UserLoggedIn');
+  const formData = new FormData();
+  
+  Object.keys(productData).forEach(key => {
+    if (productData[key] !== null && productData[key] !== undefined) {
+      formData.append(key, productData[key]);
+    }
+  });
+
+  return axios.post(`${BASE_URL}/api/addproduct`, formData, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'multipart/form-data'
+    }
+  });
+};
+
+// Update product
+export const apiUpdateProduct = async (productData: any) => {
+  const token = localStorage.getItem('UserLoggedIn');
+  const formData = new FormData();
+  
+  Object.keys(productData).forEach(key => {
+    if (productData[key] !== null && productData[key] !== undefined) {
+      formData.append(key, productData[key]);
+    }
+  });
+
+  return axios.post(`${BASE_URL}/api/updateproduct`, formData, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'multipart/form-data'
+    }
+  });
+};
+
+// Delete product
+export const apiDeleteProduct = async (productData: any) => {
+  const token = localStorage.getItem('UserLoggedIn');
+  return axios.post(`${BASE_URL}/api/deleteProduct`, productData, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    }
+  });
+};
+
+// Get company posts
+export const apiGetCompanyPost = async (companyId: string) => {
+  const token = localStorage.getItem('UserLoggedIn');
+  return axios.get(`${BASE_URL}/api/getcompanypost/${companyId}`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+};
+
+// Save company post
+export const apiSavePost = async (postData: any) => {
+  const token = localStorage.getItem('UserLoggedIn');
+  const formData = new FormData();
+  
+  Object.keys(postData).forEach(key => {
+    if (postData[key] !== null && postData[key] !== undefined) {
+      formData.append(key, postData[key]);
+    }
+  });
+
+  return axios.post(`${BASE_URL}/api/savepost`, formData, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'multipart/form-data'
+    }
+  });
+};
+
+// Get seller orders
+export const apiGetSellerOrders = async (userId: string) => {
+  const token = localStorage.getItem('UserLoggedIn');
+  return axios.get(`${BASE_URL}/api/getSellerOrders/${userId}`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+};
+
+// Get user orders
+export const apiGetUserOrders = async (userId: string) => {
+  const token = localStorage.getItem('UserLoggedIn');
+  return axios.get(`${BASE_URL}/api/getUserOrders/${userId}`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
     }
   });
 };
