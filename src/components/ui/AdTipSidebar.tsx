@@ -294,8 +294,9 @@ const ecommerceItems = [
     label: "Premium Upgrade", 
     icon: <Crown className="h-5 w-5" /> 
   },
-  { to: "/marketplace/my-orders", label: "My Ad Orders", icon: <Package className="h-5 w-5" /> },
-  { to: "/marketplace/cart", label: "Cart", icon: <ShoppingCart className="h-5 w-5" /> },
+  { to: "/seller/ad-orders", label: "My Ad Orders", icon: <Package className="h-5 w-5" /> },
+  { to: "/seller/ads-cart", label: "Cart", icon: <ShoppingCart className="h-5 w-5" /> },
+  { to: "/marketplace/cart", label: "Marketplace Cart", icon: <ShoppingCart className="h-5 w-5" /> },
   { to: "/marketplace/favorites", label: "Favorites", icon: <Heart className="h-5 w-5" /> },
   ];
 

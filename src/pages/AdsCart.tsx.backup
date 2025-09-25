@@ -1,0 +1,395 @@
+import React, { useState } from 'react';
+import { ShoppingCart, Edit, Trash2, Bookmark, Plus, ArrowLeft, CreditCard } from 'lucide-react';
+import { useNavigate, useLocation } from 'react-router-dom';
+
+const AdsCart = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { adData } = location.state || {};
+
+  const [pendingAds, setPendingAds] = useState([
+    {
+      id: 1,
+      name: 'Nike Shoes',
+      type: 'Skip Video Ad',
+      price: 30000,
+      image: 'https://via.placeholder.com/80x80',
+      status: 'pending'
+    },
+    {
+      id: 2,
+      name: 'OnePlus 7 Pro',
+      type: 'QR Code Ad',
+      price: 10000,
+      image: 'https://via.placeholder.com/80x80',
+      status: 'pending'
+    }
+  ]);
+
+  const [savedAds, setSavedAds] = useState([
+    {
+      id: 3,
+      name: 'OnePlus 7 Pro',
+      type: 'QR Code Ad',
+      price: 10000,
+      image: 'https://via.placeholder.com/80x80',
+      status: 'saved'
+    }
+  ]);
+
+  // Add the new ad from preview if it exists
+  React.useEffect(() => {
+    if (adData) {
+      const newAd = {
+        id: Date.now(),
+        name: adData.contentData?.adTitle || adData.campaignData?.campaignName || 'New Campaign',
+        type: adData.selectedModel?.title || 'Skip Video Ad',
+        price: 30000,
+        image: 'https://via.placeholder.com/80x80',
+        status: 'pending'
+      };
+      setPendingAds(prev => [newAd, ...prev]);
+    }
+  }, [adData]);
+
+  const handleEdit = (id: number) => {
+    console.log('Edit ad:', id);
+    // Navigate back to campaign configuration
+  };
+
+  const handleRemove = (id: number, type: 'pending' | 'saved') => {
+    if (type === 'pending') {
+      setPendingAds(prev => prev.filter(ad => ad.id !== id));
+    } else {
+      setSavedAds(prev => prev.filter(ad => ad.id !== id));
+    }
+  };
+
+  const handleSaveForLater = (id: number) => {
+    const ad = pendingAds.find(ad => ad.id === id);
+    if (ad) {
+      setSavedAds(prev => [...prev, { ...ad, status: 'saved' }]);
+      setPendingAds(prev => prev.filter(ad => ad.id !== id));
+    }
+  };
+
+  const handleAddToCart = (id: number) => {
+    const ad = savedAds.find(ad => ad.id === id);
+    if (ad) {
+      setPendingAds(prev => [...prev, { ...ad, status: 'pending' }]);
+      setSavedAds(prev => prev.filter(ad => ad.id !== id));
+    }
+  };
+
+  const totalAmount = pendingAds.reduce((sum, ad) => sum + ad.price, 0);
+
+  const handleProceedToPayment = () => {
+    navigate('/seller/payment-gateway', {
+      state: {
+        cartItems: pendingAds,
+        totalAmount
+      }
+    });
+  };
+
+  const handleBack = () => {
+    navigate('/seller/ad-orders');
+  };
+
+  return (
+    <div className="min-h-screen bg-[#f5f5ff]">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-[#00dcaa] to-[#00b894] text-white">
+        <div className="max-w-4xl mx-auto px-6 py-8">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <button
+                onClick={handleBack}
+                className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+                title="Go back"
+                aria-label="Go back"
+              >
+                <ArrowLeft className="w-6 h-6" />
+              </button>
+              <div className="flex items-center space-x-4">
+                <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center">
+                  <ShoppingCart className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-3xl font-bold">Ads Cart</h1>
+                  <p className="text-white/90">Review your advertising campaigns</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="max-w-4xl mx-auto px-6 py-8">
+        
+        {/* Pending Ad Models */}
+        <div className="bg-white rounded-xl shadow-lg overflow-hidden mb-8">
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 border-b border-gray-200">
+            <h2 className="text-2xl font-bold text-gray-900">Pending Ad Models</h2>
+            <p className="text-gray-600 mt-1">Ready to launch campaigns</p>
+          </div>
+          
+          <div className="p-6">
+            {pendingAds.length === 0 ? (
+              <div className="text-center py-12">
+                <ShoppingCart className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                <h3 className="text-xl font-semibold text-gray-500 mb-2">No pending ads</h3>
+                <p className="text-gray-400">Add some campaigns to get started</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {pendingAds.map((ad) => (
+                  <div key={ad.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-lg transition-all">
+                    <div className="p-6">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center space-x-4">
+                          <div className="w-16 h-16 bg-gradient-to-br from-[#00dcaa] to-[#00b894] rounded-lg flex items-center justify-center shadow-lg">
+                            <span className="text-white font-bold text-sm">AD</span>
+                          </div>
+                          <div>
+                            <h3 className="text-lg font-bold text-gray-900">{ad.name}</h3>
+                            <p className="text-gray-600 text-sm">{ad.type}</p>
+                            <div className="flex items-center space-x-2 mt-1">
+                              <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full font-medium">
+                                {ad.status.charAt(0).toUpperCase() + ad.status.slice(1)}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="text-right">
+                          <div className="text-2xl font-bold text-[#00dcaa]">₹{ad.price.toLocaleString()}</div>
+                          <p className="text-gray-500 text-sm">Total Budget</p>
+                        </div>
+                      </div>
+                      
+                          <button
+                            onClick={() => handleEdit(ad.id)}
+                            className="px-3 py-2 text-[#00dcaa] hover:bg-[#00dcaa]/10 rounded-lg transition-colors flex items-center space-x-1 text-sm font-medium"
+                            title="Edit campaign"
+                          >
+                            <Edit className="w-4 h-4" />
+                            <span>Edit</span>
+                          </button>
+                          <button
+                            onClick={() => handleRemove(ad.id, 'pending')}
+                            className="px-3 py-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors flex items-center space-x-1 text-sm font-medium"
+                            title="Remove from cart"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            <span>Remove</span>
+                          </button>
+                        </div>
+                        
+                        <button
+                          onClick={() => handleSaveForLater(ad.id)}
+                          className="px-4 py-2 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg text-sm font-medium transition-colors flex items-center space-x-1"
+                        >
+                          <Bookmark className="w-4 h-4" />
+                          <span>Save Later</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Saved for Later */}
+        <div className="bg-white rounded-xl shadow-lg overflow-hidden mb-8">
+          <div className="bg-gradient-to-r from-purple-50 to-pink-50 p-6 border-b border-gray-200">
+            <h2 className="text-2xl font-bold text-gray-900">Saved for Later</h2>
+            <p className="text-gray-600 mt-1">Campaigns saved for future use</p>
+          </div>
+          
+          <div className="p-6">
+            {savedAds.length === 0 ? (
+              <div className="text-center py-8">
+                <Bookmark className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                <h3 className="text-lg font-semibold text-gray-500 mb-2">No saved campaigns</h3>
+                <p className="text-gray-400">Save campaigns to access them later</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {savedAds.map((ad) => (
+                  <div key={ad.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+                    <div className="flex items-center space-x-4">
+                      <div className="w-20 h-20 bg-blue-500 rounded-lg flex items-center justify-center">
+                        <div className="w-16 h-16 bg-blue-600 rounded-md flex items-center justify-center">
+                          <span className="text-white font-bold text-xs">AD</span>
+                        </div>
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-bold text-gray-900">{ad.name}</h3>
+                        <p className="text-gray-600">{ad.type}</p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center space-x-4">
+                      <div className="text-right">
+                        <div className="text-2xl font-bold text-[#00dcaa]">₹ {ad.price.toLocaleString()}</div>
+                      </div>
+                      
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => handleEdit(ad.id)}
+                          className="text-[#00dcaa] hover:text-[#00b894] transition-colors"
+                          title="Edit campaign"
+                          aria-label="Edit campaign"
+                        >
+                          <Edit className="w-5 h-5" />
+                        </button>
+                        <button
+                          onClick={() => handleRemove(ad.id, 'saved')}
+                          className="text-red-500 hover:text-red-700 transition-colors"
+                          title="Remove from saved"
+                          aria-label="Remove from saved"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </button>
+                      </div>
+                      
+                      <button
+                        onClick={() => handleAddToCart(ad.id)}
+                        className="bg-[#00dcaa] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#00b894] transition-colors flex items-center space-x-2"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>Add to Cart</span>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Checkout Section */}
+        {pendingAds.length > 0 && (
+          <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+            <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900">Total Amount</h3>
+                  <p className="text-gray-600">Ready to proceed with {pendingAds.length} campaign{pendingAds.length > 1 ? 's' : ''}</p>
+                </div>
+                <div className="text-right">
+                  <div className="text-3xl font-bold text-[#00dcaa]">₹ {totalAmount.toLocaleString()}</div>
+                  <p className="text-sm text-gray-600">Including all fees</p>
+                </div>
+              </div>
+              
+              <div className="mt-6 flex justify-end">
+                <button
+                  onClick={handleProceedToPayment}
+                  className="bg-[#00dcaa] text-white px-8 py-4 rounded-lg text-lg font-semibold hover:bg-[#00b894] transition-colors flex items-center space-x-3"
+                >
+                  <ShoppingCart className="w-5 h-5" />
+                  <span>Proceed to Payment</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Footer */}
+      <footer className="bg-white border-t border-gray-200 py-12 w-full mt-12">
+        <div className="max-w-full mx-auto px-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+            {/* Company Info */}
+            <div className="space-y-4">
+              <div className="flex items-center space-x-2">
+                <div className="w-8 h-8 bg-[#00dcaa] rounded flex items-center justify-center">
+                  <span className="text-white font-bold text-sm">▶</span>
+                </div>
+                <span className="text-xl font-bold text-[#00dcaa]">AdTip</span>
+              </div>
+              <p className="text-sm text-gray-600 leading-relaxed">
+                Digital Marketing & Advertising Solutions platform that empowers businesses to grow.
+              </p>
+            </div>
+
+            {/* Navigation */}
+            <div>
+              <h3 className="font-semibold text-gray-900 mb-4">Navigation</h3>
+              <ul className="space-y-3 text-sm text-gray-600">
+                <li><a href="#" className="hover:text-[#00dcaa]">About</a></li>
+                <li><a href="#" className="hover:text-[#00dcaa]">Careers</a></li>
+                <li><a href="#" className="hover:text-[#00dcaa]">Advertising</a></li>
+                <li><a href="#" className="hover:text-[#00dcaa]">Small Business</a></li>
+              </ul>
+            </div>
+
+            {/* Services */}
+            <div>
+              <h3 className="font-semibold text-gray-900 mb-4">Services</h3>
+              <ul className="space-y-3 text-sm text-gray-600">
+                <li><a href="#" className="hover:text-[#00dcaa]">Ad Solutions</a></li>
+                <li><a href="#" className="hover:text-[#00dcaa]">Marketing Solutions</a></li>
+                <li><a href="#" className="hover:text-[#00dcaa]">Sales Solutions</a></li>
+                <li><a href="#" className="hover:text-[#00dcaa]">Help Center</a></li>
+              </ul>
+            </div>
+
+            {/* Contact & Support */}
+            <div>
+              <h3 className="font-semibold text-gray-900 mb-4">Support</h3>
+              <ul className="space-y-3 text-sm text-gray-600">
+                <li><a href="#" className="hover:text-[#00dcaa]">Community Guidelines</a></li>
+                <li><a href="#" className="hover:text-[#00dcaa]">Privacy & Terms</a></li>
+                <li><a href="#" className="hover:text-[#00dcaa]">Mobile App</a></li>
+                <li><a href="#" className="hover:text-[#00dcaa]">Contact Us</a></li>
+              </ul>
+            </div>
+          </div>
+
+          {/* Bottom Section */}
+          <div className="border-t border-gray-200 mt-8 pt-8">
+            <div className="flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
+              <div className="flex items-center space-x-6">
+                <button className="bg-[#00dcaa] text-white px-4 py-2 rounded text-sm font-medium">
+                  QUESTIONS?
+                </button>
+                <button className="bg-gray-100 text-gray-700 px-4 py-2 rounded text-sm font-medium">
+                  SETTINGS
+                </button>
+              </div>
+              
+              <div className="text-center">
+                <p className="text-sm text-gray-600 mb-2">Get our app now:</p>
+                <div className="flex space-x-3">
+                  <div className="bg-black text-white px-3 py-1 rounded text-xs">Google Play</div>
+                  <div className="bg-black text-white px-3 py-1 rounded text-xs">App Store</div>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-sm text-gray-600 mb-1">Language</p>
+                <select className="border border-gray-300 rounded px-2 py-1 text-sm" title="Select language">
+                  <option>ENGLISH</option>
+                </select>
+              </div>
+            </div>
+            
+            <div className="mt-6 text-center">
+              <p className="text-sm text-gray-500">
+                © 2024 AdTip. All rights reserved.
+              </p>
+            </div>
+          </div>
+        </div>
+      </footer>
+    </div>
+  );
+};
+
+export default AdsCart;

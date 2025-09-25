@@ -47,6 +47,22 @@ import RazorpayCheckout from "@/pages/RazorpayCheckout";
 import Wallet from "./components/Wallet";
 import ChannelPage from "./pages/ChannelPage";
 import SearchResults from "./pages/SearchResults";
+import SellerDashboard from "./pages/SellerDashboard";
+import SellerAddProduct from "./pages/AddProduct";
+import SellerAddPost from "./pages/AddPost";
+import ViewAllProducts from "./pages/ViewAllProducts";
+import ViewAllPosts from "./pages/ViewAllPosts";
+import AdModel from "./pages/AdModel";
+import ViewAllReviews from "./pages/ViewAllReviews";
+import ConfigureCampaign from "./pages/ConfigureCampaign";
+import UploadCreative from "./pages/UploadCreative";
+import PreviewAd from "./pages/PreviewAd";
+import AdsCart from "./pages/AdsCart";
+import PaymentGateway from "./pages/PaymentGateway";
+import AdOrders from "./pages/AdOrders";
+import AdAnalytics from "./pages/AdAnalytics";
+import SellerRegistration from "./components/SellerRegistration";
+import EditSellerInfo from "./components/EditSellerInfo";
 
 const router = createBrowserRouter([
 	{
@@ -170,7 +186,7 @@ const router = createBrowserRouter([
 			},
 			{
 				path: "post-ads",
-				element: <PostAds />,
+				element: <AdModel />,
 			},
 		
 			{
@@ -244,6 +260,74 @@ const router = createBrowserRouter([
 			{
 				path: "search",
 				element: <SearchResults />,
+			},
+			{
+				path: "seller-dashboard",
+				element: <SellerDashboard />,
+			},
+			{
+				path: "seller/add-product",
+				element: <SellerAddProduct />,
+			},
+			{
+				path: "seller/add-post",
+				element: <SellerAddPost />,
+			},
+			{
+				path: "seller/products",
+				element: <ViewAllProducts />,
+			},
+			{
+				path: "seller/posts",
+				element: <ViewAllPosts />,
+			},
+			{
+				path: "seller/ad-model",
+				element: <AdModel />,
+			},
+			{
+				path: "seller/reviews",
+				element: <ViewAllReviews />,
+			},
+			{
+				path: "seller/dashboard",
+				element: <SellerDashboard />,
+			},
+			{
+				path: "seller/configure-campaign",
+				element: <ConfigureCampaign />,
+			},
+			{
+				path: "seller/upload-creative",
+				element: <UploadCreative />,
+			},
+			{
+				path: "seller/preview-ad",
+				element: <PreviewAd />,
+			},
+			{
+				path: "seller/ads-cart",
+				element: <AdsCart />,
+			},
+			{
+				path: "seller/payment-gateway",
+				element: <PaymentGateway />,
+			},
+			{
+				path: "seller/ad-orders",
+				element: <AdOrders />,
+			},
+			{
+				path: "seller/ad-analytics/:id",
+				element: <AdAnalytics />,
+			},
+			{
+				path: "seller/register",
+				element: <SellerRegistration />,
+			},
+			{
+				path: "seller/edit-info",
+				element: <EditSellerInfo />, 
 			},
 			{
 				path: "*",

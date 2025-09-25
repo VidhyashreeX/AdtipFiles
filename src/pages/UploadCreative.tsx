@@ -1,0 +1,388 @@
+import React, { useState } from 'react';
+import { ArrowLeft, Upload, Wand2, Video, FileImage, Camera, Zap } from 'lucide-react';
+import { useNavigate, useLocation } from 'react-router-dom';
+
+const UploadCreative = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { selectedModel, campaignData } = location.state || {};
+
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [showContentDetails, setShowContentDetails] = useState(false);
+  const [contentData, setContentData] = useState({
+    adTitle: '',
+    adDescription: '',
+    callToAction: ''
+  });
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setUploadedFile(file);
+      setShowContentDetails(true);
+    }
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setContentData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleNextPreview = () => {
+    navigate('/seller/preview-ad', {
+      state: {
+        selectedModel,
+        campaignData,
+        uploadedFile,
+        contentData
+      }
+    });
+  };
+
+  const handleAIGeneration = (type: string) => {
+    console.log('AI Generation for:', type);
+    // This would integrate with AI service
+    // For demo, we'll show a success state
+    setShowContentDetails(true);
+    setContentData({
+      adTitle: 'AI Generated Campaign Title',
+      adDescription: 'AI generated compelling description for your campaign...',
+      callToAction: 'Shop Now'
+    });
+  };
+
+  return (
+    <div className="min-h-screen bg-[#f5f5ff]">
+      {/* Main Content */}
+      <div className="max-w-4xl mx-auto px-6 py-8">
+        <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+          
+          {/* Header */}
+          <div className="bg-gradient-to-r from-[#00dcaa] to-[#00b894] p-6">
+            <div className="flex items-center space-x-4">
+              <button 
+                className="p-2 hover:bg-white/20 rounded-lg transition-colors" 
+                onClick={() => navigate('/seller/configure-campaign')}
+                title="Back to Configure Campaign"
+                aria-label="Back to Configure Campaign"
+              >
+                <ArrowLeft className="w-5 h-5 text-white" />
+              </button>
+              <div>
+                <h1 className="text-2xl font-bold text-white">Upload Creative or Generate with AI</h1>
+                <p className="text-white/80">Step 2 of 5 - Add your creative assets or let AI create them for you</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-8">
+            {!showContentDetails ? (
+              <>
+                {/* Upload and AI Options */}
+                <div className="grid md:grid-cols-2 gap-8 mb-8">
+                  
+                  {/* Upload Creative */}
+                  <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-xl border-2 border-dashed border-blue-200 hover:border-blue-300 transition-colors">
+                    <div className="text-center">
+                      <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <Upload className="w-8 h-8 text-blue-600" />
+                      </div>
+                      <h3 className="text-xl font-bold text-gray-900 mb-2">Upload Creative</h3>
+                      <p className="text-gray-600 mb-6">
+                        Drag and drop or click to browse<br />
+                        Supports: JPG, PNG, MP4, MOV (Max 50MB)
+                      </p>
+                      
+                      <label className="inline-block">
+                        <div className="bg-white border-2 border-blue-300 text-blue-700 px-6 py-3 rounded-lg font-semibold hover:bg-blue-50 transition-colors cursor-pointer">
+                          Upload your creative
+                        </div>
+                        <input 
+                          type="file" 
+                          accept="image/*,video/*" 
+                          onChange={handleFileUpload}
+                          className="hidden"
+                        />
+                      </label>
+                      
+                      <div className="mt-4 text-sm text-gray-500">
+                        Upload your own photos, videos or graphics
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* AI Ad Generator */}
+                  <div className="bg-gradient-to-br from-purple-50 to-pink-50 p-6 rounded-xl border-2 border-dashed border-purple-200 hover:border-purple-300 transition-colors">
+                    <div className="text-center">
+                      <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <Wand2 className="w-8 h-8 text-purple-600" />
+                      </div>
+                      <h3 className="text-xl font-bold text-gray-900 mb-2">AI Ad Generator</h3>
+                      <p className="text-gray-600 mb-6">
+                        Create professional marketing videos with AI avatars,<br />
+                        product showcases, and automated scripts
+                      </p>
+                      
+                      <button 
+                        onClick={() => handleAIGeneration('general')}
+                        className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-6 py-3 rounded-lg font-semibold hover:from-purple-700 hover:to-pink-700 transition-all duration-200 transform hover:scale-105"
+                      >
+                        <Zap className="w-4 h-4 inline mr-2" />
+                        Start AI Generation
+                      </button>
+                      
+                      <div className="mt-4 text-sm text-gray-500">
+                        Let AI create compelling content for you
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* AI Generation Options */}
+                <div className="grid md:grid-cols-4 gap-4">
+                  <div 
+                    className="bg-white border border-gray-200 rounded-lg p-4 hover:border-[#00dcaa] transition-colors cursor-pointer group"
+                    onClick={() => handleAIGeneration('avatar')}
+                  >
+                    <div className="text-center">
+                      <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mx-auto mb-3 group-hover:bg-[#00dcaa] group-hover:text-white transition-colors">
+                        <Video className="w-6 h-6" />
+                      </div>
+                      <h4 className="font-semibold text-gray-900 mb-1">Avatar Videos</h4>
+                      <p className="text-xs text-gray-600">AI presenters for your products</p>
+                    </div>
+                  </div>
+
+                  <div 
+                    className="bg-white border border-gray-200 rounded-lg p-4 hover:border-[#00dcaa] transition-colors cursor-pointer group"
+                    onClick={() => handleAIGeneration('product')}
+                  >
+                    <div className="text-center">
+                      <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mx-auto mb-3 group-hover:bg-[#00dcaa] group-hover:text-white transition-colors">
+                        <FileImage className="w-6 h-6" />
+                      </div>
+                      <h4 className="font-semibold text-gray-900 mb-1">Product Shots</h4>
+                      <p className="text-xs text-gray-600">Professional product showcases</p>
+                    </div>
+                  </div>
+
+                  <div 
+                    className="bg-white border border-gray-200 rounded-lg p-4 hover:border-[#00dcaa] transition-colors cursor-pointer group"
+                    onClick={() => handleAIGeneration('script')}
+                  >
+                    <div className="text-center">
+                      <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center mx-auto mb-3 group-hover:bg-[#00dcaa] group-hover:text-white transition-colors">
+                        <Camera className="w-6 h-6" />
+                      </div>
+                      <h4 className="font-semibold text-gray-900 mb-1">Smart Scripts</h4>
+                      <p className="text-xs text-gray-600">Auto-generated marketing copy</p>
+                    </div>
+                  </div>
+
+                  <div 
+                    className="bg-white border border-gray-200 rounded-lg p-4 hover:border-[#00dcaa] transition-colors cursor-pointer group"
+                    onClick={() => handleAIGeneration('import')}
+                  >
+                    <div className="text-center">
+                      <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mx-auto mb-3 group-hover:bg-[#00dcaa] group-hover:text-white transition-colors">
+                        <Upload className="w-6 h-6" />
+                      </div>
+                      <h4 className="font-semibold text-gray-900 mb-1">Link Import</h4>
+                      <p className="text-xs text-gray-600">Import from e-commerce sites</p>
+                    </div>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                {/* File Upload Success State */}
+                {uploadedFile && (
+                  <div className="mb-8">
+                    <div className="bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-dashed border-green-300 rounded-xl p-6">
+                      <div className="flex items-center space-x-4">
+                        <div className="w-20 h-20 bg-green-100 rounded-lg flex items-center justify-center">
+                          <Upload className="w-8 h-8 text-green-600" />
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-2 mb-2">
+                            <div className="w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
+                              <span className="text-white text-xs">✓</span>
+                            </div>
+                            <span className="text-green-700 font-semibold">File uploaded successfully!</span>
+                          </div>
+                          <p className="text-gray-700 font-medium">{uploadedFile.name}</p>
+                          <p className="text-sm text-gray-500">
+                            {uploadedFile.type.startsWith('image/') ? 'Image file' : 'Video file'} • {(uploadedFile.size / 1024 / 1024).toFixed(2)} MB
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Edit Content Details */}
+                <div className="bg-gradient-to-br from-gray-50 to-blue-50 p-6 rounded-xl">
+                  <h3 className="text-xl font-bold text-gray-900 mb-6">Edit Content Details</h3>
+                  
+                  <div className="space-y-6">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Ad Title *</label>
+                      <input 
+                        type="text" 
+                        name="adTitle"
+                        value={contentData.adTitle}
+                        onChange={handleInputChange}
+                        placeholder="Enter compelling ad title" 
+                        className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#00dcaa] focus:border-transparent"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Ad Description</label>
+                      <textarea 
+                        name="adDescription"
+                        value={contentData.adDescription}
+                        onChange={handleInputChange}
+                        placeholder="Describe your product or service..." 
+                        rows={4}
+                        className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#00dcaa] focus:border-transparent resize-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Call to Action</label>
+                      <input 
+                        type="text" 
+                        name="callToAction"
+                        value={contentData.callToAction}
+                        onChange={handleInputChange}
+                        placeholder="e.g., Shop Now, Learn More, Get Started" 
+                        className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#00dcaa] focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Form Actions */}
+            <div className="border-t border-gray-200 mt-8 pt-6 flex flex-col sm:flex-row gap-4 justify-between">
+              <button
+                type="button"
+                onClick={() => navigate('/seller/configure-campaign')}
+                className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                <ArrowLeft className="w-4 h-4 inline mr-2" />
+                Back
+              </button>
+              
+              {showContentDetails && (
+                <button
+                  type="button"
+                  onClick={handleNextPreview}
+                  className="px-8 py-3 bg-[#00dcaa] text-white rounded-lg hover:bg-[#00b894] transition-colors font-semibold"
+                >
+                  Next: Preview Ad
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <footer className="bg-white border-t border-gray-200 py-12 w-full">
+        <div className="max-w-full mx-auto px-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+            {/* Company Info */}
+            <div className="space-y-4">
+              <div className="flex items-center space-x-2">
+                <div className="w-8 h-8 bg-[#00dcaa] rounded flex items-center justify-center">
+                  <span className="text-white font-bold text-sm">▶</span>
+                </div>
+                <span className="text-xl font-bold text-[#00dcaa]">AdTip</span>
+              </div>
+              <p className="text-sm text-gray-600 leading-relaxed">
+                Digital Marketing & Advertising Solutions platform that empowers businesses to grow.
+              </p>
+            </div>
+
+            {/* Navigation */}
+            <div>
+              <h3 className="font-semibold text-gray-900 mb-4">Navigation</h3>
+              <ul className="space-y-3 text-sm text-gray-600">
+                <li><a href="#" className="hover:text-[#00dcaa]">About</a></li>
+                <li><a href="#" className="hover:text-[#00dcaa]">Careers</a></li>
+                <li><a href="#" className="hover:text-[#00dcaa]">Advertising</a></li>
+                <li><a href="#" className="hover:text-[#00dcaa]">Small Business</a></li>
+              </ul>
+            </div>
+
+            {/* Services */}
+            <div>
+              <h3 className="font-semibold text-gray-900 mb-4">Services</h3>
+              <ul className="space-y-3 text-sm text-gray-600">
+                <li><a href="#" className="hover:text-[#00dcaa]">Ad Solutions</a></li>
+                <li><a href="#" className="hover:text-[#00dcaa]">Marketing Solutions</a></li>
+                <li><a href="#" className="hover:text-[#00dcaa]">Sales Solutions</a></li>
+                <li><a href="#" className="hover:text-[#00dcaa]">Help Center</a></li>
+              </ul>
+            </div>
+
+            {/* Contact & Support */}
+            <div>
+              <h3 className="font-semibold text-gray-900 mb-4">Support</h3>
+              <ul className="space-y-3 text-sm text-gray-600">
+                <li><a href="#" className="hover:text-[#00dcaa]">Community Guidelines</a></li>
+                <li><a href="#" className="hover:text-[#00dcaa]">Privacy & Terms</a></li>
+                <li><a href="#" className="hover:text-[#00dcaa]">Mobile App</a></li>
+                <li><a href="#" className="hover:text-[#00dcaa]">Contact Us</a></li>
+              </ul>
+            </div>
+          </div>
+
+          {/* Bottom Section */}
+          <div className="border-t border-gray-200 mt-8 pt-8">
+            <div className="flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
+              <div className="flex items-center space-x-6">
+                <button className="bg-[#00dcaa] text-white px-4 py-2 rounded text-sm font-medium">
+                  QUESTIONS?
+                </button>
+                <button className="bg-gray-100 text-gray-700 px-4 py-2 rounded text-sm font-medium">
+                  SETTINGS
+                </button>
+              </div>
+              
+              <div className="text-center">
+                <p className="text-sm text-gray-600 mb-2">Get our app now:</p>
+                <div className="flex space-x-3">
+                  <div className="bg-black text-white px-3 py-1 rounded text-xs">Google Play</div>
+                  <div className="bg-black text-white px-3 py-1 rounded text-xs">App Store</div>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-sm text-gray-600 mb-1">Language</p>
+                <select className="border border-gray-300 rounded px-2 py-1 text-sm" title="Select language">
+                  <option>ENGLISH</option>
+                </select>
+              </div>
+            </div>
+            
+            <div className="mt-6 text-center">
+              <p className="text-sm text-gray-500">
+                © 2024 AdTip. All rights reserved.
+              </p>
+            </div>
+          </div>
+        </div>
+      </footer>
+    </div>
+  );
+};
+
+export default UploadCreative;
