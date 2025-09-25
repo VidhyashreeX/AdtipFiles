@@ -61,6 +61,19 @@ class VideoSDKService {
   }
 
   /**
+   * Ensure VideoSDK is initialized - useful for cold start scenarios
+   * If already initialized, returns immediately. Otherwise, initializes.
+   * @returns Promise<boolean> indicating success
+   */
+  async ensureInitialized(): Promise<boolean> {
+    if (this.isInitialized && this.websocketReady) {
+      logVideoSDK('VideoSDKService', 'Already initialized, skipping re-initialization');
+      return true;
+    }
+    return this.initialize();
+  }
+
+  /**
    * Initialize VideoSDK with enhanced WebSocket connection handling and cold start optimization
    * Following latest VideoSDK React Native documentation
    */

@@ -230,6 +230,31 @@ async function handleBackgroundCallMessage(remoteMessage) {
       token: token ? 'present' : 'missing'
     });
 
+    // CRITICAL: Save call data to AsyncStorage for cold-start recovery
+    console.log('[Index] 💾 Persisting call data to AsyncStorage for cold-start recovery...');
+    try {
+      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+      const pendingCallData = {
+        sessionId,
+        callerName,
+        callType,
+        meetingId,
+        token,
+        callerId: data.callerId || info?.callerId,
+        receiverId: data.receiverId || info?.receiverId,
+        channelName: data.channelName || info?.channelName,
+        fcmMessageId: remoteMessage.messageId,
+        timestamp: Date.now(),
+        fromKilledState: true
+      };
+      
+      await AsyncStorage.setItem('PENDING_CALL', JSON.stringify(pendingCallData));
+      console.log('[Index] ✅ Call data persisted to AsyncStorage for cold-start recovery');
+    } catch (storageError) {
+      console.error('[Index] ❌ Failed to persist call data to AsyncStorage:', storageError);
+      // Continue anyway - don't block the notification
+    }
+
     // Step 0: Initialize and save call state for persistence (CRITICAL FOR OFFLINE RECOVERY)
     console.log('[Index] 💾 Initializing call state persistence...');
     try {
@@ -361,6 +386,7 @@ async function handleBackgroundCallMessage(remoteMessage) {
 
   } catch (error) {
     const totalDuration = Date.now() - startTime;
+    const data = remoteMessage.data || {};
     console.error('[Index] ❌ Enhanced killed state processing failed:', {
       error,
       duration: totalDuration,
@@ -409,12 +435,13 @@ async function handleBackgroundCallMessage(remoteMessage) {
             await handler.initialize();
           }
 
+          const emergencyData = remoteMessage.data || {};
           await handler.displayIncomingCall({
-            sessionId: data.sessionId || `emergency-${Date.now()}`,
-            callerName: data.callerName || 'Unknown Caller',
+            sessionId: emergencyData.sessionId || `emergency-${Date.now()}`,
+            callerName: emergencyData.callerName || 'Unknown Caller',
             callType: 'voice',
-            meetingId: data.meetingId || `emergency-meeting-${Date.now()}`,
-            token: data.token || `emergency-token-${Date.now()}`
+            meetingId: emergencyData.meetingId || `emergency-meeting-${Date.now()}`,
+            token: emergencyData.token || `emergency-token-${Date.now()}`
           });
 
           console.log('[Index] ✅ Emergency fallback notification displayed');
@@ -426,10 +453,11 @@ async function handleBackgroundCallMessage(remoteMessage) {
 
     // Log final performance metrics even on failure
     const finalDuration = Date.now() - startTime;
+    const finalData = remoteMessage.data || {};
     console.log('[Index] 📊 Killed state processing completed with errors', {
       duration: finalDuration,
       success: false,
-      sessionId: data.sessionId || 'unknown'
+      sessionId: finalData.sessionId || 'unknown'
     });
   }
 }
@@ -442,7 +470,7 @@ async function handleDirectCallNotification(remoteMessage) {
     const data = remoteMessage.data || {};
     let info = null;
     if (data.info && typeof data.info === 'string') {
-      try { info = JSON.parse(data.info); } catch {}
+      try { info = JSON.parse(data.info); } catch (e) {}
     } else if (data.info && typeof data.info === 'object') {
       info = data.info;
     }

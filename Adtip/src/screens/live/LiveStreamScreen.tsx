@@ -108,7 +108,7 @@ const LiveStreamScreen: React.FC = () => {
 
   // VideoSDK Meeting Components
   const LiveStreamMeetingView: React.FC = () => {
-    const { leave, toggleMic, toggleWebcam, localParticipant, participants } = useMeeting({
+    const meeting = useMeeting({
       onMeetingJoined: () => {
         Logger.info('LiveStreamScreen', 'Successfully joined VideoSDK meeting for live stream');
       },
@@ -122,6 +122,29 @@ const LiveStreamScreen: React.FC = () => {
       },
     });
 
+    const { leave, toggleMic, toggleWebcam, localParticipant, participants, join, enableWebcam, unmuteMic } = meeting || {};
+
+    // Auto-join the meeting when component mounts and enable camera/mic for host
+    useEffect(() => {
+      if (meeting && join && !localParticipant) {
+        Logger.info('LiveStreamScreen', 'Auto-joining VideoSDK meeting...');
+        join();
+      }
+    }, [meeting, join, localParticipant]);
+
+    // Enable camera and mic for host after joining
+    useEffect(() => {
+      if (isHost && localParticipant && meeting) {
+        Logger.info('LiveStreamScreen', 'Enabling camera and microphone for host');
+        if (!localParticipant.webcamOn && enableWebcam) {
+          enableWebcam();
+        }
+        if (!localParticipant.micOn && unmuteMic) {
+          unmuteMic();
+        }
+      }
+    }, [isHost, localParticipant, meeting, enableWebcam, unmuteMic]);
+
     // Sync local VideoSDK state with UI state
     useEffect(() => {
       if (localParticipant) {
@@ -132,7 +155,7 @@ const LiveStreamScreen: React.FC = () => {
 
     // Update viewer count
     useEffect(() => {
-      setViewerCount(participants.size || 0);
+      setViewerCount(participants?.size || 0);
     }, [participants]);
 
     return (
@@ -329,7 +352,7 @@ const LiveStreamScreen: React.FC = () => {
     initializeVideoSDK();
   }, [navigation]);
 
-  // Start live stream
+  // Start live stream - OPTIMIZED with single API call
   const handleStartStream = useCallback(async () => {
     if (!canStartStream) {
       Alert.alert(
@@ -341,38 +364,10 @@ const LiveStreamScreen: React.FC = () => {
 
     try {
       setIsLoading(true);
-      Logger.info('LiveStreamScreen', 'Starting live stream...');
+      Logger.info('LiveStreamScreen', 'Starting live stream with optimized API...');
 
-      // First generate VideoSDK token
-      Logger.info('LiveStreamScreen', 'Generating VideoSDK token...');
-      const tokenResponse = await ApiService.generateVideoSDKToken();
-      
-      if (!tokenResponse?.token) {
-        throw new Error('Failed to generate VideoSDK token');
-      }
-
-      // Create meeting for live stream using the token
-      const videoSDKService = VideoSDKService.getInstance();
-      const meetingData = await videoSDKService.createMeeting(tokenResponse.token);
-      
-      if (!meetingData || typeof meetingData !== 'string') {
-        throw new Error('Failed to create meeting room');
-      }
-
-      setCurrentMeetingId(meetingData);
-
-      // Set meeting configuration for VideoSDK components
-      Logger.info('LiveStreamScreen', 'Setting up meeting config for host with audio/video enabled');
-      setMeetingConfig({
-        meetingId: meetingData,
-        token: tokenResponse.token,
-        name: user?.name || 'Host',
-        micEnabled: true,
-        webcamEnabled: true
-      });
-
-      // Start billing for the stream
-      const streamResult = await LiveStreamService.startStream(user?.id!, meetingData, {
+      // Use the optimized API that returns everything in one call
+      const streamResult = await LiveStreamService.startStream(user?.id!, '', {
         title: title.trim(),
         cost_per_minute: parseInt(streamCost),
         viewer_reward_per_minute: parseInt(viewerReward),
@@ -383,11 +378,33 @@ const LiveStreamScreen: React.FC = () => {
         throw new Error(streamResult.message);
       }
 
+      const { meeting_id, token } = streamResult.data;
+      
+      if (!meeting_id || !token) {
+        throw new Error('Invalid response from server - missing meeting ID or token');
+      }
+
+      setCurrentMeetingId(meeting_id);
+
+      // Ensure VideoSDK is initialized before setting meeting config
+      const videoSDKService = VideoSDKService.getInstance();
+      await videoSDKService.ensureInitialized();
+      
+      // Set meeting configuration for VideoSDK components
+      Logger.info('LiveStreamScreen', 'Setting up meeting config for host with audio/video enabled');
+      setMeetingConfig({
+        meetingId: meeting_id,
+        token: token,
+        name: user?.name || 'Host',
+        micEnabled: true,
+        webcamEnabled: true
+      });
+
       setIsStreaming(true);
       setStreamSetup(true);
       
-      Logger.info('LiveStreamScreen', `Live stream started: ${meetingData} with mic/camera active`);
-      Alert.alert('Stream Started!', 'Your live stream is now active with microphone and camera enabled. Viewers can join using the meeting ID.');
+      Logger.info('LiveStreamScreen', `Live stream started: ${meeting_id} with mic/camera active`);
+      Alert.alert('Stream Started!', 'Your live stream is now active. Share the meeting ID with viewers!');
 
     } catch (error) {
       Logger.error('LiveStreamScreen', 'Failed to start stream:', error);

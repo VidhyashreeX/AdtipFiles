@@ -273,7 +273,14 @@ const ParticipantVideo = ({ participantId, isLocal = false }: { participantId: s
 const Controls = () => {
   const navigation = useNavigation<NativeStackNavigationProp<MainNavigatorParamList>>()
   const { status, session, media } = useCallStore()
-  const { toggleMic, toggleWebcam, leave, localParticipant, participants } = useMeeting()
+  const meeting = useMeeting()
+  
+  // Handle case when meeting is not ready yet
+  if (!meeting) {
+    return null;
+  }
+  
+  const { toggleMic, toggleWebcam, leave, localParticipant, participants } = meeting;
   const actions = useCallStore(state => state.actions)
   const controller = CallController.getInstance()
 

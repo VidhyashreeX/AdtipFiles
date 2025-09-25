@@ -10,6 +10,7 @@ import {
 
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   SafeAreaProvider,
   useSafeAreaInsets
@@ -100,11 +101,118 @@ const AppNavigator = () => {
   const { status: callStatus, session: activeSession } = useCallStore();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const [pendingCall, setPendingCall] = useState<any>(null);
+  const [coldStartChecked, setColdStartChecked] = useState(false);
 
   // Check if user needs to complete profile details (robust check across possible name fields)
   const hasName = Boolean(user?.name?.trim?.() || (user as any)?.firstname?.trim?.() || (user as any)?.firstName?.trim?.());
   const hasCompleted = user?.isSaveUserDetails === 1 || (user as any)?.isSaveUserDetails === true;
   const needsUserDetails = isAuthenticated && !(hasName && hasCompleted);
+
+  // Check for pending calls from killed state FIRST
+  useEffect(() => {
+    const checkPendingCall = async () => {
+      try {
+        Logger.debug('App', '🔍 Checking for pending call from killed state...');
+        const pendingCallData = await AsyncStorage.getItem('PENDING_CALL');
+        
+        if (pendingCallData) {
+          const callData = JSON.parse(pendingCallData);
+          Logger.info('App', '🔥 PENDING CALL FOUND from killed state:', callData);
+          
+          // Validate that the call is not too old (5 minutes max)
+          const callAge = Date.now() - callData.timestamp;
+          if (callAge < 5 * 60 * 1000) {
+            setPendingCall(callData);
+            // Clear the pending call data
+            await AsyncStorage.removeItem('PENDING_CALL');
+          } else {
+            Logger.warn('App', 'Pending call too old, ignoring:', callAge / 1000, 'seconds');
+            await AsyncStorage.removeItem('PENDING_CALL');
+          }
+        }
+      } catch (error) {
+        Logger.error('App', 'Error checking pending call:', error);
+      } finally {
+        setColdStartChecked(true);
+      }
+    };
+
+    checkPendingCall();
+  }, []);
+
+  // Handle pending call navigation after initialization
+  useEffect(() => {
+    if (!coldStartChecked || !isInitialized || !pendingCall) return;
+
+    const navigateToPendingCall = async () => {
+      try {
+        Logger.info('App', '🚀 Navigating to pending call from killed state');
+        
+        // Ensure VideoSDK is initialized first
+        const videoSDKService = VideoSDKService.getInstance();
+        await videoSDKService.ensureInitialized();
+        
+        // Navigate to Meeting screen with the pending call data
+        const navigationService = await import('./src/navigation/SimplifiedNavigationService');
+        
+        // Wait a bit for navigation to be ready
+        let retries = 0;
+        while (!navigationService.navigationRef.isReady() && retries < 10) {
+          await new Promise(resolve => setTimeout(resolve, 200));
+          retries++;
+        }
+        
+        if (navigationService.navigationRef.isReady()) {
+          const success = navigationService.default.navigateToMeeting({
+            meetingId: pendingCall.meetingId,
+            token: pendingCall.token,
+            displayName: user?.name || 'Me',
+            callType: pendingCall.callType,
+            isInitiator: false,
+            recipientName: pendingCall.callerName,
+            callData: {
+              sessionId: pendingCall.sessionId,
+              direction: 'incoming',
+              type: pendingCall.callType,
+              callerName: pendingCall.callerName,
+              fromKilledState: true
+            }
+          });
+          
+          if (success) {
+            Logger.info('App', '✅ Successfully navigated to pending call');
+            
+            // Update call store
+            const store = useCallStore.getState();
+            store.actions.setSession({
+              sessionId: pendingCall.sessionId,
+              meetingId: pendingCall.meetingId,
+              token: pendingCall.token,
+              peerId: 'unknown',
+              peerName: pendingCall.callerName,
+              direction: 'incoming',
+              type: pendingCall.callType,
+              startedAt: Date.now()
+            });
+            store.actions.setStatus('connecting');
+          } else {
+            Logger.error('App', '❌ Failed to navigate to pending call');
+          }
+        } else {
+          Logger.error('App', '❌ Navigation not ready after 10 retries');
+        }
+        
+        // Clear pending call after handling
+        setPendingCall(null);
+      } catch (error) {
+        Logger.error('App', 'Error navigating to pending call:', error);
+        setPendingCall(null);
+      }
+    };
+
+    navigateToPendingCall();
+  }, [coldStartChecked, isInitialized, pendingCall, user]);
 
   // Memoize the initialization complete callback to prevent re-renders
   const handleInitializationComplete = useCallback(() => {
@@ -113,6 +221,12 @@ const AppNavigator = () => {
     // CRITICAL FIX: Check for FCM notification from killed state first
     setTimeout(async () => {
       try {
+        // Skip FCM check if we already have a pending call from AsyncStorage
+        if (pendingCall) {
+          Logger.debug('App', 'Skipping FCM check - already have pending call from AsyncStorage');
+          return;
+        }
+
         Logger.debug('App', '🔥 Checking for killed state FCM notification...');
         
         const messaging = (await import('@react-native-firebase/messaging')).default;
