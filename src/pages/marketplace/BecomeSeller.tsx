@@ -48,8 +48,10 @@ import {
   Upload,
   ChevronsRight,
 } from "lucide-react";
-import { Progress } from "@/components/ui/progress";
 import { useNavigate } from "react-router-dom";
+import { apiGetCompanyList } from "@/api";
+import { toast } from "@/hooks/use-toast";
+import { Progress } from "@/components/ui/progress";
 
 // Seller Step Component
 const SellerStep = ({
@@ -204,9 +206,49 @@ const BecomeSeller: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState("overview");
   const [sellerStep, setSellerStep] = useState(1);
+  const [hasCompany, setHasCompany] = useState(false);
+  const [checkingCompany, setCheckingCompany] = useState(true);
   const navigate = useNavigate();
   const totalSteps = 4;
   const progress = (sellerStep / totalSteps) * 100;
+
+  // Check if user already has a company
+  useEffect(() => {
+    const checkExistingCompany = async () => {
+      try {
+        const userData = JSON.parse(localStorage.getItem('user') || '{}');
+        const userId = userData.id;
+
+        if (!userId) {
+          setCheckingCompany(false);
+          return;
+        }
+
+        const companiesResponse = await apiGetCompanyList(userId.toString());
+        if (companiesResponse.data && companiesResponse.data.status === 200) {
+          const companiesList = companiesResponse.data.data || [];
+          console.log('Companies found:', companiesList.length);
+          if (companiesList.length > 0) {
+            setHasCompany(true);
+            console.log('User has company, redirecting to dashboard...');
+            // Store the selected company
+            localStorage.setItem('selectedCompany', JSON.stringify(companiesList[0]));
+            // Redirect to seller dashboard if user already has company
+            navigate('/seller/dashboard', { replace: true });
+            return;
+          }
+        }
+        setHasCompany(false);
+      } catch (error) {
+        console.log('No companies found or error checking:', error);
+        setHasCompany(false);
+      } finally {
+        setCheckingCompany(false);
+      }
+    };
+
+    checkExistingCompany();
+  }, [navigate]);
 
   const steps = [
     { title: "Account Details", completed: sellerStep > 1 },
@@ -799,6 +841,18 @@ const BecomeSeller: React.FC = () => {
     }
   };
 
+  // Show loading while checking company status
+  if (checkingCompany) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-teal-50 to-blue-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Checking your seller status...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="container mx-auto px-4 py-8">
       {/* Hero Section */}
@@ -815,14 +869,21 @@ const BecomeSeller: React.FC = () => {
             <Button
               size="lg"
               className="bg-white text-teal-700 hover:bg-teal-50"
-              onClick={() => setActiveTab("register")}
+              onClick={() => {
+                if (hasCompany) {
+                  navigate('/seller/dashboard');
+                } else {
+                  setActiveTab("register");
+                }
+              }}
             >
-              Register Now
+              {hasCompany ? 'Go to Dashboard' : 'Register Now'}
             </Button>
             <Button
               size="lg"
               variant="outline"
               className="bg-transparent text-white border-white hover:bg-white/10"
+              onClick={() => setActiveTab("benefits")}
             >
               Learn More
             </Button>

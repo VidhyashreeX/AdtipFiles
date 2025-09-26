@@ -1,11 +1,92 @@
-import React from 'react';
-import { ArrowLeft, FileText, Eye, Heart, MessageSquare, Share2, Calendar } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ArrowLeft, FileText, Eye, Heart, MessageSquare, Share2, Calendar, Plus, Edit, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { apiGetCompanyList, apiGetCompanyPost } from '@/api';
+import { toast } from '@/hooks/use-toast';
 
 const ViewAllPosts = () => {
   const navigate = useNavigate();
-  
-  const posts = [
+  const [loading, setLoading] = useState(true);
+  const [posts, setPosts] = useState<any[]>([]);
+  const [selectedCompany, setSelectedCompany] = useState<any>(null);
+  const [companies, setCompanies] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        const userData = JSON.parse(localStorage.getItem('user') || '{}');
+        const userId = userData.id;
+
+        if (!userId) {
+          toast({
+            title: "Error",
+            description: "User not found. Please log in again.",
+            variant: "destructive"
+          });
+          navigate('/login');
+          return;
+        }
+
+        // Fetch user's companies
+        const companiesResponse = await apiGetCompanyList(userId.toString());
+        if (companiesResponse.data && companiesResponse.data.status === 200) {
+          const companiesList = companiesResponse.data.data || [];
+          setCompanies(companiesList);
+          
+          if (companiesList.length === 0) {
+            toast({
+              title: "No Company Found",
+              description: "Please create a company profile first.",
+              variant: "destructive"
+            });
+            navigate('/seller/register');
+            return;
+          }
+
+          // Get selected company
+          const storedCompany = JSON.parse(localStorage.getItem('selectedCompany') || '{}');
+          const selectedComp = storedCompany.id ? 
+            companiesList.find((c: any) => c.id === storedCompany.id) || companiesList[0] :
+            companiesList[0];
+          
+          setSelectedCompany(selectedComp);
+
+          // Fetch posts for selected company
+          if (selectedComp) {
+            const postsResponse = await apiGetCompanyPost(selectedComp.id.toString());
+            if (postsResponse.data && postsResponse.data.status === 200) {
+              setPosts(postsResponse.data.data || []);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching data:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load posts data.",
+          variant: "destructive"
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [navigate]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#f5f5ff] flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#00dcaa] mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading posts...</p>
+        </div>
+      </div>
+    );
+  }
+
+  const oldPosts = [
     {
       id: 1,
       title: 'Summer Sale Campaign - Up to 50% Off',

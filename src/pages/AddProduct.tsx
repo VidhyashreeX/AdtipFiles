@@ -1,10 +1,48 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Upload, Plus, X, Package, Truck, DollarSign, Tag, Image } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { apiAddProduct, apiGetCompanyList } from '@/api';
+import { toast } from '@/hooks/use-toast';
+import { uploadToR2, UPLOAD_FOLDERS, UploadResult } from '@/services/r2UploadService';
+
+type Company = {
+  id: number;
+  name: string;
+  [key: string]: unknown;
+};
+
+type ProductFormData = {
+  name: string;
+  description: string;
+  brandName: string;
+  category: string;
+  deliveryTime: string;
+  unitsAvailable: string;
+  sizeOptions: string[];
+  regularPrice: string;
+  marketPrice: string;
+  deliveryType: string;
+  weight: string;
+  dimensions: string;
+};
+
+const CATEGORY_MAP: Record<string, number> = {
+  electronics: 1,
+  clothing: 2,
+  home: 3,
+  books: 4,
+  sports: 5,
+  beauty: 6,
+  toys: 7,
+  automotive: 8,
+};
 
 const AddProduct = () => {
   const navigate = useNavigate();
-  const [formData, setFormData] = useState({
+  const [loading, setLoading] = useState(false);
+  const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [formData, setFormData] = useState<ProductFormData>({
     name: '',
     description: '',
     brandName: '',
@@ -16,13 +54,137 @@ const AddProduct = () => {
     marketPrice: '',
     deliveryType: '',
     weight: '',
-    dimensions: '',
-    sku: '',
-    tags: ''
+    dimensions: ''
   });
   
-  const [images, setImages] = useState([]);
+  const [images, setImages] = useState<File[]>([]);
   const [sizeInput, setSizeInput] = useState('');
+
+  // Fetch user companies on component mount
+  useEffect(() => {
+    const fetchCompanies = async () => {
+      try {
+        const userDataRaw = localStorage.getItem('user');
+        const parsedUser = userDataRaw ? (JSON.parse(userDataRaw) as Record<string, unknown>) : {};
+        const userIdValue = parsedUser?.id;
+        const userId = typeof userIdValue === 'string' ? Number.parseInt(userIdValue, 10) : userIdValue;
+
+        if (typeof userId !== 'number' || Number.isNaN(userId)) {
+          toast({
+            title: "Error",
+            description: "User not found. Please log in again.",
+            variant: "destructive"
+          });
+          navigate('/login');
+          return;
+        }
+
+        const companiesResponse = await apiGetCompanyList(userId.toString());
+        if (companiesResponse.data && companiesResponse.data.status === 200) {
+          const rawCompanies = (companiesResponse.data.data ?? []) as unknown[];
+          const normalizedCompanies = rawCompanies
+            .map((company): Company | null => {
+              if (!company || typeof company !== 'object') {
+                return null;
+              }
+              const companyRecord = company as Record<string, unknown>;
+              const rawId = companyRecord.id;
+              const rawName = companyRecord.name;
+
+              if ((typeof rawId !== 'number' && typeof rawId !== 'string') || typeof rawName !== 'string') {
+                return null;
+              }
+
+              const numericId = typeof rawId === 'string' ? Number.parseInt(rawId, 10) : rawId;
+              if (!Number.isFinite(numericId)) {
+                return null;
+              }
+
+              return {
+                ...companyRecord,
+                id: numericId,
+                name: rawName,
+              } as Company;
+            })
+            .filter((company): company is Company => Boolean(company));
+
+          setCompanies(normalizedCompanies);
+          
+          if (normalizedCompanies.length === 0) {
+            toast({
+              title: "No Company Found",
+              description: "Please create a company profile first.",
+              variant: "destructive"
+            });
+            navigate('/seller/register');
+            return;
+          }
+
+          // Set selected company from localStorage or first company
+          const storedCompanyRaw = localStorage.getItem('selectedCompany');
+          let storedCompany: Partial<Company> = {};
+          if (storedCompanyRaw) {
+            try {
+              storedCompany = JSON.parse(storedCompanyRaw) as Partial<Company>;
+            } catch (parseError) {
+              console.error('Error parsing stored company:', parseError);
+            }
+          }
+
+          const targetCompany = storedCompany?.id
+            ? normalizedCompanies.find((company) => company.id === storedCompany?.id)
+            : undefined;
+          const selectedComp = targetCompany ?? normalizedCompanies[0];
+          
+          setSelectedCompany(selectedComp);
+        }
+      } catch (error) {
+        console.error('Error fetching companies:', error);
+        toast({
+          title: "Error",
+          description: "Failed to fetch company information.",
+          variant: "destructive"
+        });
+      }
+    };
+
+    // Load any existing draft
+    const loadDraft = () => {
+      try {
+        const draftData = localStorage.getItem('productDraft');
+        if (draftData) {
+          const draft = JSON.parse(draftData);
+          setFormData({
+            name: draft.name || '',
+            description: draft.description || '',
+            brandName: draft.brandName || '',
+            category: draft.category || '',
+            deliveryTime: draft.deliveryTime || '',
+            unitsAvailable: draft.unitsAvailable || '',
+            sizeOptions: draft.sizeOptions || [],
+            regularPrice: draft.regularPrice || '',
+            marketPrice: draft.marketPrice || '',
+            deliveryType: draft.deliveryType || '',
+            weight: draft.weight || '',
+            dimensions: draft.dimensions || ''
+          });
+          // Note: We don't restore images from draft since File objects can't be serialized
+          // User will need to re-upload images
+          
+          toast({
+            title: "Draft Loaded",
+            description: "Your saved draft has been loaded.",
+            variant: "default"
+          });
+        }
+      } catch (error) {
+        console.error('Error loading draft:', error);
+      }
+    };
+
+    fetchCompanies();
+    loadDraft();
+  }, [navigate]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -60,10 +222,173 @@ const AddProduct = () => {
     }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSaveDraft = async () => {
+    if (!selectedCompany) {
+      toast({
+        title: "Error",
+        description: "Please select or create a company first.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      // Save draft data to localStorage (excluding images since File objects can't be serialized)
+      const draftData = {
+        ...formData,
+        companyId: selectedCompany.id,
+        imageCount: images.length, // Save count for reference
+        timestamp: new Date().toISOString()
+      };
+      
+      localStorage.setItem('productDraft', JSON.stringify(draftData));
+      
+      toast({
+        title: "Draft Saved",
+        description: "Your product draft has been saved successfully.",
+        variant: "default"
+      });
+    } catch (error) {
+      console.error('Error saving draft:', error);
+      toast({
+        title: "Error",
+        description: "Failed to save draft. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Product data:', formData, 'Images:', images);
-    navigate('/seller/dashboard');
+    
+    if (!selectedCompany) {
+      toast({
+        title: "Error",
+        description: "Please select or create a company first.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (images.length === 0) {
+      toast({
+        title: "Error",
+        description: "Please add at least one product image.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setLoading(true);
+    
+    try {
+      // Get user data for the API call
+      const userDataRaw = localStorage.getItem('user');
+      const parsedUser = userDataRaw ? (JSON.parse(userDataRaw) as Record<string, unknown>) : {};
+      const rawUserId = parsedUser?.id;
+      const userId = typeof rawUserId === 'string' ? Number.parseInt(rawUserId, 10) : rawUserId;
+
+      if (typeof userId !== 'number' || Number.isNaN(userId)) {
+        throw new Error('User information missing. Please log in again.');
+      }
+
+      // Upload product images to R2 and collect URLs
+      const uploadPromises = images.map((file, index) =>
+        uploadToR2(file, UPLOAD_FOLDERS.IMAGES, userId, (progress) => {
+            console.log(
+              `[Product Upload ${index + 1}/${images.length}] ${progress.percentage.toFixed(0)}%`
+            );
+        })
+      );
+
+      const uploadResults: UploadResult[] = await Promise.all(uploadPromises);
+
+      const imageUrls = uploadResults
+        .filter((result) => result.success && result.url)
+        .map((result) => result.url);
+
+      if (imageUrls.length === 0) {
+        throw new Error('Failed to upload product images.');
+      }
+      
+      // Create product data matching the backend SQL structure exactly
+      const productData = {
+        // Core product fields matching backend SQL - using exact field names as backend expects
+        name: formData.name || '',
+        description: formData.description || '',
+        brand: formData.brandName || selectedCompany.name || '',
+        categoryId: CATEGORY_MAP[formData.category] || parseInt(formData.category) || 1,
+        deliveryTime: formData.deliveryTime || '1-2 days', // Backend uses deliveryTime in VALUES
+        units: parseInt(formData.unitsAvailable) || 1,
+        regularPrice: parseFloat(formData.regularPrice) || 0, // Backend uses regularPrice in VALUES
+        marketPrice: parseFloat(formData.marketPrice) || 0, // Backend uses marketPrice in VALUES
+        size: formData.sizeOptions.length > 0 ? formData.sizeOptions.join(',') : '',
+        images: imageUrls.join(','),
+        companyId: selectedCompany.id, // Backend uses companyId in VALUES
+        deliveryType: formData.deliveryType || 'Standard', // Backend uses deliveryType in VALUES
+        termsApply: 'Standard terms and conditions apply', // Backend uses termsApply in VALUES
+        created_by: userId,
+        your_price: parseFloat(formData.regularPrice) || 0,
+        keyword: formData.name ? formData.name.toLowerCase().replace(/\s+/g, ',') : '',
+        manufacturer_date: new Date().toISOString().split('T')[0],
+        product_description: formData.description || '',
+        product_specification: `Weight: ${formData.weight || 0}kg, Dimensions: ${formData.dimensions || 'N/A'}`,
+        inches: 0,
+        additional_accessories: '',
+        stock: parseInt(formData.unitsAvailable) || 1,
+        procurement_type: 'Direct',
+        procurement_time: 1,
+        shipping_fee: 0,
+        replacement_days: 7,
+        warranty_days: 30,
+        sku_id: `SKU-${Date.now()}`,
+        auto_bargain: 0,
+        bargain_minimum_price: parseFloat(formData.regularPrice) * 0.9 || 0,
+        primary_image: imageUrls[0],
+      };
+
+  console.log('Submitting product data:', productData);
+
+  const response = await apiAddProduct(productData);
+      
+      if (response.data && response.data.status === 200) {
+        // Clear draft on successful submission
+        localStorage.removeItem('productDraft');
+        setImages([]);
+        setFormData({
+          name: '',
+          description: '',
+          brandName: '',
+          category: '',
+          deliveryTime: '',
+          unitsAvailable: '',
+          sizeOptions: [],
+          regularPrice: '',
+          marketPrice: '',
+          deliveryType: '',
+          weight: '',
+          dimensions: ''
+        });
+        
+        toast({
+          title: "Success!",
+          description: "Product added successfully!",
+          variant: "default"
+        });
+        navigate('/seller/dashboard');
+      } else {
+        throw new Error(response.data?.message || 'Failed to add product');
+      }
+    } catch (error) {
+      console.error('Error adding product:', error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to add product. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -78,6 +403,8 @@ const AddProduct = () => {
               <button 
                 className="p-2 hover:bg-white/20 rounded-lg transition-colors" 
                 onClick={() => navigate('/seller/dashboard')}
+                type="button"
+                aria-label="Go back to seller dashboard"
               >
                 <ArrowLeft className="w-5 h-5 text-white" />
               </button>
@@ -89,6 +416,35 @@ const AddProduct = () => {
           </div>
 
           <form onSubmit={handleSubmit} className="p-8">
+            {/* Company Selection */}
+            {companies.length > 1 && (
+              <div className="mb-8 p-4 bg-gray-50 rounded-lg">
+                <label htmlFor="company-select" className="block text-sm font-semibold text-gray-700 mb-2">Select Company</label>
+                <select 
+                  id="company-select"
+                  value={selectedCompany?.id || ''}
+                  onChange={(e) => {
+                    const companyId = parseInt(e.target.value);
+                    const company = companies.find(c => c.id === companyId);
+                    if (company) {
+                      setSelectedCompany(company);
+                      localStorage.setItem('selectedCompany', JSON.stringify(company));
+                    }
+                  }}
+                  className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#00dcaa] focus:border-transparent"
+                  title="Select Company"
+                  required
+                >
+                  <option value="">Select a company</option>
+                  {companies.map((company) => (
+                    <option key={company.id} value={company.id}>
+                      {company.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               
               {/* Left Column - Basic Info */}
@@ -101,7 +457,7 @@ const AddProduct = () => {
                     {images.map((image, index) => (
                       <div key={index} className="relative group">
                         <img 
-                          src={URL.createObjectURL(image)} 
+                          src={image instanceof File ? URL.createObjectURL(image) : ''} 
                           alt={`Product ${index + 1}`}
                           className="w-full h-24 object-cover rounded-lg border-2 border-gray-200"
                         />
@@ -109,6 +465,7 @@ const AddProduct = () => {
                           type="button"
                           onClick={() => removeImage(index)}
                           className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                          aria-label={`Remove image ${index + 1}`}
                         >
                           <X className="w-3 h-3" />
                         </button>
@@ -174,8 +531,9 @@ const AddProduct = () => {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Category *</label>
-                    <select 
+                    <label htmlFor="product-category" className="block text-sm font-semibold text-gray-700 mb-2">Category *</label>
+                      <select 
+                        id="product-category"
                       name="category"
                       value={formData.category}
                       onChange={handleInputChange}
@@ -206,6 +564,7 @@ const AddProduct = () => {
                           type="button"
                           onClick={() => removeSize(index)}
                           className="ml-2 hover:bg-white/20 rounded-full p-0.5"
+                          aria-label={`Remove size ${size}`}
                         >
                           <X className="w-3 h-3" />
                         </button>
@@ -224,9 +583,11 @@ const AddProduct = () => {
                     <button
                       type="button"
                       onClick={addSize}
-                      className="bg-[#00dcaa] text-white px-4 py-2 rounded-lg hover:bg-[#00b894] transition-colors"
+                      className="bg-[#00dcaa] text-white px-4 py-2 rounded-lg hover:bg-[#00b894] transition-colors flex items-center gap-2"
+                      aria-label="Add size option"
                     >
-                      <Plus className="w-4 h-4" />
+                      <Plus className="w-4 h-4" aria-hidden="true" />
+                      <span className="text-sm font-medium">Add</span>
                     </button>
                   </div>
                 </div>
@@ -290,8 +651,9 @@ const AddProduct = () => {
                   </h3>
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">Delivery Type *</label>
+                      <label htmlFor="delivery-type" className="block text-sm font-semibold text-gray-700 mb-2">Delivery Type *</label>
                       <select 
+                        id="delivery-type"
                         name="deliveryType"
                         value={formData.deliveryType}
                         onChange={handleInputChange}
@@ -306,8 +668,9 @@ const AddProduct = () => {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">Delivery Time *</label>
+                      <label htmlFor="delivery-time" className="block text-sm font-semibold text-gray-700 mb-2">Delivery Time *</label>
                       <select 
+                        id="delivery-time"
                         name="deliveryTime"
                         value={formData.deliveryTime}
                         onChange={handleInputChange}
@@ -350,38 +713,7 @@ const AddProduct = () => {
                   </div>
                 </div>
 
-                {/* Additional Information */}
-                <div className="bg-gradient-to-br from-yellow-50 to-orange-50 p-6 rounded-lg">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                    <Tag className="w-5 h-5 mr-2 text-[#00dcaa]" />
-                    Additional Information
-                  </h3>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">SKU / Product Code</label>
-                      <input 
-                        type="text" 
-                        name="sku"
-                        value={formData.sku}
-                        onChange={handleInputChange}
-                        placeholder="Enter SKU or product code" 
-                        className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#00dcaa] focus:border-transparent"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">Tags</label>
-                      <input 
-                        type="text" 
-                        name="tags"
-                        value={formData.tags}
-                        onChange={handleInputChange}
-                        placeholder="Enter tags separated by commas" 
-                        className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#00dcaa] focus:border-transparent"
-                      />
-                      <p className="text-xs text-gray-500 mt-1">e.g., trending, bestseller, new arrival</p>
-                    </div>
-                  </div>
-                </div>
+
               </div>
             </div>
 
@@ -396,15 +728,21 @@ const AddProduct = () => {
               </button>
               <button
                 type="button"
-                className="px-6 py-3 border border-[#00dcaa] text-[#00dcaa] rounded-lg hover:bg-[#00dcaa]/10 transition-colors"
+                onClick={handleSaveDraft}
+                disabled={loading || !selectedCompany}
+                className="px-6 py-3 border border-[#00dcaa] text-[#00dcaa] rounded-lg hover:bg-[#00dcaa]/10 transition-colors disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed"
               >
                 Save as Draft
               </button>
               <button
                 type="submit"
-                className="px-8 py-3 bg-[#00dcaa] text-white rounded-lg hover:bg-[#00b894] transition-colors font-semibold"
+                disabled={loading || !selectedCompany}
+                className="px-8 py-3 bg-[#00dcaa] text-white rounded-lg hover:bg-[#00b894] transition-colors font-semibold disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center space-x-2"
               >
-                Publish Product
+                {loading && (
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                )}
+                <span>{loading ? 'Publishing...' : 'Publish Product'}</span>
               </button>
             </div>
           </form>

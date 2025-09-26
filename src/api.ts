@@ -37,39 +37,85 @@ api.interceptors.response.use(
 export const apiCreateCompany = async (companyData: any) => {
   const token = localStorage.getItem('UserLoggedIn');
   
-  // Add required user ID
-  const userData = JSON.parse(localStorage.getItem('UserData') || '{}');
+  // Try multiple localStorage keys to find user data
+  let userData = {};
+  try {
+    userData = JSON.parse(localStorage.getItem('user') || '{}');
+    if (!userData || !(userData as any).id) {
+      userData = JSON.parse(localStorage.getItem('UserData') || '{}');
+    }
+    if (!userData || !(userData as any).id) {
+      userData = JSON.parse(localStorage.getItem('userData') || '{}');
+    }
+  } catch (e) {
+    console.error('Error parsing user data:', e);
+    userData = {};
+  }
+
+  // Ensure we have a valid user ID
+  const userId = (userData as any).id;
+  if (!userId) {
+    throw new Error('User not logged in. Please log in again and try registering your company.');
+  }
+
+  // Create unique company name to avoid duplicate entry errors
+  const baseCompanyName = companyData.companyName || '';
+  const timestamp = Date.now();
   
   // Create JSON payload for the new createCompany endpoint
   const payload = {
-    createdby: userData.id || 1,
-    name: companyData.companyName || '',
+    createdby: userId,
+    name: baseCompanyName,
     email: companyData.email || '',
     phone: companyData.phone || '',
     location: companyData.location || '',
     about: companyData.description || '',
     website: companyData.website || '',
-    industry: companyData.companyType || '',
-    button: companyData.ctaButton || '',
+    industry: companyData.companyType || 'Products',
+    button: companyData.ctaButton || 'Know More',
     // Send URLs directly - these will be stored as strings in the database
     profileimage: companyData.logoUrl || '', // Logo URL
     coverimage: companyData.bannerUrl || ''   // Banner URL
   };
 
-  // Debug: Log the payload being sent
-  console.log('=== FRONTEND API CALL DEBUG ===');
-  console.log('Sending company payload:', JSON.stringify(payload, null, 2));
+  console.log('=== COMPANY REGISTRATION DEBUG ===');
+  console.log('User ID found:', userId);
+  console.log('Company Name:', baseCompanyName);
   console.log('Token present:', !!token);
-  console.log('User ID:', userData.id);
-  console.log('Logo URL:', companyData.logoUrl);
-  console.log('Banner URL:', companyData.bannerUrl);
-  console.log('===============================');
+  console.log('Payload:', JSON.stringify(payload, null, 2));
+  console.log('====================================');
 
-  return axios.post(`${BASE_URL}/api/registercompany`, payload, {
-    headers: {
-      'Content-Type': 'application/json'
+  try {
+    const response = await axios.post(`${BASE_URL}/api/registercompany`, payload, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return response;
+  } catch (error: any) {
+    console.error('Company registration error:', error);
+    
+    // Handle duplicate entry error by adding timestamp to name
+    if (error.response?.data?.message?.includes('ER_DUP_ENTRY') || 
+        error.response?.data?.message?.includes('Duplicate entry') ||
+        error.response?.data?.message?.includes('unique_comany_user_id')) {
+      
+      console.log('Duplicate entry detected, retrying with unique name...');
+      const uniqueName = `${baseCompanyName}_${timestamp}`;
+      const retryPayload = { ...payload, name: uniqueName };
+      
+      console.log('Retrying with unique name:', uniqueName);
+      return axios.post(`${BASE_URL}/api/registercompany`, retryPayload, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
     }
-  });
+    
+    throw error;
+  }
 };
 
 // Check if company name exists
@@ -538,18 +584,11 @@ export const apiGetAllProducts = async () => {
 // Add new product
 export const apiAddProduct = async (productData: any) => {
   const token = localStorage.getItem('UserLoggedIn');
-  const formData = new FormData();
-  
-  Object.keys(productData).forEach(key => {
-    if (productData[key] !== null && productData[key] !== undefined) {
-      formData.append(key, productData[key]);
-    }
-  });
 
-  return axios.post(`${BASE_URL}/api/addproduct`, formData, {
+  return axios.post(`${BASE_URL}/api/addproduct`, productData, {
     headers: {
       'Authorization': `Bearer ${token}`,
-      'Content-Type': 'multipart/form-data'
+      'Content-Type': 'application/json'
     }
   });
 };
@@ -557,18 +596,11 @@ export const apiAddProduct = async (productData: any) => {
 // Update product
 export const apiUpdateProduct = async (productData: any) => {
   const token = localStorage.getItem('UserLoggedIn');
-  const formData = new FormData();
-  
-  Object.keys(productData).forEach(key => {
-    if (productData[key] !== null && productData[key] !== undefined) {
-      formData.append(key, productData[key]);
-    }
-  });
 
-  return axios.post(`${BASE_URL}/api/updateproduct`, formData, {
+  return axios.post(`${BASE_URL}/api/updateproduct`, productData, {
     headers: {
       'Authorization': `Bearer ${token}`,
-      'Content-Type': 'multipart/form-data'
+      'Content-Type': 'application/json'
     }
   });
 };
@@ -594,21 +626,41 @@ export const apiGetCompanyPost = async (companyId: string) => {
   });
 };
 
+export const apiGetCompanyButtons = async () => {
+  const token = localStorage.getItem('UserLoggedIn');
+  return axios.get(`${BASE_URL}/api/getCompanyButton`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+};
+
 // Save company post
 export const apiSavePost = async (postData: any) => {
   const token = localStorage.getItem('UserLoggedIn');
-  const formData = new FormData();
-  
-  Object.keys(postData).forEach(key => {
-    if (postData[key] !== null && postData[key] !== undefined) {
-      formData.append(key, postData[key]);
-    }
-  });
-
-  return axios.post(`${BASE_URL}/api/savepost`, formData, {
+  return axios.post(`${BASE_URL}/api/savepost`, postData, {
     headers: {
       'Authorization': `Bearer ${token}`,
-      'Content-Type': 'multipart/form-data'
+      'Content-Type': 'application/json'
+    }
+  });
+};
+
+export const apiGetProductDetails = async (productId: string | number, userId: string | number) => {
+  const token = localStorage.getItem('UserLoggedIn');
+  return axios.get(`${BASE_URL}/api/productbyproductid/${productId}/${userId}`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+};
+
+export const apiSaveProductDetails = async (details: any) => {
+  const token = localStorage.getItem('UserLoggedIn');
+  return axios.post(`${BASE_URL}/api/savevproductsdetails`, details, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
     }
   });
 };
@@ -630,5 +682,45 @@ export const apiGetUserOrders = async (userId: string) => {
     headers: {
       'Authorization': `Bearer ${token}`
     }
+  });
+};
+
+// Get recent ads by company
+export const apiGetRecentAdsByCompany = async (companyId: string, userId: string) => {
+  const token = localStorage.getItem('UserLoggedIn');
+  return axios.get(`${BASE_URL}/api/getLastaddetails/${companyId}/${userId}`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+};
+
+// Get company ads (seller's ads)
+export const apiGetSellerAds = async (userId: string) => {
+  const token = localStorage.getItem('UserLoggedIn');
+  return axios.get(`${BASE_URL}/api/getAdvModel/${userId}`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+};
+
+// Get company reviews (mock for now - create this endpoint in backend)
+export const apiGetCompanyReviews = async (companyId: string) => {
+  const token = localStorage.getItem('UserLoggedIn');
+  // This is a mock API call since the reviews endpoint doesn't exist yet
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      resolve({
+        data: {
+          status: 200,
+          data: [
+            { id: 1, name: 'Sarah Johnson', rating: 5, comment: 'Excellent service and great results!', date: '2024-01-15' },
+            { id: 2, name: 'Mike Chen', rating: 5, comment: 'Very professional and effective campaigns.', date: '2024-01-12' },
+            { id: 3, name: 'Lisa Davis', rating: 4, comment: 'Good experience overall, would recommend.', date: '2024-01-10' }
+          ]
+        }
+      });
+    }, 500);
   });
 };

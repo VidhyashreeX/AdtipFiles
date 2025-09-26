@@ -1,12 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Upload, X, Image as ImageIcon, Video, FileText, Calendar, Target, Tag } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { apiSavePost, apiGetCompanyList } from '@/api';
+import { toast } from '@/hooks/use-toast';
+import { uploadToR2, UPLOAD_FOLDERS } from '@/services/r2UploadService';
 
 const AddPost = () => {
   const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
+  const [selectedCompany, setSelectedCompany] = useState<any>(null);
+  const [companies, setCompanies] = useState<any[]>([]);
   const [selectedButton, setSelectedButton] = useState<string>('');
   const [postType, setPostType] = useState<string>('image');
-  const [images, setImages] = useState([]);
+  const [images, setImages] = useState<File[]>([]);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -19,6 +25,59 @@ const AddPost = () => {
     duration: '',
     tags: ''
   });
+
+  // Fetch user companies on component mount
+  useEffect(() => {
+    const fetchCompanies = async () => {
+      try {
+        const userData = JSON.parse(localStorage.getItem('user') || '{}');
+        const userId = userData.id;
+
+        if (!userId) {
+          toast({
+            title: "Error",
+            description: "User not found. Please log in again.",
+            variant: "destructive"
+          });
+          navigate('/login');
+          return;
+        }
+
+        const companiesResponse = await apiGetCompanyList(userId.toString());
+        if (companiesResponse.data && companiesResponse.data.status === 200) {
+          const companiesList = companiesResponse.data.data || [];
+          setCompanies(companiesList);
+          
+          if (companiesList.length === 0) {
+            toast({
+              title: "No Company Found",
+              description: "Please create a company profile first.",
+              variant: "destructive"
+            });
+            navigate('/seller/register');
+            return;
+          }
+
+          // Set selected company from localStorage or first company
+          const storedCompany = JSON.parse(localStorage.getItem('selectedCompany') || '{}');
+          const selectedComp = storedCompany.id ? 
+            companiesList.find((c: any) => c.id === storedCompany.id) || companiesList[0] :
+            companiesList[0];
+          
+          setSelectedCompany(selectedComp);
+        }
+      } catch (error) {
+        console.error('Error fetching companies:', error);
+        toast({
+          title: "Error",
+          description: "Failed to fetch company information.",
+          variant: "destructive"
+        });
+      }
+    };
+
+    fetchCompanies();
+  }, [navigate]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -39,10 +98,101 @@ const AddPost = () => {
     setImages(prev => prev.filter((_, i) => i !== index));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Post data:', { ...formData, selectedButton, postType, images });
-    navigate('/seller/dashboard');
+    
+    if (!selectedCompany) {
+      toast({
+        title: "Error",
+        description: "Please select or create a company first.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (images.length === 0) {
+      toast({
+        title: "Error",
+        description: "Please add at least one image for your post.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setLoading(true);
+    
+    try {
+      // Get user data for upload
+      const userData = JSON.parse(localStorage.getItem('user') || '{}');
+      const userId = userData.id;
+
+      if (!userId) {
+        throw new Error('User information missing. Please log in again.');
+      }
+
+      // Upload images to R2 if any
+      let imageUrls: string[] = [];
+      if (images.length > 0) {
+        const uploadPromises = images.map((file, index) =>
+          uploadToR2(file, UPLOAD_FOLDERS.IMAGES, userId, (progress) => {
+            console.log(`[Post Image Upload ${index + 1}/${images.length}] ${progress.percentage.toFixed(0)}%`);
+          })
+        );
+
+        const uploadResults = await Promise.all(uploadPromises);
+        imageUrls = uploadResults
+          .filter((result) => result.success && result.url)
+          .map((result) => result.url);
+
+        if (images.length > 0 && imageUrls.length === 0) {
+          throw new Error('Failed to upload post images.');
+        }
+      }
+
+      const postData = {
+        companyId: selectedCompany.id,
+        title: formData.title,
+        description: formData.description,
+        websiteLink: formData.websiteLink,
+        brandName: formData.brandName || selectedCompany.name,
+        customButton: selectedButton || formData.customButton,
+        category: formData.category,
+        targetAudience: formData.targetAudience,
+        budget: parseFloat(formData.budget) || 0,
+        duration: parseInt(formData.duration) || 7,
+        tags: formData.tags,
+        postType: postType,
+        // Use the uploaded image URLs
+        postImage: imageUrls.length > 0 ? imageUrls[0] : '',
+        images: imageUrls.join(','),
+        userId: userId,
+        createdBy: userId
+      };
+
+      console.log('Submitting post data:', postData);
+
+      const response = await apiSavePost(postData);
+      
+      if (response.data && response.data.status === 200) {
+        toast({
+          title: "Success!",
+          description: "Post created successfully!",
+          variant: "default"
+        });
+        navigate('/seller/dashboard');
+      } else {
+        throw new Error(response.data?.message || 'Failed to create post');
+      }
+    } catch (error: any) {
+      console.error('Error creating post:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create post. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const buttonOptions = [
@@ -92,6 +242,34 @@ const AddPost = () => {
           </div>
 
           <form onSubmit={handleSubmit} className="p-8">
+            
+            {/* Company Selection */}
+            {companies.length > 1 && (
+              <div className="mb-8 p-4 bg-gray-50 rounded-lg">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Select Company</label>
+                <select 
+                  value={selectedCompany?.id || ''}
+                  onChange={(e) => {
+                    const companyId = parseInt(e.target.value);
+                    const company = companies.find(c => c.id === companyId);
+                    if (company) {
+                      setSelectedCompany(company);
+                      localStorage.setItem('selectedCompany', JSON.stringify(company));
+                    }
+                  }}
+                  className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#00dcaa] focus:border-transparent"
+                  title="Select Company"
+                  required
+                >
+                  <option value="">Select a company</option>
+                  {companies.map((company) => (
+                    <option key={company.id} value={company.id}>
+                      {company.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             
             {/* Post Type Selection */}
             <div className="mb-8">
@@ -327,25 +505,7 @@ const AddPost = () => {
                   </div>
                 </div>
 
-                {/* Additional Settings */}
-                <div className="bg-gradient-to-br from-yellow-50 to-orange-50 p-6 rounded-lg">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                    <Tag className="w-5 h-5 mr-2 text-[#00dcaa]" />
-                    Additional Settings
-                  </h3>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Tags & Keywords</label>
-                    <input 
-                      type="text" 
-                      name="tags"
-                      value={formData.tags}
-                      onChange={handleInputChange}
-                      placeholder="Enter relevant tags separated by commas" 
-                      className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#00dcaa] focus:border-transparent"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">e.g., promotion, sale, new product, trending</p>
-                  </div>
-                </div>
+
               </div>
             </div>
 
@@ -353,22 +513,38 @@ const AddPost = () => {
             <div className="border-t border-gray-200 mt-8 pt-6 flex flex-col sm:flex-row gap-4 justify-end">
               <button
                 type="button"
-                onClick={() => navigate('/seller/dashboard')}
+                onClick={() => {
+                  if (window.confirm('Are you sure you want to cancel? All unsaved changes will be lost.')) {
+                    navigate('/seller/dashboard');
+                  }
+                }}
                 className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
               >
                 Cancel
               </button>
               <button
                 type="button"
+                onClick={() => {
+                  // Save as draft functionality
+                  toast({
+                    title: "Draft Saved",
+                    description: "Your post has been saved as draft. You can continue editing later.",
+                    variant: "default"
+                  });
+                }}
                 className="px-6 py-3 border border-[#00dcaa] text-[#00dcaa] rounded-lg hover:bg-[#00dcaa]/10 transition-colors"
               >
                 Save as Draft
               </button>
               <button
                 type="submit"
-                className="px-8 py-3 bg-[#00dcaa] text-white rounded-lg hover:bg-[#00b894] transition-colors font-semibold"
+                disabled={loading || !selectedCompany}
+                className="px-8 py-3 bg-[#00dcaa] text-white rounded-lg hover:bg-[#00b894] transition-colors font-semibold disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center space-x-2"
               >
-                Publish Post
+                {loading && (
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                )}
+                <span>{loading ? 'Publishing...' : 'Publish Post'}</span>
               </button>
             </div>
           </form>

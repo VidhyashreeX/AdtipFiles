@@ -15,7 +15,7 @@ interface CloudflareR2Config {
 }
 
 // Configuration for web (should match your backend config)
-const CLOUDFLARE_R2_CONFIG: CloudflareR2Config = {
+export const CLOUDFLARE_R2_CONFIG: CloudflareR2Config = {
   accountId: '94e2ffe1e7d5daf0d3de8d11c55dd2d6',
   accessKeyId: 'cee3aea0fa77a871fbc3d34a28897216',
   secretAccessKey: '686b7a165aa944fbd641de53bbbb277a07e9a284ace18c84a83237b330b63c1d',
@@ -38,6 +38,8 @@ export const UPLOAD_FOLDERS = {
 export const FILE_SIZE_LIMITS = {
   VIDEO_MAX: 100 * 1024 * 1024,    // 100MB
   IMAGE_MAX: 5 * 1024 * 1024,      // 5MB
+  SHORT_MAX: 50 * 1024 * 1024,     // 50MB for short videos
+  THUMBNAIL_MAX: 5 * 1024 * 1024,  // 5MB for thumbnails
   COMPANY_LOGO_MAX: 2 * 1024 * 1024,  // 2MB
 } as const;
 

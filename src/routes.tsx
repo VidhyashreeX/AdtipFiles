@@ -19,6 +19,7 @@ import Premium from "./pages/Premium";
 import TipShop from "./pages/marketplace/TipShop";
 import BecomeSeller from "./pages/marketplace/BecomeSeller";
 import ProductDetail from "./pages/marketplace/ProductDetail";
+import ProductDetailView from "./pages/ProductDetailView";
 import ListProductsPage from "./pages/ListProductsPage";
 import ListProductFinish from "./pages/marketplace/ListProductFinish";
 import AddProduct from "./pages/marketplace/AddProduct";
@@ -150,7 +151,7 @@ const router = createBrowserRouter([
 			},
 			{
 				path: "product/:id",
-				element: <ProductDetail />,
+				element: <ProductDetailView />,
 			},
 			{
 				path: "list-products",
@@ -262,6 +263,10 @@ const router = createBrowserRouter([
 				element: <SearchResults />,
 			},
 			{
+				path: "seller/dashboard",
+				element: <SellerDashboard />,
+			},
+			{
 				path: "seller-dashboard",
 				element: <SellerDashboard />,
 			},
@@ -288,10 +293,6 @@ const router = createBrowserRouter([
 			{
 				path: "seller/reviews",
 				element: <ViewAllReviews />,
-			},
-			{
-				path: "seller/dashboard",
-				element: <SellerDashboard />,
 			},
 			{
 				path: "seller/configure-campaign",
