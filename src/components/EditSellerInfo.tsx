@@ -335,13 +335,13 @@ const EditSellerInfo = () => {
           </div>
           
           <form onSubmit={handleSubmit} className="p-8 space-y-8">
-          <div className="space-y-8">
-            {/* Basic Information Section */}
-            <div className="bg-gray-50 rounded-lg p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                <div className="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
-                Basic Information
-              </h3>
+            <div className="space-y-8">
+              {/* Basic Information Section */}
+              <div className="bg-gray-50 rounded-lg p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
+                  Basic Information
+                </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -645,15 +645,16 @@ const EditSellerInfo = () => {
             </div>
           </div>
 
-          {errors.submit && (
-            <div className="bg-red-50 border-2 border-red-200 rounded-xl p-4 mt-6">
-              <p className="text-red-600 font-medium flex items-center">
-                <span className="w-2 h-2 bg-red-500 rounded-full mr-3"></span>
-                {errors.submit}
-              </p>
-            </div>
-          )}
-        </form>
+            {errors.submit && (
+              <div className="bg-red-50 border-2 border-red-200 rounded-xl p-4 mt-6">
+                <p className="text-red-600 font-medium flex items-center">
+                  <span className="w-2 h-2 bg-red-500 rounded-full mr-3"></span>
+                  {errors.submit}
+                </p>
+              </div>
+            )}
+          </form>
+        </div>
       </div>
     </div>
   );
