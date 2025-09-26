@@ -31,6 +31,7 @@ const corsConfiguration = {
       AllowedOrigins: [
         'http://localhost:3000',
         'http://localhost:8080',
+        'http://localhost:8081',
         'https://web.adtip.in',
         'https://adtip.in',
         'https://www.adtip.in'
