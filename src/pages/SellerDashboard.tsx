@@ -9,10 +9,95 @@ import {
   apiUpdateCompany,
   apiGetRecentAdsByCompany,
   apiGetSellerAds,
-  apiGetCompanyReviews
+  apiGetCompanyReviews,
+  apiTogglePostLike,
+  apiAddPostComment
 } from '@/api';
 import { toast } from '@/hooks/use-toast';
 import { normalizeProduct, formatCurrency } from '@/utils/product';
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:7082';
+
+type NormalizedPost = {
+  id: number;
+  title: string;
+  description: string;
+  imageUrl: string | null;
+  likes: number;
+  comments: number;
+  views: number;
+  isLiked: boolean;
+  raw: any;
+};
+
+const toNumeric = (value: any, fallback = 0): number => {
+  if (value === null || value === undefined || value === '') {
+    return fallback;
+  }
+  const parsed = Number(value);
+  return Number.isNaN(parsed) ? fallback : parsed;
+};
+
+const resolveMediaUrl = (value?: string | null): string | null => {
+  if (!value) {
+    return null;
+  }
+
+  const trimmed = String(value).replace(/^"|"$/g, '').trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  // Handle escaped URLs stored in DB
+  const unescaped = trimmed.replace(new RegExp('\\/', 'g'), '/');
+
+  if (/^https?:\/\//i.test(unescaped)) {
+    return unescaped;
+  }
+
+  return `${API_BASE_URL}/api/photo/${unescaped.replace(/^\/+/, '')}`;
+};
+
+const normalizePostRecord = (raw: any): NormalizedPost => {
+  const id = toNumeric(raw.id ?? raw.postId ?? raw.PostId, 0);
+
+  const mediaCandidates = [
+    raw.image_path,
+    raw.imagePath,
+    raw.image,
+    raw.postImage,
+    raw.post_image,
+    raw.media_url,
+    raw.filename,
+    raw.fileName,
+    raw.file_name,
+    raw.imageFilename,
+    raw.post_filename
+  ]
+    .map((candidate) => resolveMediaUrl(candidate))
+    .filter(Boolean) as string[];
+
+  return {
+    id,
+    title: raw.PostName ?? raw.title ?? raw.name ?? 'Untitled Post',
+    description: raw.PostDiscription ?? raw.description ?? raw.details ?? '',
+    imageUrl: mediaCandidates.length > 0 ? mediaCandidates[0] : null,
+    likes: toNumeric(
+      raw.likeCount ?? raw.likes ?? raw.totalLikes ?? raw.like_count ?? raw.total_likes,
+      0
+    ),
+    comments: toNumeric(
+      raw.commentCount ?? raw.comments ?? raw.comment_count ?? raw.total_comments,
+      0
+    ),
+    views: toNumeric(
+      raw.viewCount ?? raw.views ?? raw.view_count ?? raw.totalViews ?? raw.total_views,
+      0
+    ),
+    isLiked: Boolean(raw.is_liked ?? raw.isLiked ?? raw.userLiked ?? raw.liked),
+    raw,
+  };
+};
 
 const SellerDashboard = () => {
   const navigate = useNavigate();

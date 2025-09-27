@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { apiSavePost, apiGetCompanyList } from '@/api';
 import { toast } from '@/hooks/use-toast';
 import { uploadToR2, UPLOAD_FOLDERS } from '@/services/r2UploadService';
+import { checkServerConnectivity, retryApiCall } from '@/utils/networkUtils';
 
 const AddPost = () => {
   const navigate = useNavigate();
@@ -104,7 +105,7 @@ const AddPost = () => {
     if (!selectedCompany) {
       toast({
         title: "Error",
-        description: "Please select or create a company first.",
+        description: "Please select a company before creating a post.",
         variant: "destructive"
       });
       return;
@@ -149,29 +150,87 @@ const AddPost = () => {
         }
       }
 
+      // Sanitize data to prevent undefined values in SQL queries
+      const sanitizeValue = (value: any) => {
+        if (value === undefined || value === null) return '';
+        if (typeof value === 'string') return value.trim();
+        return value;
+      };
+      
+      // Format image URLs properly for SQL storage
+      const formatImageUrls = (urls: string[]) => {
+        if (!urls || urls.length === 0) return '';
+        // Filter out any empty strings and join with a single comma (no spaces)
+        return urls.filter(url => url && url.trim() !== '').join(',');
+      };
+      
       const postData = {
-        companyId: selectedCompany.id,
-        title: formData.title,
-        description: formData.description,
-        websiteLink: formData.websiteLink,
-        brandName: formData.brandName || selectedCompany.name,
-        customButton: selectedButton || formData.customButton,
-        category: formData.category,
-        targetAudience: formData.targetAudience,
+        companyId: selectedCompany?.id || null,
+        title: sanitizeValue(formData.title),
+        description: sanitizeValue(formData.description),
+        websiteLink: sanitizeValue(formData.websiteLink),
+        brandName: sanitizeValue(formData.brandName || (selectedCompany?.name || '')),
+        customButton: sanitizeValue(selectedButton || formData.customButton),
+        category: sanitizeValue(formData.category),
+        targetAudience: sanitizeValue(formData.targetAudience),
         budget: parseFloat(formData.budget) || 0,
         duration: parseInt(formData.duration) || 7,
-        tags: formData.tags,
-        postType: postType,
-        // Use the uploaded image URLs
-        postImage: imageUrls.length > 0 ? imageUrls[0] : '',
-        images: imageUrls.join(','),
-        userId: userId,
-        createdBy: userId
+        tags: sanitizeValue(formData.tags),
+        postType: sanitizeValue(postType),
+        // Use the uploaded image URLs with proper formatting
+        postImage: imageUrls.length > 0 ? sanitizeValue(imageUrls[0]) : '',
+        images: formatImageUrls(imageUrls),
+        userId: userId || null,
+        createdBy: userId || null
       };
 
       console.log('Submitting post data:', postData);
+      
+      // Basic client-side validation
+      const errors = [];
+      
+      // Check required fields (already sanitized)
+      if (!postData.title) errors.push('Title is required');
+      if (!postData.description) errors.push('Description is required');
+      if (!postData.companyId) errors.push('Company selection is required');
+      if (postType === 'image' && !postData.postImage) errors.push('Please upload at least one image');
+      
+      // Check for reasonable length to avoid server validation issues
+      if (postData.title && postData.title.length > 200) errors.push('Title is too long (max 200 characters)');
+      if (postData.description && postData.description.length > 5000) errors.push('Description is too long (max 5000 characters)');
+      
+      if (errors.length > 0) {
+        toast({
+          title: "Validation Error",
+          description: errors.join('. '),
+          variant: "destructive"
+        });
+        setLoading(false);
+        return;
+      }
+      
+      // Use sanitized postData directly for API call
+      const enhancedPostData = postData;
 
-      const response = await apiSavePost(postData);
+      // Check server connectivity before making the API call
+      const serverAvailable = await checkServerConnectivity(import.meta.env.VITE_API_URL || 'http://localhost:7082');
+      if (!serverAvailable) {
+        toast({
+          title: "Server Unavailable",
+          description: "The server appears to be offline or unreachable. Please check your internet connection and try again.",
+          variant: "destructive"
+        });
+        setLoading(false);
+        return;
+      }
+
+  // Log sanitized data for debugging
+  console.log('Sanitized post data to be sent:', JSON.stringify(enhancedPostData, null, 2));
+      
+  // Use retry functionality for better reliability
+  const response = await retryApiCall(() => apiSavePost(enhancedPostData), 1);
+      
+      console.log('Server response:', response);
       
       if (response.data && response.data.status === 200) {
         toast({
@@ -181,15 +240,46 @@ const AddPost = () => {
         });
         navigate('/seller/dashboard');
       } else {
-        throw new Error(response.data?.message || 'Failed to create post');
+        // More detailed error handling
+        const errorMessage = response.data?.message || 'Failed to create post';
+        console.error('API error response:', errorMessage);
+        throw new Error(errorMessage);
       }
     } catch (error: any) {
       console.error('Error creating post:', error);
-      toast({
-        title: "Error",
-        description: error.message || "Failed to create post. Please try again.",
-        variant: "destructive"
-      });
+      
+      // Enhanced error logging for debugging
+      if (error.response) {
+        // The request was made and the server responded with a status code
+        // that falls out of the range of 2xx
+        console.error('Server Error Response:', {
+          data: error.response.data,
+          status: error.response.status,
+          headers: error.response.headers
+        });
+        
+        // Show more specific error message if available
+        toast({
+          title: "Server Error",
+          description: `Error ${error.response.status}: ${error.response.data?.message || "Server couldn't process the request. Check post data."}`,
+          variant: "destructive"
+        });
+      } else if (error.request) {
+        // The request was made but no response was received
+        console.error('No response received:', error.request);
+        toast({
+          title: "Network Error",
+          description: "No response from server. Check your internet connection.",
+          variant: "destructive"
+        });
+      } else {
+        // Something happened in setting up the request that triggered an Error
+        toast({
+          title: "Error",
+          description: error.message || "Failed to create post. Please try again.",
+          variant: "destructive"
+        });
+      }
     } finally {
       setLoading(false);
     }

@@ -24,11 +24,40 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   response => response,
   error => {
-    console.error('API Error:', {
-      url: error.config?.url,
-      status: error.response?.status,
-      data: error.response?.data
-    });
+    // Enhanced detailed error logging
+    if (error.response) {
+      console.error('API Error Response:', {
+        url: error.config?.url,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        method: error.config?.method,
+        headers: error.config?.headers,
+        timestamp: new Date().toISOString()
+      });
+      
+      // Log any specific error messages from server
+      if (error.response.data?.message) {
+        console.error('Server error message:', error.response.data.message);
+      }
+      
+      // Log detailed validation errors if available
+      if (error.response.data?.errors) {
+        console.error('Validation errors:', error.response.data.errors);
+      }
+    } else if (error.request) {
+      console.error('API Request Error (No Response):', {
+        url: error.config?.url,
+        method: error.config?.method,
+        timestamp: new Date().toISOString()
+      });
+    } else {
+      console.error('API Setup Error:', {
+        message: error.message,
+        timestamp: new Date().toISOString()
+      });
+    }
+    
     return Promise.reject(error);
   }
 );
@@ -585,12 +614,243 @@ export const apiGetAllProducts = async () => {
 export const apiAddProduct = async (productData: any) => {
   const token = localStorage.getItem('UserLoggedIn');
 
-  return axios.post(`${BASE_URL}/api/addproduct`, productData, {
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json'
+  const sanitizeText = (value: any, fallback = ''): string => {
+    if (value === undefined || value === null) {
+      return fallback;
     }
-  });
+    const text = String(value).trim();
+    if (!text) {
+      return fallback;
+    }
+    return text
+      .replace(/\\/g, '\\\\')
+      .replace(/'/g, "\\'")
+      .replace(/"/g, '\\"')
+      .replace(/\r?\n/g, ' ');
+  };
+
+  const toIntSafe = (value: any, fallback = 0): number => {
+    const parsed = typeof value === 'number' ? value : Number.parseInt(value, 10);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  };
+
+  const toFloatSafe = (value: any, fallback = 0): number => {
+    const parsed = typeof value === 'number' ? value : Number.parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  };
+
+  const toCsv = (value: any): string => {
+    if (Array.isArray(value)) {
+      return value
+        .filter((item) => item !== undefined && item !== null && String(item).trim() !== '')
+        .map((item) => sanitizeText(item))
+        .join(',');
+    }
+    if (typeof value === 'string') {
+      return value
+        .split(',')
+        .map((item) => sanitizeText(item))
+        .filter((item) => item !== '')
+        .join(',');
+    }
+    return '';
+  };
+
+  try {
+    const normalizedImages = toCsv(
+      productData.images ?? productData.product_images ?? productData.primary_image ?? ''
+    );
+
+    const normalizedData: Record<string, any> = {
+      name: sanitizeText(productData.name),
+      description: sanitizeText(productData.description ?? productData.product_description),
+      brand: sanitizeText(
+        productData.brand ?? productData.brandName ?? productData.brand_name ?? ''
+      ),
+      categoryId: toIntSafe(
+        productData.categoryId ?? productData.category_id ?? productData.category
+      ),
+      deliveryTime: sanitizeText(
+        productData.deliveryTime ?? productData.delivery_time ?? '1-2 days'
+      ),
+      units: toIntSafe(
+        productData.units ?? productData.stock ?? productData.unitsAvailable,
+        1
+      ),
+      regularPrice: toFloatSafe(productData.regularPrice ?? productData.your_price ?? 0, 0),
+      marketPrice: toFloatSafe(
+        productData.marketPrice ?? productData.regularPrice ?? productData.your_price ?? 0,
+        0
+      ),
+      size: sanitizeText(
+        productData.size ??
+          (Array.isArray(productData.sizeOptions)
+            ? productData.sizeOptions.join(',')
+            : productData.sizeOptions ?? ''),
+        ''
+      ),
+      images: normalizedImages,
+      companyId: toIntSafe(productData.companyId ?? productData.company_id),
+      deliveryType: sanitizeText(
+        productData.deliveryType ?? productData.delivery_type ?? 'Standard'
+      ),
+      termsApply: sanitizeText(
+        productData.termsApply ?? productData.terms_condition ?? 'Standard terms and conditions apply'
+      ),
+      created_by: toIntSafe(
+        productData.created_by ?? productData.createdBy ?? productData.userId
+      ),
+      your_price: toFloatSafe(
+        productData.your_price ?? productData.regularPrice ?? productData.marketPrice ?? 0,
+        0
+      ),
+      keyword: sanitizeText(
+        productData.keyword ??
+          (productData.name ? String(productData.name).toLowerCase().replace(/\s+/g, ',') : '')
+      ),
+      manufacturer_date: sanitizeText(
+        productData.manufacturer_date ??
+          productData.manufacturerDate ??
+          new Date().toISOString().split('T')[0]
+      ),
+      product_description: sanitizeText(
+        productData.product_description ?? productData.description
+      ),
+      product_specification: sanitizeText(
+        productData.product_specification ??
+          (() => {
+            const weight = String(productData.weight ?? '0').trim() || '0';
+            const dimensions = String(productData.dimensions ?? 'N/A').trim() || 'N/A';
+            return `Weight: ${weight}kg, Dimensions: ${dimensions}`;
+          })()
+      ),
+      inches: toFloatSafe(productData.inches ?? 0, 0),
+      additional_accessories: sanitizeText(
+        productData.additional_accessories ?? ''
+      ),
+      stock: toIntSafe(
+        productData.stock ?? productData.units ?? productData.unitsAvailable,
+        1
+      ),
+      procurement_type: sanitizeText(productData.procurement_type ?? 'Direct'),
+      procurement_time: toIntSafe(productData.procurement_time ?? 1, 1),
+      shipping_fee: toFloatSafe(productData.shipping_fee ?? 0, 0),
+      replacement_days: toIntSafe(productData.replacement_days ?? 7, 7),
+      warranty_days: toIntSafe(productData.warranty_days ?? 30, 30),
+      sku_id: sanitizeText(productData.sku_id ?? productData.skuId ?? `SKU-${Date.now()}`),
+      auto_bargain: toIntSafe(productData.auto_bargain ?? 0, 0),
+      bargain_minimum_price: toFloatSafe(
+        productData.bargain_minimum_price ??
+          (productData.regularPrice ? Number(productData.regularPrice) * 0.9 : 0),
+        0
+      ),
+      primary_image: sanitizeText(
+        productData.primary_image ?? normalizedImages.split(',')[0] ?? ''
+      ),
+    };
+
+    const requiredFields: Array<keyof typeof normalizedData> = [
+      'name',
+      'description',
+      'brand',
+      'categoryId',
+      'companyId',
+      'created_by',
+      'images',
+      'regularPrice'
+    ];
+
+    const missingFields = requiredFields.filter((field) => {
+      const value = normalizedData[field];
+      if (typeof value === 'number') {
+        if (field === 'regularPrice') {
+          return value <= 0;
+        }
+        return value <= 0;
+      }
+      return !value;
+    });
+
+    if (missingFields.length > 0) {
+      throw new Error(
+        `Missing required product data: ${missingFields.join(', ')}`
+      );
+    }
+
+    const payloadFields = [
+      'name',
+      'description',
+      'brand',
+      'categoryId',
+      'deliveryTime',
+      'units',
+      'regularPrice',
+      'marketPrice',
+      'size',
+      'images',
+      'companyId',
+      'deliveryType',
+      'termsApply',
+      'created_by',
+      'your_price',
+      'keyword',
+      'manufacturer_date',
+      'product_description',
+      'product_specification',
+      'inches',
+      'additional_accessories',
+      'stock',
+      'procurement_type',
+      'procurement_time',
+      'shipping_fee',
+      'replacement_days',
+      'warranty_days',
+      'sku_id',
+      'auto_bargain',
+      'bargain_minimum_price',
+      'primary_image'
+    ] as const;
+
+    const payload: Record<string, any> = {};
+    payloadFields.forEach((field) => {
+      payload[field] = normalizedData[field];
+    });
+
+    console.log('apiAddProduct request:', {
+      url: `${BASE_URL}/api/addproduct`,
+      token: token ? 'Present' : 'Missing',
+      fieldCount: Object.keys(payload).length,
+      fields: Object.keys(payload),
+      data: {
+        ...payload,
+        images: payload.images ? 'Present' : 'Missing',
+        primary_image: payload.primary_image ? 'Present' : 'Missing'
+      }
+    });
+
+    return await axios.post(`${BASE_URL}/api/addproduct`, payload, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      timeout: 15000
+    });
+  } catch (error: any) {
+    const errorData = error.response?.data;
+    console.error('apiAddProduct error:', {
+      message: error.message,
+      status: error.response?.status,
+      data: errorData,
+      sqlError: errorData?.sqlMessage || errorData?.message,
+      payload: productData
+    });
+
+    if (errorData?.sqlMessage && errorData.sqlMessage.includes('Unknown column')) {
+      console.error('SQL COLUMN ERROR: Backend schema mismatch suspected.');
+    }
+
+    throw error;
+  }
 };
 
 // Update product
@@ -638,12 +898,187 @@ export const apiGetCompanyButtons = async () => {
 // Save company post
 export const apiSavePost = async (postData: any) => {
   const token = localStorage.getItem('UserLoggedIn');
-  return axios.post(`${BASE_URL}/api/savepost`, postData, {
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json'
+  
+  try {
+    const sanitizeText = (value: any, fallback = ''): string => {
+      if (value === undefined || value === null) {
+        return fallback;
+      }
+      const text = String(value).trim();
+      if (!text) {
+        return fallback;
+      }
+      return text
+        .replace(/\\/g, '\\\\')
+        .replace(/'/g, "\\'")
+        .replace(/"/g, '\\"')
+        .replace(/\r?\n/g, ' ');
+    };
+
+    const toIntSafe = (value: any, fallback = 0): number => {
+      const parsed = typeof value === 'number' ? value : Number.parseInt(value, 10);
+      return Number.isFinite(parsed) ? parsed : fallback;
+    };
+
+    const normalizedData: Record<string, any> = {
+      company_id: toIntSafe(postData.company_id ?? postData.companyId),
+      createdby: toIntSafe(postData.createdby ?? postData.createdBy ?? postData.userId),
+      PostName: sanitizeText(postData.PostName ?? postData.title),
+      PostDescription: sanitizeText(postData.PostDescription ?? postData.description),
+      buttonid: toIntSafe(postData.buttonid ?? postData.buttonId ?? 0, 0),
+      website: sanitizeText(postData.website ?? postData.websiteLink ?? ''),
+      image_path: sanitizeText(postData.image_path ?? postData.postImage ?? ''),
+      custom_button_label: sanitizeText(postData.customButton ?? ''),
+      id: toIntSafe(postData.id ?? 0, 0)
+    };
+
+    const requiredFields: Array<keyof typeof normalizedData> = [
+      'company_id',
+      'createdby',
+      'PostName',
+      'PostDescription'
+    ];
+
+    const missingFields = requiredFields.filter((field) => {
+      const value = normalizedData[field];
+      if (typeof value === 'number') {
+        return value <= 0;
+      }
+      return !value;
+    });
+
+    if (missingFields.length) {
+      throw new Error(`Missing required post data: ${missingFields.join(', ')}`);
     }
-  });
+
+    // Use default button id if none provided
+    if (!normalizedData.buttonid || normalizedData.buttonid < 0) {
+      normalizedData.buttonid = 0;
+    }
+
+    const payload: Record<string, any> = {
+      PostName: normalizedData.PostName,
+      PostDescription: normalizedData.PostDescription,
+      buttonid: normalizedData.buttonid,
+      website: normalizedData.website,
+      image_path: normalizedData.image_path,
+      createdby: normalizedData.createdby,
+      company_id: normalizedData.company_id
+    };
+
+    if (normalizedData.id > 0) {
+      payload.id = normalizedData.id;
+    }
+
+    if (normalizedData.custom_button_label) {
+      payload.custom_button_label = normalizedData.custom_button_label;
+    }
+
+    console.log('apiSavePost request:', {
+      url: `${BASE_URL}/api/savepost`,
+      token: token ? 'Present' : 'Missing',
+      fieldCount: Object.keys(payload).length,
+      fields: Object.keys(payload),
+      data: {
+        ...payload,
+        image_path: payload.image_path ? 'Present' : 'Missing'
+      }
+    });
+
+    return await axios.post(`${BASE_URL}/api/savepost`, payload, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      // Add timeout to prevent long-hanging requests
+      timeout: 15000
+    });
+  } catch (error: any) {
+    // Enhanced error handling with SQL error diagnosis
+    const errorData = error.response?.data;
+    console.error('apiSavePost error:', {
+      message: error.message,
+      status: error.response?.status,
+      data: errorData,
+      sqlError: errorData?.sqlMessage || errorData?.message,
+      requiredFields: ['PostName', 'PostDescription', 'company_id', 'createdby'],
+    });
+    
+    // Special handling for SQL column errors
+    if (errorData?.sqlMessage && errorData.sqlMessage.includes('Unknown column')) {
+      console.error('SQL COLUMN ERROR: The backend database schema might not match the mapped fields');
+      console.error('Original frontend fields:', Object.keys(postData));
+      console.error('Mapped backend fields were sent to API');
+    }
+    
+    throw error;
+  }
+};
+
+type TogglePostLikePayload = {
+  postId: number | string;
+  userId: number | string;
+  isLiked: boolean;
+};
+
+export const apiTogglePostLike = async ({ postId, userId, isLiked }: TogglePostLikePayload) => {
+  const token = localStorage.getItem('UserLoggedIn');
+
+  if (!token) {
+    throw new Error('User is not authenticated');
+  }
+
+  return axios.post(
+    `${BASE_URL}/api/save-user-post-like`,
+    {
+      postId: Number(postId),
+      userId: Number(userId),
+      is_liked: isLiked ? 1 : 0
+    },
+    {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    }
+  );
+};
+
+type AddPostCommentPayload = {
+  postId: number | string;
+  userId: number | string;
+  comment: string;
+};
+
+export const apiAddPostComment = async ({ postId, userId, comment }: AddPostCommentPayload) => {
+  const token = localStorage.getItem('UserLoggedIn');
+
+  if (!token) {
+    throw new Error('User is not authenticated');
+  }
+
+  const sanitizeComment = (value: string) =>
+    value
+      .trim()
+      .replace(/\\/g, '\\\\')
+      .replace(/'/g, "\\'")
+      .replace(/"/g, '\\"')
+      .replace(/\r?\n/g, ' ');
+
+  return axios.post(
+    `${BASE_URL}/api/save-user-post-comment`,
+    {
+      postId: Number(postId),
+      userId: Number(userId),
+      comment: sanitizeComment(comment)
+    },
+    {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    }
+  );
 };
 
 export const apiGetProductDetails = async (productId: string | number, userId: string | number) => {

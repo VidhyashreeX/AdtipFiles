@@ -64,6 +64,7 @@ import AdOrders from "./pages/AdOrders";
 import AdAnalytics from "./pages/AdAnalytics";
 import SellerRegistration from "./components/SellerRegistration";
 import EditSellerInfo from "./components/EditSellerInfo";
+import BecomeAdvertiserRedirect from "./components/BecomeAdvertiserRedirect";
 
 const router = createBrowserRouter([
 	{
@@ -147,7 +148,7 @@ const router = createBrowserRouter([
 			},
 			{
 				path: "become-seller",
-				element: <BecomeSeller />,
+				element: <BecomeAdvertiserRedirect />,
 			},
 			{
 				path: "product/:id",

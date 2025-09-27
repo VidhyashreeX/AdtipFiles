@@ -4,6 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import { apiAddProduct, apiGetCompanyList } from '@/api';
 import { toast } from '@/hooks/use-toast';
 import { uploadToR2, UPLOAD_FOLDERS, UploadResult } from '@/services/r2UploadService';
+import { validateProductData, getSelectedCompanyId } from '@/utils/apiValidation';
+import { checkServerConnectivity, retryApiCall } from '@/utils/networkUtils';
 
 type Company = {
   id: number;
@@ -349,7 +351,76 @@ const AddProduct = () => {
 
   console.log('Submitting product data:', productData);
 
-  const response = await apiAddProduct(productData);
+  // Additional validation specifically to match backend expectations
+  const serverValidationErrors = [];
+  
+  // Check for critical fields that might cause SQL errors
+  if (!productData.name) serverValidationErrors.push('Product name is required');
+  if (!productData.description) serverValidationErrors.push('Product description is required');
+  if (!productData.companyId) serverValidationErrors.push('Company ID is missing');
+  if (!productData.regularPrice) serverValidationErrors.push('Product price must be greater than 0');
+  if (images.length === 0 || !productData.primary_image) serverValidationErrors.push('At least one product image is required');
+  
+  // Check if we've mixed up field names (common source of 500 errors)
+  const expectedServerFields = ['companyId', 'name', 'description', 'regularPrice', 'categoryId', 'units', 'images', 'primary_image'];
+  const missingFields = expectedServerFields.filter(field => {
+    return productData[field] === undefined || productData[field] === null || productData[field] === '';
+    return productData[field] === undefined || productData[field] === null;
+  });
+  
+  if (missingFields.length > 0) {
+    serverValidationErrors.push(`Missing expected fields: ${missingFields.join(', ')}`);
+  }
+  
+  if (serverValidationErrors.length > 0) {
+    toast({
+      title: "Server Compatibility Error",
+      description: serverValidationErrors.join('. '),
+      variant: "destructive"
+    });
+    setLoading(false);
+    return;
+  }
+  
+  // Create a copy with debug information to help diagnose server errors
+  // Sanitize the product data to ensure no undefined values
+  const sanitizedProductData = Object.fromEntries(
+    Object.entries(productData).map(([key, value]) => {
+      // Replace undefined or null values with appropriate defaults based on field type
+      if (value === undefined || value === null) {
+        // Provide appropriate defaults based on field name/type
+        if (key.includes('price') || key.includes('fee')) return [key, 0];
+        if (key.includes('days') || key.includes('units') || key.includes('stock')) return [key, 0];
+        if (key.includes('image') && key !== 'images' && key !== 'primary_image') return [key, '']; 
+        return [key, ''];  // Default to empty string for other fields
+      }
+      // Ensure any array values are properly converted to strings
+      if (Array.isArray(value)) {
+        return [key, value.join(',')];
+      }
+      return [key, value];
+    })
+  );
+  
+  // Remove debug info to prevent SQL issues
+  const enhancedProductData = {
+    ...sanitizedProductData
+  };
+
+  // Check server connectivity before making the API call
+  const serverAvailable = await checkServerConnectivity(import.meta.env.VITE_API_URL || 'http://localhost:7082');
+  if (!serverAvailable) {
+    toast({
+      title: "Server Unavailable",
+      description: "The server appears to be offline or unreachable. Please check your internet connection and try again.",
+      variant: "destructive"
+    });
+    setLoading(false);
+    return;
+  }
+
+  // Use retry functionality for better reliability
+  const response = await retryApiCall(() => apiAddProduct(enhancedProductData), 1);
       
       if (response.data && response.data.status === 200) {
         // Clear draft on successful submission
@@ -379,13 +450,41 @@ const AddProduct = () => {
       } else {
         throw new Error(response.data?.message || 'Failed to add product');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error adding product:', error);
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to add product. Please try again.",
-        variant: "destructive"
-      });
+      
+      // Enhanced error logging for debugging
+      if (error.response) {
+        // The request was made and the server responded with a status code
+        // that falls out of the range of 2xx
+        console.error('Server Error Response:', {
+          data: error.response.data,
+          status: error.response.status,
+          headers: error.response.headers
+        });
+        
+        // Show more specific error message if available
+        toast({
+          title: "Server Error",
+          description: `Error ${error.response.status}: ${error.response.data?.message || "Server couldn't process the request. Check product data."}`,
+          variant: "destructive"
+        });
+      } else if (error.request) {
+        // The request was made but no response was received
+        console.error('No response received:', error.request);
+        toast({
+          title: "Network Error",
+          description: "No response from server. Check your internet connection.",
+          variant: "destructive"
+        });
+      } else {
+        // Something happened in setting up the request that triggered an Error
+        toast({
+          title: "Error",
+          description: error.message || "Failed to add product. Please try again.",
+          variant: "destructive"
+        });
+      }
     } finally {
       setLoading(false);
     }

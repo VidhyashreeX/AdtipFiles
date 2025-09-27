@@ -8,6 +8,7 @@ import axios from "axios";
 import { ChannelForm } from "./ChannelForm";
 import type { Channel, ChannelFormData } from "./ChannelForm";
 import { userAPI } from "../../services/api";
+import { apiGetCompanyList } from "../../api";
 
 
 
@@ -75,6 +76,7 @@ interface NavItem {
   icon: JSX.Element;
   subtitle?: string;
   external?: boolean;
+  onClick?: () => void;
 }
 
 const AdTipSidebar = () => {
@@ -286,7 +288,11 @@ const ecommerceItems = [
     : []),
   { to: "/follow", label: "Follow", icon: <Users className="h-5 w-5" /> },
   { to: user ? "/wallet" : "/login", label: "My Wallet", icon: <Wallet className="h-5 w-5" /> },
-  { to: "/become-seller-full", label: "Become Advertiser", icon: <Store className="h-5 w-5" />, external: true },
+  { 
+    to: "/become-seller", 
+    label: "Become Advertiser", 
+    icon: <Store className="h-5 w-5" />
+  },
   { to: "/post-ads", label: "Post Advertisements", icon: <BadgeDollarSign className="h-5 w-5" /> },
   { 
     to: "/chooseplan", 
@@ -509,6 +515,28 @@ const [showLogoutDialog, setShowLogoutDialog] = React.useState(false);
           )}
           <SidebarGroupContent>
             {ecommerceItems.map((item) => {
+              // Handle items with custom onClick handler
+              if (item.onClick) {
+                return (
+                  <button
+                    key={item.label}
+                    onClick={() => {
+                      item.onClick();
+                      if (isMobile) setOpenMobile(false);
+                    }}
+                    className={cn(
+                      "flex items-center gap-3 rounded-lg px-0 py-3 text-gray-500 transition-all hover:text-gray-900 w-full text-left",
+                      isCollapsed && !isMobile && "justify-center px-0"
+                    )}
+                  >
+                    {React.cloneElement(item.icon, { className: "h-6 w-6" })}
+                    {(!isCollapsed || isMobile) && (
+                      <span className="text-sm font-medium">{item.label}</span>
+                    )}
+                  </button>
+                );
+              }
+                
               // Handle items with state property using navigate
               if (item.state) {
                 return (
