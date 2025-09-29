@@ -12,6 +12,7 @@ import {
   SafeAreaView,
   StatusBar
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import ApiService from '../../services/ApiService';
@@ -33,29 +34,92 @@ const SubscriptionScreen = () => {
   const [loading, setLoading] = useState(true);
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [paymentProcessing, setPaymentProcessing] = useState(false);
+  const [apiCallTimeout, setApiCallTimeout] = useState<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     const fetchPlans = async () => {
+      // Set a timeout to detect if API call is hanging
+      const timeout = setTimeout(() => {
+        console.warn('[PremiumPlansScreen] API call timeout - plans fetch taking too long');
+        Alert.alert('Timeout', 'The request is taking too long. Please check your connection and try again.');
+        setLoading(false);
+      }, 30000); // 30 second timeout
+      
+      setApiCallTimeout(timeout);
+
       try {
-        const response = await ApiService.getSubscriptionPlans();
-        if (response.status) {
-          setPlans(response.plans);
+        console.log('[PremiumPlansScreen] Fetching subscription plans...');
+        
+        // Test API connection first
+        try {
+          const testResponse = await fetch('https://api.adtip.in/api/subscription-plans', {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'Authorization': `Bearer ${await AsyncStorage.getItem('accessToken')}`
+            }
+          });
+          console.log('[PremiumPlansScreen] Direct fetch test - Status:', testResponse.status);
+          const testData = await testResponse.json();
+          console.log('[PremiumPlansScreen] Direct fetch test - Data:', testData);
+        } catch (fetchError) {
+          console.error('[PremiumPlansScreen] Direct fetch test failed:', fetchError);
+        }
+        
+        // Try test endpoints first, then fallback to production
+        let response;
+        try {
+          console.log('[PremiumPlansScreen] Trying test subscription plans first...');
+          response = await ApiService.getSubscriptionPlansTest();
+          console.log('[PremiumPlansScreen] Test plans response:', response);
+        } catch (testError) {
+          console.log('[PremiumPlansScreen] Test plans failed, trying production plans...');
+          response = await ApiService.getSubscriptionPlans();
+        }
+        console.log('[PremiumPlansScreen] Plans response:', response);
+        
+        // Clear timeout since we got a response
+        clearTimeout(timeout);
+        setApiCallTimeout(null);
+        
+        if (response && response.status) {
+          setPlans(response.plans || []);
           // Pre-select the middle plan
-          if (response.plans.length > 1) {
+          if (response.plans && response.plans.length > 1) {
             setSelectedPlanId(response.plans[1].id);
-          } else if (response.plans.length > 0) {
+          } else if (response.plans && response.plans.length > 0) {
             setSelectedPlanId(response.plans[0].id);
           }
         } else {
-          Alert.alert('Error', 'Could not fetch subscription plans.');
+          console.error('[PremiumPlansScreen] API returned status false:', response);
+          Alert.alert('Error', response?.message || 'Could not fetch subscription plans.');
         }
-      } catch (error) {
-        Alert.alert('Error', 'An error occurred while fetching plans.');
+      } catch (error: any) {
+        // Clear timeout on error
+        clearTimeout(timeout);
+        setApiCallTimeout(null);
+        
+        console.error('[PremiumPlansScreen] Error fetching plans:', error);
+        console.error('[PremiumPlansScreen] Error details:', {
+          message: error.message,
+          response: error.response?.data,
+          status: error.response?.status,
+          config: error.config
+        });
+        Alert.alert('Error', error.message || 'An error occurred while fetching plans.');
       } finally {
         setLoading(false);
       }
     };
     fetchPlans();
+
+    // Cleanup timeout on unmount
+    return () => {
+      if (apiCallTimeout) {
+        clearTimeout(apiCallTimeout);
+      }
+    };
   }, []);
 
   const handlePayment = async () => {
@@ -71,20 +135,54 @@ const SubscriptionScreen = () => {
     
     setPaymentProcessing(true);
 
+    // Set a timeout for payment setup API calls
+    const paymentTimeout = setTimeout(() => {
+      console.warn('[PremiumPlansScreen] Payment setup timeout');
+      setPaymentProcessing(false);
+      Alert.alert('Timeout', 'Payment setup is taking too long. Please try again.');
+    }, 45000); // 45 second timeout for payment setup
+
     try {
       // Step 1: Create a subscription on Razorpay (no database storage yet)
-      const subResponse = await ApiService.createSubscription(selectedPlanId, user.id);
+      console.log('[PremiumPlansScreen] Creating subscription with plan_id:', selectedPlanId, 'user_id:', user.id);
+      
+      // Try test endpoint first, then fallback to production
+      let subResponse;
+      try {
+        console.log('[PremiumPlansScreen] Trying test subscription creation first...');
+        subResponse = await ApiService.createSubscriptionTest(selectedPlanId, user.id);
+        console.log('[PremiumPlansScreen] Test subscription creation response:', subResponse);
+      } catch (testError) {
+        console.log('[PremiumPlansScreen] Test subscription failed, trying production...');
+        subResponse = await ApiService.createSubscription(selectedPlanId, user.id);
+      }
+      console.log('[PremiumPlansScreen] Create subscription response:', subResponse);
 
-      if (!subResponse.status || !subResponse.subscription_id) {
-        throw new Error(subResponse.message || 'Failed to create subscription.');
+      if (!subResponse || !subResponse.status || !subResponse.subscription_id) {
+        console.error('[PremiumPlansScreen] Create subscription failed:', subResponse);
+        throw new Error(subResponse?.message || 'Failed to create subscription.');
       }
 
       const { subscription_id } = subResponse;
+      console.log('[PremiumPlansScreen] Subscription created with ID:', subscription_id);
 
       // Step 2: Fetch Razorpay key from backend
-      const razorpayDetails = await ApiService.getRazorpayDetails();
-      const key = razorpayDetails.api_key;
+      console.log('[PremiumPlansScreen] Fetching Razorpay details...');
+      
+      // Try test endpoint first, then fallback to production
+      let razorpayDetails;
+      try {
+        console.log('[PremiumPlansScreen] Trying test Razorpay details first...');
+        razorpayDetails = await ApiService.getRazorpayDetailsTest();
+        console.log('[PremiumPlansScreen] Test Razorpay details response:', razorpayDetails);
+      } catch (testError) {
+        console.log('[PremiumPlansScreen] Test Razorpay details failed, trying production...');
+        razorpayDetails = await ApiService.getRazorpayDetails();
+      }
+      console.log('[PremiumPlansScreen] Razorpay details response:', razorpayDetails);
+      const key = razorpayDetails?.api_key;
       if (!key) {
+        console.error('[PremiumPlansScreen] No Razorpay key found:', razorpayDetails);
         throw new Error('Could not fetch Razorpay key.');
       }
 
@@ -149,6 +247,8 @@ const SubscriptionScreen = () => {
         })
         .catch((error: any) => {
             console.error('❌ [SubscriptionScreen] Payment failed:', error);
+            // Clear payment timeout on payment completion
+            clearTimeout(paymentTimeout);
             // Show user-friendly messages for payment cancelled or failed
             if (
               error?.code === 'BAD_REQUEST_ERROR' &&
@@ -160,10 +260,22 @@ const SubscriptionScreen = () => {
             }
         })
         .finally(() => {
+            // Clear payment timeout
+            clearTimeout(paymentTimeout);
             setPaymentProcessing(false);
         });
 
     } catch (error: any) {
+      // Clear payment timeout on error
+      clearTimeout(paymentTimeout);
+      
+      console.error('[PremiumPlansScreen] Payment setup error:', error);
+      console.error('[PremiumPlansScreen] Error details:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+        config: error.config
+      });
       setPaymentProcessing(false);
       Alert.alert('Error', error.message || 'An unexpected error occurred.');
     }
