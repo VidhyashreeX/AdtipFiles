@@ -376,6 +376,13 @@ const handleAdTubeShare = (apiVideo: any) => {
                     className="font-semibold text-gray-900 hover:underline text-base line-clamp-1"
                     target="_blank"
                     rel="noopener noreferrer"
+                    onClick={() => {
+                      // Pause video when navigating to channel
+                      const video = videoPlayerRef.current;
+                      if (video) {
+                        video.pause();
+                      }
+                    }}
                   >
                     {currentVideo.creatorName}
                   </a>
@@ -526,6 +533,18 @@ feedRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
                       className="font-semibold text-sm text-adtip-teal hover:underline line-clamp-1"
                       target="_blank"
                       rel="noopener noreferrer"
+                      onClick={() => {
+                        // Pause video when navigating to channel
+                        const videoElement = document.querySelector(`video[src="${video.videoUrl}"]`) as HTMLVideoElement;
+                        if (videoElement) {
+                          videoElement.pause();
+                        }
+                        // Also pause current modal video if playing
+                        const modalVideo = videoPlayerRef.current;
+                        if (modalVideo) {
+                          modalVideo.pause();
+                        }
+                      }}
                     >
                       {video.creatorName}
                     </a>

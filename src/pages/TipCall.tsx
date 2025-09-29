@@ -209,9 +209,11 @@ export default function TipCall() {
           throw new Error("Invalid response format");
         }
 
-        const mappedExperts = data.data.map((user: any) => ({
+        const mappedExperts = data.data
+          .filter((user: any) => user.id && (user.name && user.name.trim() !== '')) // Filter out users with no ID or empty names
+          .map((user: any) => ({
           id: user.id,
-          name: user.name || "Anonymous User",
+          name: user.name?.trim() || `User ${user.id}`, // Better fallback with user ID
           specialty: user.interests?.length > 0 ? user.interests[0].name : "General",
           description: `Available for consultation. ${user.online_status ? "Online now" : "Offline"}`,
           price: 100,

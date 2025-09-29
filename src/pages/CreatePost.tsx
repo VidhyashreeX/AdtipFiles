@@ -91,13 +91,15 @@ const CreatePost = () => {
       return;
     }
 
-    if (isPaid && (pricePerMinute <= 0) && (postType === "tip-tube" || postType === "tip-shorts")) {
-      toast({
-        title: "Invalid price",
-        description: "Please set a valid price per minute",
-        variant: "destructive",
-      });
-      return;
+    if (isPaid && (postType === "tip-tube" || postType === "tip-shorts")) {
+      if (pricePerMinute < 0.20 || pricePerMinute > 5.00) {
+        toast({
+          title: "Invalid price",
+          description: "Price must be between ₹0.20 and ₹5.00 per minute",
+          variant: "destructive",
+        });
+        return;
+      }
     }
 
     setIsLoading(true);
@@ -308,10 +310,17 @@ const CreatePost = () => {
                   <Input
                     id="price-per-minute"
                     type="number"
-                    min="1"
+                    min="0.20"
+                    max="5.00"
+                    step="0.01"
                     value={pricePerMinute === 0 ? "" : pricePerMinute}
-                    onChange={(e) => setPricePerMinute(Number(e.target.value))}
-                    placeholder="4"
+                    onChange={(e) => {
+                      const value = Number(e.target.value);
+                      if (value <= 5.00) {
+                        setPricePerMinute(value);
+                      }
+                    }}
+                    placeholder="0.20 - 5.00"
                     className="mt-1"
                   />
                   {pricePerMinute > 0 && (
