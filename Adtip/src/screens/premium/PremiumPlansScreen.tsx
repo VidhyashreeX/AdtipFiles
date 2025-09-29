@@ -169,92 +169,7 @@ const SubscriptionScreen = () => {
     }
   };
 
-  const renderFeatureComparison = () => {
-    const freeFeatures = [
-      { label: 'Earn per ad view', value: '₹0.03 Rupees' },
-      { label: 'Platform fee', value: '60% +18% GST' },
-      { label: 'Tip Call charge', value: '₹7 per minute' },
-      { label: 'Maximum earnings', value: 'Upto ₹2000' },
-      { label: 'Withdrawal processing', value: '30 business days' },
-      { label: 'Tip Call acceptance', value: '₹1 per call' },
-      { label: 'Minimum withdrawal', value: '₹2000' },
-      { label: 'Creator earnings withdrawal', value: '₹5000' },
-    ];
 
-    const premiumFeatures = [
-      { label: 'Earn per ad view', value: 'Upto ₹10' },
-      { label: 'Platform fee', value: '30% +18% GST' },
-      { label: 'Tip Call charge', value: '₹4 per minute' },
-      { label: 'Maximum earnings', value: 'Upto ₹20000' },
-      { label: 'Withdrawal processing', value: '14 business days' },
-      { label: 'Tip Call acceptance', value: '₹2 per call' },
-      { label: 'Minimum withdrawal', value: '₹1000' },
-      { label: 'Creator earnings withdrawal', value: '₹1000' },
-    ];
-
-    return (
-      <View style={styles.comparisonSection}>
-        <Text style={[styles.comparisonTitle, { color: colors.text.primary }]}>
-          Free vs Premium Benefits
-        </Text>
-        
-        <View style={styles.comparisonContainer}>
-          {/* Free Column */}
-          <View style={[styles.comparisonColumn, { backgroundColor: isDarkMode ? colors.card : colors.surface }]}>
-            <View style={styles.planTypeHeader}>
-              <Text style={[styles.planTypeTitle, { color: colors.text.secondary }]}>FREE</Text>
-              <View style={[styles.planTypeBadge, { backgroundColor: colors.text.tertiary + '20' }]}>
-                <Text style={[styles.planTypeBadgeText, { color: colors.text.tertiary }]}>Current</Text>
-              </View>
-            </View>
-            
-            {freeFeatures.map((feature, index) => (
-              <View key={index} style={styles.featureRow}>
-                <Text style={[styles.featureLabel, { color: colors.text.secondary }]}>
-                  {feature.label}
-                </Text>
-                <Text style={[styles.featureValue, { color: colors.text.primary }]}
-                  numberOfLines={1}
-                  ellipsizeMode="tail"
-                >
-                  {feature.value}
-                </Text>
-              </View>
-            ))}
-          </View>
-
-          {/* Premium Column */}
-          <View style={[styles.comparisonColumn, { backgroundColor: colors.primary + '10', borderColor: colors.primary, borderWidth: 1 }]}
-            pointerEvents={user?.is_premium ? 'none' : 'auto'}
-          >
-            <View style={styles.planTypeHeader}>
-              <Text style={[styles.planTypeTitle, { color: colors.primary }]}>PREMIUM</Text>
-              <LinearGradient
-                colors={[colors.primary, colors.secondary]}
-                style={styles.planTypeBadge}
-              >
-                <Text style={styles.premiumBadgeText}>Upgrade</Text>
-              </LinearGradient>
-            </View>
-            
-            {premiumFeatures.map((feature, index) => (
-              <View key={index} style={styles.featureRow}>
-                <Text style={[styles.featureLabel, { color: colors.text.secondary }]}>
-                  {feature.label}
-                </Text>
-                <Text style={[styles.featureValue, { color: colors.primary, fontWeight: '600' }]}
-                  numberOfLines={1}
-                  ellipsizeMode="tail"
-                >
-                  {feature.value}
-                </Text>
-              </View>
-            ))}
-          </View>
-        </View>
-      </View>
-    );
-  };
 
   const renderPlan = (plan: any, index: number) => {
     const isSelected = plan.id === selectedPlanId;
@@ -355,24 +270,21 @@ const SubscriptionScreen = () => {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header Section
+        {/* Header Section 
         <LinearGradient
           colors={isDarkMode ? ['#1a1a2e', '#16213e'] : ['#667eea', '#764ba2']}
           style={styles.headerGradient}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
         >
-          <Text style={styles.headerTitle}>Unlock Premium Features</Text>
+          <Text style={styles.headerTitle}>Choose Your Premium Plan</Text>
           <Text style={styles.headerSubtitle}>
-            Join thousands of users enjoying premium benefits
+            Select the perfect plan for your earning goals
           </Text>
           <View style={styles.premiumIcon}>
             <Icon name="star" size={32} color="#FFD700" />
           </View>
-        </LinearGradient>
-         */} 
-        {/* Feature Comparison Section */}
-        {renderFeatureComparison()}
+        </LinearGradient>*/}
 
         {/* Plans Section */}
         <View style={styles.plansSection}>
@@ -506,61 +418,7 @@ const styles = StyleSheet.create({
     top: 20,
     right: 20,
   },
-  comparisonSection: {
-    paddingHorizontal: 20,
-    marginBottom: 32,
-  },
-  comparisonTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: 20,
-  },
-  comparisonContainer: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  comparisonColumn: {
-    flex: 1,
-    borderRadius: 16,
-    padding: 16,
-  },
-  planTypeHeader: {
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  planTypeTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 8,
-  },
-  planTypeBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  planTypeBadgeText: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  premiumBadgeText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#fff',
-  },
-  featureRow: {
-    marginBottom: 12,
-  },
-  featureLabel: {
-    fontSize: 12,
-    marginBottom: 2,
-    lineHeight: 16,
-  },
-  featureValue: {
-    fontSize: 13,
-    fontWeight: '600',
-    lineHeight: 18,
-  },
+
   plansSection: {
     paddingHorizontal: 20,
     marginBottom: 24,

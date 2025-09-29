@@ -6,6 +6,8 @@ import {
   ScrollView,
   TouchableOpacity,
   SafeAreaView,
+  Dimensions,
+  Platform,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
@@ -13,6 +15,8 @@ import LinearGradient from 'react-native-linear-gradient';
 
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
+
+const { width, height } = Dimensions.get('window');
 
 const PremiumBenefitsScreen: React.FC = () => {
   const navigation = useNavigation();
@@ -78,6 +82,93 @@ const PremiumBenefitsScreen: React.FC = () => {
     navigation.goBack();
   };
 
+  const renderFeatureComparison = () => {
+    const freeFeatures = [
+      { label: 'Earn per ad view', value: '₹0.03 Rupees' },
+      { label: 'Platform fee', value: '60% +18% GST' },
+      { label: 'Tip Call charge', value: '₹7 per minute' },
+      { label: 'Maximum earnings', value: 'Upto ₹2000' },
+      { label: 'Withdrawal processing', value: '30 business days' },
+      { label: 'Tip Call acceptance', value: '₹1 per call' },
+      { label: 'Minimum withdrawal', value: '₹2000' },
+      { label: 'Creator earnings withdrawal', value: '₹5000' },
+    ];
+
+    const premiumFeatures = [
+      { label: 'Earn per ad view', value: 'Upto ₹10' },
+      { label: 'Platform fee', value: '30% +18% GST' },
+      { label: 'Tip Call charge', value: '₹4 per minute' },
+      { label: 'Maximum earnings', value: 'Upto ₹20000' },
+      { label: 'Withdrawal processing', value: '14 business days' },
+      { label: 'Tip Call acceptance', value: '₹2 per call' },
+      { label: 'Minimum withdrawal', value: '₹1000' },
+      { label: 'Creator earnings withdrawal', value: '₹1000' },
+    ];
+
+    return (
+      <View style={styles.comparisonSection}>
+        <Text style={[styles.comparisonTitle, { color: colors.text.primary }]}>
+          Free vs Premium Benefits
+        </Text>
+        
+        <View style={styles.comparisonContainer}>
+          {/* Free Column */}
+          <View style={[styles.comparisonColumn, { backgroundColor: isDarkMode ? colors.card : colors.surface }]}>
+            <View style={styles.planTypeHeader}>
+              <Text style={[styles.planTypeTitle, { color: colors.text.secondary }]}>FREE</Text>
+              <View style={[styles.planTypeBadge, { backgroundColor: colors.text.tertiary + '20' }]}>
+                <Text style={[styles.planTypeBadgeText, { color: colors.text.tertiary }]}>Current</Text>
+              </View>
+            </View>
+            
+            {freeFeatures.map((feature, index) => (
+              <View key={index} style={styles.featureRow}>
+                <Text style={[styles.featureLabel, { color: colors.text.secondary }]}>
+                  {feature.label}
+                </Text>
+                <Text style={[styles.featureValue, { color: colors.text.primary }]}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                >
+                  {feature.value}
+                </Text>
+              </View>
+            ))}
+          </View>
+
+          {/* Premium Column */}
+          <View style={[styles.comparisonColumn, { backgroundColor: colors.primary + '10', borderColor: colors.primary, borderWidth: 1 }]}
+            pointerEvents={user?.is_premium ? 'none' : 'auto'}
+          >
+            <View style={styles.planTypeHeader}>
+              <Text style={[styles.planTypeTitle, { color: colors.primary }]}>PREMIUM</Text>
+              <LinearGradient
+                colors={[colors.primary, colors.secondary]}
+                style={styles.planTypeBadge}
+              >
+                <Text style={styles.premiumBadgeText}>Upgrade</Text>
+              </LinearGradient>
+            </View>
+            
+            {premiumFeatures.map((feature, index) => (
+              <View key={index} style={styles.featureRow}>
+                <Text style={[styles.featureLabel, { color: colors.text.secondary }]}>
+                  {feature.label}
+                </Text>
+                <Text style={[styles.featureValue, { color: colors.primary, fontWeight: '600' }]}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                >
+                  {feature.value}
+                </Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      </View>
+    );
+  };
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
@@ -105,13 +196,16 @@ const PremiumBenefitsScreen: React.FC = () => {
           style={styles.heroSection}
         >
           <View style={styles.heroContent}>
-            <Icon name="crown" size={48} color="#FFFFFF" />
+            <Icon name="star" size={48} color="#FFFFFF" />
             <Text style={styles.heroTitle}>Unlock Premium</Text>
             <Text style={styles.heroSubtitle}>
               Get access to exclusive features and maximize your earning potential
             </Text>
           </View>
         </LinearGradient>
+
+        {/* Feature Comparison Section */}
+        {renderFeatureComparison()}
 
         {/* Benefits Grid */}
         <View style={styles.benefitsContainer}>
@@ -162,24 +256,25 @@ const PremiumBenefitsScreen: React.FC = () => {
           </Text>
         </View>
 
-        {/* Call to Action */}
-        <View style={styles.ctaSection}>
-          <TouchableOpacity
-            style={[styles.continueButton, { backgroundColor: colors.primary }]}
-            onPress={handleContinue}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.continueButtonText}>
-              View Premium Plans
-            </Text>
-            <Icon name="chevron-right" size={20} color="#FFFFFF" />
-          </TouchableOpacity>
-          
-          <Text style={[styles.ctaSubtext, { color: colors.text.tertiary }]}>
-            Cancel anytime • No hidden fees
-          </Text>
-        </View>
       </ScrollView>
+
+      {/* Fixed Bottom CTA */}
+      <View style={[styles.bottomContainer, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
+        <TouchableOpacity
+          style={[styles.continueButton, { backgroundColor: colors.primary }]}
+          onPress={handleContinue}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.continueButtonText}>
+            View Premium Plans
+          </Text>
+          <Icon name="chevron-right" size={20} color="#FFFFFF" />
+        </TouchableOpacity>
+        
+        <Text style={[styles.ctaSubtext, { color: colors.text.tertiary }]}>
+          Cancel anytime • No hidden fees
+        </Text>
+      </View>
     </SafeAreaView>
   );
 };
@@ -305,9 +400,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontStyle: 'italic',
   },
-  ctaSection: {
+  bottomContainer: {
     paddingHorizontal: 16,
-    marginTop: 24,
+    paddingTop: 16,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+    borderTopWidth: 1,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
   },
   continueButton: {
     flexDirection: 'row',
@@ -326,6 +428,62 @@ const styles = StyleSheet.create({
   ctaSubtext: {
     fontSize: 12,
     textAlign: 'center',
+  },
+  // Feature Comparison Styles
+  comparisonSection: {
+    paddingHorizontal: 16,
+    marginBottom: 24,
+  },
+  comparisonTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  comparisonContainer: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  comparisonColumn: {
+    flex: 1,
+    borderRadius: 12,
+    padding: 12,
+  },
+  planTypeHeader: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  planTypeTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 6,
+  },
+  planTypeBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 10,
+  },
+  planTypeBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  premiumBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  featureRow: {
+    marginBottom: 10,
+  },
+  featureLabel: {
+    fontSize: 11,
+    marginBottom: 2,
+    lineHeight: 14,
+  },
+  featureValue: {
+    fontSize: 12,
+    fontWeight: '600',
+    lineHeight: 16,
   },
 });
 
