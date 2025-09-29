@@ -32,6 +32,7 @@ import Header from '../../components/common/Header';
 import { ProfileFastImage } from '../../utils/FastImageOptimizer';
 import VideoThumbnail from '../../components/common/VideoThumbnail';
 import { useCustomBackHandler } from '../../hooks/useCustomBackHandler';
+import { getContactDisplayName } from '../../utils/contactUtils';
 
 const AVATAR_SIZE = 80; // Reduced to match ProfileScreen
 const GRID_SPACING = 1;
@@ -213,7 +214,7 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
     // Navigate to FCM chat system
     navigation.navigate('FCMChat', {
       participantId: userId.toString(),
-      participantName: user.name || 'Unknown User'
+      participantName: getContactDisplayName(user)
     });
 
     // Mark messages as read in background

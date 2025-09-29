@@ -23,17 +23,19 @@ const STREAM_ITEM_WIDTH = screenWidth * 0.28;
 const STREAM_ITEM_MARGIN = 8;
 
 interface ActiveStream {
-  id: number;
-  user_id: number;
+  id?: number;
+  user_id?: number;
   meeting_id: string;
   title: string;
-  user_name: string;
+  user_name?: string;
+  streamer_name?: string; // Backend might return this instead of user_name
   user_profile_image?: string;
+  profile_picture?: string; // Backend might return this instead
   viewer_count: number;
   cost_per_minute: number;
-  is_private: boolean;
+  is_private?: boolean;
   start_time: string;
-  status: string;
+  status?: string;
 }
 
 interface ActiveStreamsRowProps {
@@ -62,8 +64,22 @@ const ActiveStreamsRow: React.FC<ActiveStreamsRowProps> = ({
       const response = await LiveStreamService.getActiveStreams(1, 10);
       
       if (response.success && response.data?.streams) {
-        setActiveStreams(response.data.streams);
-        Logger.info('ActiveStreamsRow', `Loaded ${response.data.streams.length} active streams`);
+        // Validate and clean the streams data
+        const validStreams = response.data.streams.filter((stream: any) => 
+          stream && 
+          stream.meeting_id && 
+          stream.title
+        ).map((stream: any): ActiveStream => ({
+          ...stream,
+          id: stream.id || Date.now() + Math.random(), // Generate ID if missing
+          user_name: stream.user_name || stream.streamer_name || 'Unknown',
+          viewer_count: stream.viewer_count || 0,
+          cost_per_minute: stream.cost_per_minute || 0,
+          is_private: stream.is_private || false
+        }));
+        
+        setActiveStreams(validStreams);
+        Logger.info('ActiveStreamsRow', `Loaded ${validStreams.length} active streams`, validStreams);
       } else {
         setActiveStreams([]);
         Logger.info('ActiveStreamsRow', 'No active streams found');
@@ -118,12 +134,12 @@ const ActiveStreamsRow: React.FC<ActiveStreamsRowProps> = ({
         onJoinStream(stream.meeting_id, stream.title);
       } else {
         // Navigate to live stream screen with join parameters
-        navigation.navigate('LiveStream' as never, {
+        (navigation as any).navigate('LiveStream', {
           meetingId: stream.meeting_id,
           isHost: false,
           streamTitle: stream.title,
-          streamerName: stream.user_name
-        } as never);
+          streamerName: stream.user_name || stream.streamer_name || 'Unknown'
+        });
       }
     } catch (error) {
       Logger.error('ActiveStreamsRow', 'Failed to join stream:', error);
@@ -149,9 +165,9 @@ const ActiveStreamsRow: React.FC<ActiveStreamsRowProps> = ({
 
       {/* Stream thumbnail / placeholder */}
       <View style={[styles.streamThumbnail, { backgroundColor: colors.surface }]}>
-        {stream.user_profile_image ? (
+        {(stream.user_profile_image || stream.profile_picture) ? (
           <Image
-            source={{ uri: stream.user_profile_image }}
+            source={{ uri: stream.user_profile_image || stream.profile_picture }}
             style={styles.streamerAvatar}
           />
         ) : (
@@ -165,25 +181,25 @@ const ActiveStreamsRow: React.FC<ActiveStreamsRowProps> = ({
           style={[styles.streamTitle, { color: colors.text.primary }]}
           numberOfLines={2}
         >
-          {stream.title}
+          {stream.title || 'Live Stream'}
         </Text>
         
         <Text
           style={[styles.streamerName, { color: colors.text.secondary }]}
           numberOfLines={1}
         >
-          {stream.user_name}
+          {stream.user_name || stream.streamer_name || 'Unknown'}
         </Text>
 
         <View style={styles.streamStats}>
           <View style={styles.statItem}>
             <Eye size={12} color={colors.text.secondary} />
             <Text style={[styles.statText, { color: colors.text.secondary }]}>
-              {stream.viewer_count}
+              {stream.viewer_count || 0}
             </Text>
           </View>
           
-          {!stream.is_private && (
+          {!stream.is_private && stream.cost_per_minute && (
             <View style={styles.statItem}>
               <Text style={[styles.costText, { color: colors.primary }]}>
                 ₹{stream.cost_per_minute}/min
@@ -238,7 +254,7 @@ const ActiveStreamsRow: React.FC<ActiveStreamsRowProps> = ({
       {activeStreams.length > 0 ? (
         <FlatList
           data={activeStreams}
-          keyExtractor={(item) => item.id.toString()}
+          keyExtractor={(item, index) => item.id?.toString() || item.meeting_id || `stream-${index}`}
           renderItem={renderStreamItem}
           horizontal
           showsHorizontalScrollIndicator={false}

@@ -27,6 +27,7 @@ import Icon from 'react-native-vector-icons/Feather'
 import { useBlocklist } from '../../hooks/useBlocklist'
 import { useMissedCallsCount } from '../../hooks/useMissedCalls'
 import { useWallet } from '../../hooks/useWallet'
+import { getContactDisplayName, getContactInitial } from '../../utils/contactUtils'
 import { BanknoteArrowUp, Ban, MoreVertical, Mail, PhoneCall, Video } from 'lucide-react-native'
 import { MainNavigatorParamList } from '../../types/navigation'
 import { CallType } from '../../stores/callStoreSimplified'
@@ -129,7 +130,7 @@ const isDndEnabled = Boolean(contact.dnd)
           <View style={styles.avatarContainer}>
             <View style={[styles.avatar, { backgroundColor: avatarColor }]}>
               <Text style={styles.avatarText}>
-                {contact.name ? contact.name.charAt(0).toUpperCase() : 'U'}
+                {getContactInitial(contact)}
               </Text>
             </View>
             {isUserOnlineAndAvailable && (
@@ -143,7 +144,7 @@ const isDndEnabled = Boolean(contact.dnd)
               style={[styles.contactName, { color: colors.text.primary }]}
               numberOfLines={1}
             >
-              {contact.name || 'Unknown User'}
+              {getContactDisplayName(contact)}
             </Text>
             <Text
               style={[styles.contactStatus, { color: colors.text.secondary }]}
@@ -665,7 +666,7 @@ const TipCallScreenSimple = () => {
     (contact) =>
       contact.id !== user?.id &&
       !isUserBlocked(contact.id.toString()) &&
-      (debouncedSearch === '' || contact.name?.toLowerCase().includes(debouncedSearch.toLowerCase()))
+      (debouncedSearch === '' || getContactDisplayName(contact).toLowerCase().includes(debouncedSearch.toLowerCase()))
   )
 
   const contactsWithAds = useMemo(() => getContactsWithAds(filteredContacts), [filteredContacts])
@@ -951,7 +952,7 @@ const TipCallScreenSimple = () => {
       Alert.alert(
         'Block User',
         `Are you sure you want to block ${
-          contact.name || 'this user'
+          getContactDisplayName(contact)
         }? They won't be able to call you anymore.`,
         [
           {
@@ -965,11 +966,11 @@ const TipCallScreenSimple = () => {
               try {
                 await blockUser(
                   contact.id.toString(),
-                  contact.name || 'Unknown User'
+                  getContactDisplayName(contact)
                 )
                 Alert.alert(
                   'Success',
-                  `${contact.name || 'User'} has been blocked.`
+                  `${getContactDisplayName(contact)} has been blocked.`
                 )
               } catch (error) {
                 console.error('[TipCallScreen] Failed to block user:', error)
@@ -1001,7 +1002,7 @@ const TipCallScreenSimple = () => {
     );
 
     // If user doesn't have premium access, show upgrade modal
-    if (accessResult.hasAccess) {
+    if (!accessResult.hasAccess) {
       Logger.debug('TipCallScreen', 'Non-premium user attempting chat, showing premium popup')
       setPremiumFeature('chat')
       setShowPremiumPopup(true)
@@ -1012,7 +1013,7 @@ const TipCallScreenSimple = () => {
       // Navigate to FCM chat system - create conversation with the contact
       navigation.navigate('FCMChat', {
         participantId: contact.id.toString(),
-        participantName: contact.name || 'Unknown User'
+        participantName: getContactDisplayName(contact)
       });
 
       // Mark messages as read in background
@@ -1090,10 +1091,10 @@ const TipCallScreenSimple = () => {
       <ContactCard
         contact={item}
         onVideoCall={() =>
-          handleStartCall(item.id.toString(), item.name || 'Unknown User', 'video')
+          handleStartCall(item.id.toString(), getContactDisplayName(item), 'video')
         }
         onVoiceCall={() =>
-          handleStartCall(item.id.toString(), item.name || 'Unknown User', 'voice')
+          handleStartCall(item.id.toString(), getContactDisplayName(item), 'voice')
         }
         onChat={() => handleChatNavigation(item)}
         hasUnreadMessages={unreadCounts[item.id] > 0}
@@ -1109,8 +1110,8 @@ const TipCallScreenSimple = () => {
   const renderLiveSearchItem = ({ item }: { item: Contact }) => (
     <ContactCard
       contact={item}
-      onVideoCall={() => handleStartCall(item.id.toString(), item.name || 'Unknown User', 'video')}
-      onVoiceCall={() => handleStartCall(item.id.toString(), item.name || 'Unknown User', 'voice')}
+      onVideoCall={() => handleStartCall(item.id.toString(), getContactDisplayName(item), 'video')}
+      onVoiceCall={() => handleStartCall(item.id.toString(), getContactDisplayName(item), 'voice')}
       onChat={() => handleChatNavigation(item)}
       hasUnreadMessages={false}
       colors={colors}

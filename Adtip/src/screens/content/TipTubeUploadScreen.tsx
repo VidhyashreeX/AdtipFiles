@@ -658,8 +658,11 @@ const TipTubeUploadScreen: React.FC = () => {
     if (isPaidVideo && (!promotionalPrice || parseFloat(promotionalPrice) <= 0)) {
       return 'Please enter a valid promotional price for paid video.';
     }
-    if (isPaidVideo && parseFloat(promotionalPrice) > 1000) {
-      return 'Promotional price cannot exceed ₹1000.';
+    if (isPaidVideo && parseFloat(promotionalPrice) < 0.20) {
+      return 'Promotional price must be at least ₹0.20.';
+    }
+    if (isPaidVideo && parseFloat(promotionalPrice) > 5.00) {
+      return 'Promotional price cannot exceed ₹5.00.';
     }
     return null;
   };
@@ -1068,7 +1071,7 @@ const TipTubeUploadScreen: React.FC = () => {
                     />
                   </View>
                   <Text style={[styles.priceHelper, { color: colors.text.tertiary }]}>
-                    Set the price viewers will pay to watch this video
+                    Set the price viewers will pay to watch this video (₹0.20 - ₹5.00)
                   </Text>
                 </View>
               )}

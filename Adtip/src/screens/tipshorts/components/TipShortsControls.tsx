@@ -207,3 +207,6 @@ export const TipShortsControlsProvider: React.FC<TipShortsControlsProviderProps>
     </TipShortsControlsContext.Provider>
   );
 };
+
+// Export the audio manager class for external use
+export { TipShortsAudioManager };

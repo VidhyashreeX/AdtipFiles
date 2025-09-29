@@ -20,6 +20,7 @@ import Header from '../../components/common/Header';
 import ScreenTransition from '../../components/common/ScreenTransition';
 import Icon from 'react-native-vector-icons/Feather';
 import { Contact } from '../../types/api';
+import { getContactDisplayName } from '../../utils/contactUtils';
 import { MainNavigatorParamList } from '../../types/navigation';
 import CallController from '../../services/calling/CallController';
 import { checkPremiumAccess, logPremiumAccessAttempt } from '../../utils/premiumAccessUtils';
@@ -70,7 +71,7 @@ const MissedCallCard: React.FC<{
         {/* Contact Info Section */}
         <View style={styles.contactInfo}>
           <Text style={[styles.contactName, { color: colors.text.primary }]} numberOfLines={1}>
-            {contact.name || 'Unknown User'}
+            {getContactDisplayName(contact)}
           </Text>
           
           <Text style={[styles.contactId, { color: colors.text.tertiary }]} numberOfLines={1}>
@@ -304,7 +305,7 @@ export default function MissedCallsScreen() {
   const handleChat = useCallback((contact: Contact) => {
     navigation.navigate('FCMChat', {
       participantId: contact.id.toString(),
-      participantName: contact.name || 'Unknown User',
+      participantName: getContactDisplayName(contact),
     });
   }, [navigation]);
 

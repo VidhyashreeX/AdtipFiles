@@ -135,9 +135,9 @@ const Header: React.FC<HeaderProps> = ({
   }, [navigation]);
   
   const navigateToPremium = useCallback(() => {
-    console.log('🚀 [Header] User clicked premium toggle, navigating to PremiumUser');
+    console.log('🚀 [Header] User clicked premium toggle, navigating to SubscriptionScreen');
     console.log('📊 [Header] Current premium status:', { isPremium, balance });
-    navigation.navigate('PremiumUser' as never);
+    navigation.navigate('SubscriptionScreen' as never);
   }, [navigation, isPremium, balance]);
 
   const navigateToLibrary = useCallback(() => {

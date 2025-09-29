@@ -575,16 +575,16 @@ const TipTubeScreen = () => {
       showLoginPromptForAction('view channels');
       return;
     }
-    navigation.navigate('Channel', {
+    
+    console.log('[TipTubeScreen] Navigating to channel profile:', channelData);
+    
+    navigation.navigate('ChannelProfile' as never, {
       channelId: channelData.channelId,
-      channelData: {
-        channelId: channelData.channelId,
-        channelName: channelData.channelName,
-        profileImage: channelData.avatar,
-        isVerified: channelData.isVerified || false,
-        createdBy: channelData.createdBy
-      }
-    });
+      channelName: channelData.channelName,
+      avatar: channelData.avatar,
+      isVerified: channelData.isVerified || false,
+      createdBy: channelData.createdBy
+    } as never);
   }, [isGuest, navigation, showLoginPromptForAction]);
 
   const handleAnalytics = useCallback(() => {
@@ -935,7 +935,7 @@ const TipTubeScreen = () => {
       {/* CPX Survey Banner */}
       <SurveyBanner
         isPremium={isPremium}
-        onUpgrade={() => navigation.navigate('PremiumUser' as never)}
+        onUpgrade={() => navigation.navigate('SubscriptionScreen' as never)}
         renderCPXAtRoot={true}
       />
 
@@ -979,12 +979,12 @@ const TipTubeScreen = () => {
   // Content Creator Premium Toggle Handler
   const handleTogglePremium = () => {
     requireAuth('premium', () => {
-      console.log('🚀 [TipTubeScreen] User clicked content creator premium toggle');
-      console.log('📊 [TipTubeScreen] Current content creator premium status:', {
+      console.log('🚀 [TipTubeScreen] User clicked premium toggle');
+      console.log('📊 [TipTubeScreen] Current premium status:', {
         isContentCreatorPremium,
         hasData: !!contentCreatorPremiumData
       });
-      navigation.navigate('ContentCreatorPremium');
+      navigation.navigate('SubscriptionScreen' as never);
     });
   };
 

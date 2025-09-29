@@ -25,6 +25,7 @@ import VideoPreviewScreen from '../screens/media/VideoPreviewScreen';
 import VideoScreen from '../screens/media/VideoScreen';
 import ShortsScreen from '../screens/media/ShortsScreen';
 import ChannelScreen from '../screens/channel/ChannelScreen';
+import ChannelProfileScreen from '../screens/channel/ChannelProfileScreen';
 import CreateChannelScreen from '../screens/channel/CreateChannelScreen';
 import MyChannelScreen from '../screens/channel/MyChannelScreen';
 //import EditChannelScreen from '../screens/channel/EditChannelScreen';
@@ -383,6 +384,7 @@ const MainNavigator = () => {
       
       {/* Channel screens */}
       <Stack.Screen name="Channel" component={ChannelScreen} />
+      <Stack.Screen name="ChannelProfile" component={ChannelProfileScreen} />
       <Stack.Screen name="MyChannel" component={MyChannelScreen} />
       <Stack.Screen name="EditChannel" component={EditChannelScreen} />
       <Stack.Screen name="ChannelSettings" component={ChannelSettingsScreen} />

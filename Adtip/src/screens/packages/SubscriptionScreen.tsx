@@ -29,6 +29,11 @@ const SubscriptionScreen = () => {
   const { user } = useAuth();
   const navigation = useNavigation<any>();
 
+  // Redirect to new premium benefits flow
+  useEffect(() => {
+    navigation.replace('PremiumBenefitsScreen');
+  }, [navigation]);
+
   const [plans, setPlans] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);

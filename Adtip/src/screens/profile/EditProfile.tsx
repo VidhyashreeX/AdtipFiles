@@ -80,6 +80,9 @@ const EditProfile: React.FC = () => {
   const [maternalStatus, setMaternalStatus] = useState<string>(user?.maternal_status || '');
   const [selectedInterests, setSelectedInterests] = useState<number[]>([]);
   const [selectedLanguages, setSelectedLanguages] = useState<number[]>([]);
+  const [mobileNumber, setMobileNumber] = useState<string>(user?.mobile_number || '');
+  const [address, setAddress] = useState<string>(user?.address || '');
+  const [pincode, setPincode] = useState<string>(user?.pincode || '');
 
   // Helper function to parse date safely
   const parseDateSafely = (dateValue: any): Date | null => {
@@ -124,7 +127,10 @@ const EditProfile: React.FC = () => {
     profession: user?.profession || '',
     maternalStatus: user?.maternal_status || '',
     interests: user?.interests?.map((interest: any) => typeof interest === 'object' ? interest.id : interest) || [],
-    languages: user?.languages?.map((language: any) => typeof language === 'object' ? language.id : language) || []
+    languages: user?.languages?.map((language: any) => typeof language === 'object' ? language.id : language) || [],
+    mobileNumber: user?.mobile_number || '',
+    address: user?.address || '',
+    pincode: user?.pincode || ''
   });
 
   // API data
@@ -164,7 +170,10 @@ const EditProfile: React.FC = () => {
       profession: user?.profession || '',
       maternalStatus: user?.maternal_status || '',
       interests: user?.interests?.map((interest: any) => typeof interest === 'object' ? interest.id : interest) || [],
-      languages: user?.languages?.map((language: any) => typeof language === 'object' ? language.id : language) || []
+      languages: user?.languages?.map((language: any) => typeof language === 'object' ? language.id : language) || [],
+      mobileNumber: user?.mobile_number || '',
+      address: user?.address || '',
+      pincode: user?.pincode || ''
     });
   }, [user]);
 
@@ -422,6 +431,18 @@ const EditProfile: React.FC = () => {
           current: selectedLanguages,
           sending: updateData.languages
         });
+      }
+
+      if (hasFieldChanged('mobileNumber', mobileNumber.trim())) {
+        updateData.mobile_number = mobileNumber.trim();
+      }
+
+      if (hasFieldChanged('address', address.trim())) {
+        updateData.address = address.trim();
+      }
+
+      if (hasFieldChanged('pincode', pincode.trim())) {
+        updateData.pincode = pincode.trim();
       }
 
       // Check if any fields were actually changed
@@ -781,6 +802,73 @@ const EditProfile: React.FC = () => {
             </Text>
             <Icon name="chevron-down" size={20} color={colors.text.secondary} />
           </TouchableOpacity>
+        </View>
+
+        {/* Mobile Number */}
+        <View style={styles.inputGroup}>
+          <Text style={[styles.label, { color: colors.text.secondary }]}>Mobile Number</Text>
+          <TextInput
+            style={[
+              styles.input,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+                color: colors.text.primary,
+              }
+            ]}
+            value={mobileNumber}
+            onChangeText={setMobileNumber}
+            placeholder="Enter your mobile number"
+            placeholderTextColor={colors.text.light}
+            keyboardType="phone-pad"
+            maxLength={15}
+            editable={!loading}
+          />
+        </View>
+
+        {/* Address */}
+        <View style={styles.inputGroup}>
+          <Text style={[styles.label, { color: colors.text.secondary }]}>Address</Text>
+          <TextInput
+            style={[
+              styles.input,
+              styles.textArea,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+                color: colors.text.primary,
+              }
+            ]}
+            value={address}
+            onChangeText={setAddress}
+            placeholder="Enter your complete address"
+            placeholderTextColor={colors.text.light}
+            multiline
+            numberOfLines={3}
+            editable={!loading}
+          />
+        </View>
+
+        {/* Pincode */}
+        <View style={styles.inputGroup}>
+          <Text style={[styles.label, { color: colors.text.secondary }]}>Pincode</Text>
+          <TextInput
+            style={[
+              styles.input,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+                color: colors.text.primary,
+              }
+            ]}
+            value={pincode}
+            onChangeText={setPincode}
+            placeholder="Enter your area pincode"
+            placeholderTextColor={colors.text.light}
+            keyboardType="numeric"
+            maxLength={6}
+            editable={!loading}
+          />
         </View>
       </ScrollView>
 

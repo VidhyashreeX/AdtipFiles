@@ -99,12 +99,18 @@ export const getUserFullName = (userData: ComprehensiveUserData | null): string 
  * Get user's display name (prioritizes full name, falls back to username)
  */
 export const getUserDisplayName = (userData: ComprehensiveUserData | null): string => {
-  if (!userData) return 'Unknown User';
+  if (!userData) return 'Anonymous User';
   
   const fullName = getUserFullName(userData);
   if (fullName) return fullName;
   
-  return userData.username || userData.name || 'Unknown User';
+  const name = userData.username || userData.name;
+  if (name && name.trim() !== '') {
+    return name.trim();
+  }
+
+  // Better fallback than "Unknown User"
+  return userData.id ? `User ${userData.id}` : 'Anonymous User';
 };
 
 /**

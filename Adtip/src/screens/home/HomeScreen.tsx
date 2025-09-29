@@ -27,7 +27,7 @@ import { InfiniteData } from '@tanstack/react-query';
 import { Gamepad2, WifiOff, Dices, Mail, MessageCircle, Search, CreditCard } from 'lucide-react-native';
 import PostWithComments from '../../components/home/PostWithComments';
 import { FeedFlatList } from '../../components/common/OptimizedFlatList';
-import SurveyBanner, { CPXResearchProvider as CPXResearchComponent } from '../../components/home/SurveyBanner';
+import { CPXResearchProvider as CPXResearchComponent } from '../../components/home/SurveyBanner';
 import { CPXResearchProvider } from '../../contexts/CPXResearchContext';
 import StatusStoriesRow, { StatusUser, StatusItem } from '../../components/home/StatusStoriesRow';
 import ActiveStreamsRow from '../../components/home/ActiveStreamsRow';
@@ -149,79 +149,6 @@ interface EarnCardsRowProps {
   onInstallToEarn: () => void;
   isLoading?: boolean;
 }
-
-// External Link Banner Component
-interface ExternalLinkBannerProps {
-  isPremium: boolean;
-  onUpgrade: () => void;
-  onShowPremiumAlert: () => void;
-}
-
-const ExternalLinkBanner: React.FC<ExternalLinkBannerProps> = ({ isPremium, onUpgrade, onShowPremiumAlert }) => {
-  const { colors } = useTheme();
-  const styles = createHomeScreenStyles(colors);
-
-  const handleBannerPress = async () => {
-    // Premium restriction for games section
-    if (!isPremium) {
-      onShowPremiumAlert();
-      return;
-    }
-
-    try {
-      const url = 'https://37b802eb.epicplay.in/';
-      const supported = await Linking.canOpenURL(url);
-
-      if (supported) {
-        await Linking.openURL(url);
-      } else {
-        Alert.alert('Error', 'Cannot open the link. Please try again later.');
-      }
-    } catch (error) {
-      Logger.error('HomeScreen', 'Error opening external link:', error);
-      Alert.alert('Error', 'Failed to open the link. Please try again.');
-    }
-  };
-
-  return (
-    <View style={styles.earnCardsCarouselSection}>
-      <TouchableOpacity
-        style={styles.earnCardVerticalItem}
-        onPress={handleBannerPress}
-        activeOpacity={0.9}
-      >
-        <LinearGradient
-          colors={isPremium ? ['#4CAF50', '#45A049', '#2E7D32'] : ['#9E9E9E', '#757575', '#424242']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.earnCardGradient}
-        >
-          <View style={styles.earnCardContent}>
-            <View style={styles.earnCardTextContainer}>
-              <Text style={styles.earnCardTitle}>Play games to earn upto ₹10000</Text>
-              <Text style={styles.earnCardDescription}>
-                {isPremium ? 'Click to play exciting games and earn rewards!' : 'Premium feature - Upgrade to unlock games!'}
-              </Text>
-              <LinearGradient
-                colors={isPremium ? ['#FFD700', '#FFA500', '#FF8C00'] : ['#FFD700', '#FFA500', '#FF8C00']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.earnCardRewardBadge}
-              >
-                <Text style={styles.earnCardRewardText}>
-                  {isPremium ? 'Play Now!' : '👑 Premium Only'}
-                </Text>
-              </LinearGradient>
-            </View>
-            <View style={styles.earnCardIconContainer}>
-              <Gamepad2 size={32} color="#FFFFFF" />
-            </View>
-          </View>
-        </LinearGradient>
-      </TouchableOpacity>
-    </View>
-  );
-};
 
 // Survey Banner Component - Replaced Rush Play Games with CPX Research Surveys
 
@@ -1279,15 +1206,9 @@ const HomeScreen: React.FC = () => {
           <ScrollView style={styles.content} contentContainerStyle={[styles.scrollContent, {paddingBottom: contentPaddingBottom}]}>
 
             <CategoriesRow categories={[]} selectedCategory={null} onCategoryPress={handleCategoryPress} isLoading={true} />
-            {/* Rearranged banner sections: Carousel (first), Survey banners (second), Survey Offerwalls (third), Games section (fourth) */}
+            {/* Rearranged banner sections: Carousel (first), Survey Offerwalls (second) */}
             <BannerCarousel />
-            <SurveyBanner isPremium={isPremium} onUpgrade={() => navigation.navigate('PremiumUser' as never)} renderCPXAtRoot={true} />
             <SurveyOfferwallSection />
-            <ExternalLinkBanner
-              isPremium={isPremium}
-              onUpgrade={() => navigation.navigate('PremiumUser' as never)}
-              onShowPremiumAlert={() => setShowPremiumUpgradeAlert(true)}
-            />
             <EarnCardsRow onWatchAndEarn={handleWatchAndEarn} onInstallToEarn={handleInstallToEarn} isLoading={true} />
             <View style={styles.skeletonContainer}>
               {Array(6).fill(0).map((_, index) => <PostItemSkeleton key={`skeleton-${index}`} />)}
@@ -1389,15 +1310,9 @@ const HomeScreen: React.FC = () => {
               />
 
               <CategoriesRow categories={displayCategories} selectedCategory={selectedCategoryState} onCategoryPress={handleCategoryPress} isLoading={categoriesLoading} />
-              {/* Rearranged banner sections: Carousel (first), Survey banners (second), Survey Offerwalls (third), Games section (fourth) */}
+              {/* Rearranged banner sections: Carousel (first), Survey Offerwalls (second) */}
               <BannerCarousel onBannerPress={handleBannerPress} />
-              <SurveyBanner isPremium={isPremium} onUpgrade={() => navigation.navigate('PremiumUser' as never)} renderCPXAtRoot={true} />
               <SurveyOfferwallSection />
-              <ExternalLinkBanner
-                isPremium={isPremium}
-                onUpgrade={() => navigation.navigate('PremiumUser' as never)}
-                onShowPremiumAlert={() => setShowPremiumUpgradeAlert(true)}
-              />
               <EarnCardsRow onWatchAndEarn={handleWatchAndEarn} onInstallToEarn={handleInstallToEarn} />
             </>
           )}

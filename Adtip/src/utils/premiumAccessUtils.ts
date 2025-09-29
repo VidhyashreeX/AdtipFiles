@@ -31,7 +31,15 @@ export interface PremiumAccessOptions {
 export const checkPremiumAccess = (options: PremiumAccessOptions): PremiumAccessResult => {
   const { feature, isPremium, showAlert = false, customMessage } = options;
 
-  // Premium users always have access
+  // Chat is available for all users (premium and non-premium)
+  if (feature === 'chat') {
+    return {
+      hasAccess: true,
+      shouldShowUpgradeModal: false,
+    };
+  }
+
+  // Premium users always have access to other features
   if (isPremium) {
     return {
       hasAccess: true,
@@ -39,11 +47,11 @@ export const checkPremiumAccess = (options: PremiumAccessOptions): PremiumAccess
     };
   }
 
-  // Non-premium users are restricted
+  // Non-premium users are restricted for other features (except chat)
   const featureMessages = {
     voice_call: 'Voice calling is available for premium users only. Upgrade to premium to make voice calls.',
     video_call: 'Video calling is available for premium users only. Upgrade to premium to make video calls.',
-    chat: 'Chat feature is available for premium users only. Upgrade to premium to start chatting.',
+    chat: 'Chat feature is available for all users.', // This won't be used since chat is always allowed
     survey: 'Survey participation is available for premium users only. Upgrade to premium to access high-paying surveys.',
     install_to_earn: 'Install to earn tasks are available for premium users only. Upgrade to premium to access high-paying tasks.',
     general: 'This feature is available for premium users only. Upgrade to premium to access all features.',

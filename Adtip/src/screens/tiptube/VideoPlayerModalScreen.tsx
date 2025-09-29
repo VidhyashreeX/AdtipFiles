@@ -89,6 +89,7 @@ const VideoPlayerModalScreen: React.FC = () => {
   const [isVideoLiked, setIsVideoLiked] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [autoRotationEnabled, setAutoRotationEnabled] = useState(true);
+  const [isVideoPaused, setIsVideoPaused] = useState(false);
 
   // Get comment count for preview
   const { data: commentCount = 0 } = useCommentCount({ videoId: video.id });
@@ -304,6 +305,9 @@ const VideoPlayerModalScreen: React.FC = () => {
   // Handle navigation to channel from channel section
   const handleNavigateToChannelFromSection = useCallback(() => {
     if (video?.channelId) {
+      // Pause the video before navigating to channel
+      setIsVideoPaused(true);
+      
       navigation.navigate('Channel', {
         channelId: String(video.channelId),
         channelData: {
@@ -335,7 +339,7 @@ const VideoPlayerModalScreen: React.FC = () => {
                   source={videoSource}
                   style={StyleSheet.absoluteFillObject}
                   controls={true}
-                  paused={false}
+                  paused={isVideoPaused}
                   resizeMode="contain"
                   onReadyForDisplay={() => setIsVideoReady(true)}
                   onError={(error) => {

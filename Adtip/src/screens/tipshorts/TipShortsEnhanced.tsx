@@ -56,6 +56,7 @@ import InshortsRewardPopup from '../../components/common/InshortsRewardPopup';
 import { useUserPremiumStatus } from '../../contexts/UserDataContext';
 import { useInshortsReward } from '../../hooks/useInshortsReward';
 import { TipShortsLogger } from '../../utils/logger';
+import { TipShortsAudioManager } from './components/TipShortsControls';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -412,6 +413,11 @@ const TipShortsEnhanced = () => {
       showLoginPromptForAction('view channels');
       return;
     }
+    
+    // Pause all videos before navigating to channel
+    const audioManager = TipShortsAudioManager.getInstance();
+    audioManager.pauseAllVideos();
+    
     navigation.navigate('Channel', {
       channelId: channelData.id,
       channelData: {

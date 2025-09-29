@@ -96,9 +96,16 @@ export type MainNavigatorParamList = {
   };
   // Live streaming screen types
   LiveStream: {
-    mode?: 'host' | 'viewer';
+    userId: number;
+    isHost?: boolean;
     meetingId?: string;
+    token?: string;
     streamTitle?: string;
+  };
+  
+  // Live stream configuration screen
+  LiveStreamConfig: {
+    userId: number;
   };
   PlayToEarn: undefined;
   LudoGame: undefined;
@@ -140,6 +147,13 @@ export type MainNavigatorParamList = {
     };
   };
   Channel: { channelId: string | number };
+  ChannelProfile: {
+    channelId: string;
+    channelName: string;
+    avatar?: string;
+    isVerified?: boolean;
+    createdBy?: number;
+  };
   MyChannel: undefined;
   YourChannel: undefined;
   FollowedChannel: undefined;

@@ -26,7 +26,7 @@ import {
 
 // Components
 import { TipShortsDataProvider } from './components/TipShortsDataProvider';
-import { TipShortsControlsProvider } from './components/TipShortsControls';
+import { TipShortsControlsProvider, TipShortsAudioManager } from './components/TipShortsControls';
 import { TipShortsGestureProvider } from './components/TipShortsGestureHandler';
 import { TipShortsRewardProvider } from './components/TipShortsRewardManager';
 import { TipShortsVideoList } from './components/TipShortsVideoList';
@@ -153,6 +153,10 @@ const TipShortsRefactored = () => {
 
   // Handle channel navigation
   const handleChannelNavigation = useCallback((channelData: { id: string; name: string; avatar?: string }) => {
+    // Pause all videos before navigating to channel
+    const audioManager = TipShortsAudioManager.getInstance();
+    audioManager.pauseAllVideos();
+    
     navigation.navigate('Channel', { channelId: channelData.id });
   }, [navigation]);
 
