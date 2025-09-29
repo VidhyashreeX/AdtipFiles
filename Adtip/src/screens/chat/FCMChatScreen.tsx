@@ -28,6 +28,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useFCMChat } from '../../contexts/FCMChatContext';
 import { useWallet } from '../../hooks/useWallet';
+import { useCustomBackHandler } from '../../hooks/useCustomBackHandler';
 import { Message } from '../../services/FCMChatServiceLocal';
 import { RealTimeMessageHandler, useRealTimeMessages } from '../../components/chat/RealTimeMessageHandler';
 import { COLORS } from '../../constants/colors';
@@ -255,6 +256,13 @@ const FCMChatScreen: React.FC = () => {
   } = useFCMChat();
 
   const { participantId, participantName } = route.params;
+  
+  // Handle hardware back button navigation
+  const handleCustomBack = useCustomBackHandler({
+    screenType: 'chat',
+    fallbackRoute: 'Home'
+  });
+
   const [messageText, setMessageText] = useState('');
   const [sending, setSending] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -322,7 +330,7 @@ const FCMChatScreen: React.FC = () => {
     try {
       console.log('[FCMChatScreen] Initiating voice call to:', participantName);
       const callController = CallController.getInstance();
-      const success = await callController.startCall(participantId, participantName, 'audio');
+      const success = await callController.startCall(participantId, participantName, 'voice');
 
       if (success) {
         console.log('[FCMChatScreen] Voice call initiated successfully');

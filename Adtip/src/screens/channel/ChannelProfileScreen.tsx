@@ -11,6 +11,8 @@ import {
   Alert,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { MainNavigatorParamList } from '../../types/navigation';
 import Icon from 'react-native-vector-icons/Feather';
 import { Phone, Video, MessageCircle, UserPlus, UserMinus, Share2 } from 'lucide-react-native';
 import LinearGradient from 'react-native-linear-gradient';
@@ -50,8 +52,10 @@ interface RouteParams {
   createdBy?: number;
 }
 
+type ChannelProfileNavigationProp = NativeStackNavigationProp<MainNavigatorParamList, 'ChannelProfile'>;
+
 const ChannelProfileScreen: React.FC = () => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<ChannelProfileNavigationProp>();
   const route = useRoute();
   const { colors, isDarkMode } = useTheme();
   const { user, isGuest } = useAuth();
@@ -180,103 +184,60 @@ const ChannelProfileScreen: React.FC = () => {
   const handleVoiceCall = useCallback(async () => {
     if (!profile) return;
 
-    const accessResult = checkPremiumAccess({
-      feature: 'voice_call',
-      isPremium,
-      userId: user?.id,
-    });
-
-    logPremiumAccessAttempt(
-      'voice_call',
-      isPremium,
-      user?.id,
-      { channelId: profile.id, channelName: profile.name }
-    );
-
-    if (!accessResult.hasAccess) {
-      setPremiumFeature('voice_call');
-      setShowPremiumModal(true);
-      return;
-    }
-
+    // Allow all users to make voice calls
     try {
       const callController = CallController.getInstance();
-      await callController.initiateCall(
-        profile.id,
-        profile.name,
-        'voice' as CallType
+      const success = await callController.startCall(
+        profile.id.toString(),
+        profile.name || 'Unknown',
+        'voice'
       );
+
+      if (success) {
+        console.log('[ChannelProfile] Voice call initiated successfully');
+      } else {
+        Alert.alert('Call Failed', 'Unable to start voice call. Please try again.');
+      }
     } catch (error) {
       console.error('[ChannelProfile] Voice call error:', error);
       Alert.alert('Call Failed', 'Unable to start voice call. Please try again.');
     }
-  }, [profile, isPremium, user?.id]);
+  }, [profile]);
 
   // Handle video call
   const handleVideoCall = useCallback(async () => {
     if (!profile) return;
 
-    const accessResult = checkPremiumAccess({
-      feature: 'video_call',
-      isPremium,
-      userId: user?.id,
-    });
-
-    logPremiumAccessAttempt(
-      'video_call',
-      isPremium,
-      user?.id,
-      { channelId: profile.id, channelName: profile.name }
-    );
-
-    if (!accessResult.hasAccess) {
-      setPremiumFeature('video_call');
-      setShowPremiumModal(true);
-      return;
-    }
-
+    // Allow all users to make video calls
     try {
       const callController = CallController.getInstance();
-      await callController.initiateCall(
-        profile.id,
-        profile.name,
-        'video' as CallType
+      const success = await callController.startCall(
+        profile.id.toString(),
+        profile.name || 'Unknown',
+        'video'
       );
+
+      if (success) {
+        console.log('[ChannelProfile] Video call initiated successfully');
+      } else {
+        Alert.alert('Call Failed', 'Unable to start video call. Please try again.');
+      }
     } catch (error) {
       console.error('[ChannelProfile] Video call error:', error);
       Alert.alert('Call Failed', 'Unable to start video call. Please try again.');
     }
-  }, [profile, isPremium, user?.id]);
+  }, [profile]);
 
   // Handle chat navigation
   const handleChat = useCallback(() => {
     if (!profile) return;
 
-    const accessResult = checkPremiumAccess({
-      feature: 'chat',
-      isPremium,
-      userId: user?.id,
-    });
-
-    logPremiumAccessAttempt(
-      'chat',
-      isPremium,
-      user?.id,
-      { channelId: profile.id, channelName: profile.name }
-    );
-
-    if (!accessResult.hasAccess) {
-      setPremiumFeature('chat');
-      setShowPremiumModal(true);
-      return;
-    }
-
-    // Navigate to chat screen
-    navigation.navigate('FCMChat' as never, {
+    // Allow all users to chat
+    navigation.navigate('FCMChat', {
       participantId: profile.id.toString(),
       participantName: profile.name
     });
-  }, [profile, isPremium, user?.id, navigation]);
+  }, [profile, navigation]);
 
   // Handle share
   const handleShare = useCallback(async () => {
@@ -369,7 +330,6 @@ const ChannelProfileScreen: React.FC = () => {
             <ProfileFastImage
               source={profile.profile_image ? { uri: profile.profile_image } : undefined}
               style={styles.avatar}
-              fallbackText={profile.name.charAt(0).toUpperCase()}
             />
             {isOnline && (
               <View style={[styles.onlineIndicator, { backgroundColor: colors.success }]} />

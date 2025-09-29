@@ -180,6 +180,8 @@ export type MainNavigatorParamList = {
   TestCall: undefined;
   UserPremiumPlans: undefined;
   SubscriptionScreen: undefined;
+  PremiumBenefitsScreen: undefined;
+  PremiumPlansScreen: undefined;
   ContentCreatorSubscriptionScreen: undefined;
   PremiumUser: undefined;
   ContentCreatorPremium: undefined;

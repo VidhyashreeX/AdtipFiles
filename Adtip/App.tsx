@@ -918,11 +918,11 @@ function App(): React.JSX.Element {
                               {/* Theme test modal for debugging dark mode issues (only in debug builds) */}
                               <ThemeTestModal />
 
-                              {/* CallKeep test buttons for triggering native UI (only in debug builds) */}
-                              <CallKeepTestButtons />
+                              {/* CallKeep test buttons for triggering native UI (hidden per user request) */}
+                              {/* <CallKeepTestButtons /> */}
 
-                              {/* Debug buttons list for comprehensive testing (only in debug builds) */}
-                              <DebugButtonsList />
+                              {/* Debug buttons list for comprehensive testing (hidden per user request) */}
+                              {/* <DebugButtonsList /> */}
                                 </GestureHandlerRootView>
                               </CallEndModalProvider>
                             </SidebarProvider>

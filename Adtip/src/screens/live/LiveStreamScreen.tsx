@@ -793,7 +793,7 @@ const createLiveStreamStyles = (colors: any, isDarkMode: boolean, insets: any) =
   setupTitle: {
     fontSize: 28,
     fontWeight: '700',
-    color: colors.text,
+    color: colors.text?.primary || colors.text || (isDarkMode ? '#FFFFFF' : '#000000'),
     textAlign: 'center',
     marginBottom: 40,
   },
@@ -806,7 +806,7 @@ const createLiveStreamStyles = (colors: any, isDarkMode: boolean, insets: any) =
   label: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.text,
+    color: colors.text?.primary || colors.text || (isDarkMode ? '#FFFFFF' : '#000000'),
     marginBottom: 8,
   },
   textInput: {
@@ -815,7 +815,7 @@ const createLiveStreamStyles = (colors: any, isDarkMode: boolean, insets: any) =
     borderRadius: 12,
     padding: 15,
     fontSize: 16,
-    color: colors.text,
+    color: colors.text?.primary || colors.text || (isDarkMode ? '#FFFFFF' : '#000000'),
     backgroundColor: colors.surface,
   },
   switchContainer: {
@@ -833,12 +833,12 @@ const createLiveStreamStyles = (colors: any, isDarkMode: boolean, insets: any) =
   balanceText: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.text,
+    color: colors.text?.primary || colors.text || (isDarkMode ? '#FFFFFF' : '#000000'),
     marginBottom: 4,
   },
   costText: {
     fontSize: 14,
-    color: colors.textSecondary,
+    color: colors.text?.secondary || colors.textSecondary || (isDarkMode ? '#CCCCCC' : '#666666'),
   },
   startButton: {
     backgroundColor: colors.primary,
@@ -955,7 +955,7 @@ const createLiveStreamStyles = (colors: any, isDarkMode: boolean, insets: any) =
   tipsTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.text,
+    color: colors.text?.primary || colors.text || (isDarkMode ? '#FFFFFF' : '#000000'),
     marginBottom: 10,
   },
   tipsList: {
@@ -968,7 +968,7 @@ const createLiveStreamStyles = (colors: any, isDarkMode: boolean, insets: any) =
   },
   tipText: {
     fontSize: 14,
-    color: colors.text,
+    color: colors.text?.primary || colors.text || (isDarkMode ? '#FFFFFF' : '#000000'),
     marginLeft: 6,
     flex: 1,
   },
@@ -1007,7 +1007,7 @@ const createLiveStreamStyles = (colors: any, isDarkMode: boolean, insets: any) =
   headerTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: colors.text.primary || colors.text,
+    color: colors.text?.primary || colors.text || (isDarkMode ? '#FFFFFF' : '#000000'),
   },
 
   // VideoSDK-specific styles
@@ -1083,7 +1083,7 @@ const createLiveStreamStyles = (colors: any, isDarkMode: boolean, insets: any) =
   },
   statusText: {
     fontSize: 12,
-    color: colors.textSecondary,
+    color: colors.text?.secondary || colors.textSecondary || (isDarkMode ? '#CCCCCC' : '#666666'),
     textAlign: 'center',
     marginTop: 4,
   },

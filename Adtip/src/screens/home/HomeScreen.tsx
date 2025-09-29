@@ -27,7 +27,7 @@ import { InfiniteData } from '@tanstack/react-query';
 import { Gamepad2, WifiOff, Dices, Mail, MessageCircle, Search, CreditCard } from 'lucide-react-native';
 import PostWithComments from '../../components/home/PostWithComments';
 import { FeedFlatList } from '../../components/common/OptimizedFlatList';
-import { CPXResearchProvider as CPXResearchComponent } from '../../components/home/SurveyBanner';
+import SurveyBanner from '../../components/home/SurveyBanner';
 import { CPXResearchProvider } from '../../contexts/CPXResearchContext';
 import StatusStoriesRow, { StatusUser, StatusItem } from '../../components/home/StatusStoriesRow';
 import ActiveStreamsRow from '../../components/home/ActiveStreamsRow';
@@ -1206,9 +1206,9 @@ const HomeScreen: React.FC = () => {
           <ScrollView style={styles.content} contentContainerStyle={[styles.scrollContent, {paddingBottom: contentPaddingBottom}]}>
 
             <CategoriesRow categories={[]} selectedCategory={null} onCategoryPress={handleCategoryPress} isLoading={true} />
-            {/* Rearranged banner sections: Carousel (first), Survey Offerwalls (second) */}
+            {/* Rearranged banner sections: Carousel (first), Survey Banner (kept), Survey Offerwalls (hidden per user request) */}
             <BannerCarousel />
-            <SurveyOfferwallSection />
+            {/* <SurveyOfferwallSection /> */}
             <EarnCardsRow onWatchAndEarn={handleWatchAndEarn} onInstallToEarn={handleInstallToEarn} isLoading={true} />
             <View style={styles.skeletonContainer}>
               {Array(6).fill(0).map((_, index) => <PostItemSkeleton key={`skeleton-${index}`} />)}
@@ -1248,14 +1248,7 @@ const HomeScreen: React.FC = () => {
     <CPXResearchProvider>
       <ScreenTransition skipAnimation={true}>
         <View style={[styles.container, {backgroundColor: colors.background}]}>
-          {/* CPX Research Component at root level for full-screen modal */}
-          <CPXResearchComponent
-            isPremium={isPremium}
-            onRewardEarned={(amount, isPremium) => {
-              // Handle reward earned - could trigger wallet refresh, show notification, etc.
-              console.log('Survey reward earned:', amount, isPremium);
-            }}
-          />
+          {/* CPX Research Component at root level for full-screen modal - using provider only */}
 
           <Header
             title=""
@@ -1284,8 +1277,8 @@ const HomeScreen: React.FC = () => {
           }}
           ListHeaderComponent={() => (
             <>
-              {/* Status Stories Row - Instagram-like stories at the top */}
-              {!isGuest && (
+              {/* Status Stories Row - Hidden per user request */}
+              {/* {!isGuest && (
                 <StatusStoriesRow
                   statuses={statusUsers}
                   currentUserId={user?.id}
@@ -1295,24 +1288,37 @@ const HomeScreen: React.FC = () => {
                   onViewStatus={handleViewStatus}
                   isLoading={statusLoading}
                 />
-              )}
+              )} */}
 
               {/* Active Live Streams Row - Show ongoing live streams */}
               <ActiveStreamsRow
                 onJoinStream={(meetingId, streamTitle) => {
-                  navigation.navigate('LiveStream' as never, {
+                  navigation.navigate('LiveStream', {
                     meetingId,
                     isHost: false,
                     streamTitle,
                     mode: 'join'
-                  } as never);
+                  });
                 }}
               />
 
               <CategoriesRow categories={displayCategories} selectedCategory={selectedCategoryState} onCategoryPress={handleCategoryPress} isLoading={categoriesLoading} />
-              {/* Rearranged banner sections: Carousel (first), Survey Offerwalls (second) */}
+              {/* Rearranged banner sections: Carousel (first), Survey Banner (restored), Survey Offerwalls (hidden per user request) */}
               <BannerCarousel onBannerPress={handleBannerPress} />
-              <SurveyOfferwallSection />
+              
+              {/* CPX Research Survey Banner - Restored per user request */}
+              <SurveyBanner
+                isPremium={isPremium}
+                onUpgrade={() => {
+                  navigation.navigate('PremiumBenefitsScreen' as never);
+                }}
+                onRewardEarned={(amount: number, isPremium: boolean) => {
+                  console.log('Survey banner reward earned:', amount, isPremium);
+                }}
+                renderCPXAtRoot={true}
+              />
+              
+              {/* <SurveyOfferwallSection /> */}
               <EarnCardsRow onWatchAndEarn={handleWatchAndEarn} onInstallToEarn={handleInstallToEarn} />
             </>
           )}
