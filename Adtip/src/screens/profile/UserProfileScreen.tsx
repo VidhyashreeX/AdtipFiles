@@ -65,10 +65,10 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
   const userIdFromParams = route.params && typeof route.params === 'object' && 'userId' in route.params ? Number(route.params.userId) : undefined;
   // Fix NaN issue: if userIdFromParams is undefined (own profile), use currentUser.id
   const [userId, setUserId] = useState<number>(
-    userIdFromParams && !isNaN(userIdFromParams)
-      ? userIdFromParams
-      : props.userId && !isNaN(props.userId)
-        ? props.userId
+    props.userId && !isNaN(props.userId)
+      ? props.userId
+      : userIdFromParams && !isNaN(userIdFromParams)
+        ? userIdFromParams
         : currentUser?.id ?? 0
   );
   const [user, setUser] = useState<any>(null);
@@ -105,14 +105,19 @@ const UserProfileScreen: React.FC<UserProfileScreenProps> = (props) => {
   });
 
   useEffect(() => {
-    // Handle userId updates from navigation params
-    if (userIdFromParams && !isNaN(userIdFromParams) && userIdFromParams !== userId) {
+    // Prioritize props.userId over navigation params (important for modal usage)
+    if (props.userId && !isNaN(props.userId) && props.userId !== userId) {
+      console.log('[UserProfileScreen] Updating userId from props:', props.userId);
+      setUserId(props.userId);
+    } else if (userIdFromParams && !isNaN(userIdFromParams) && userIdFromParams !== userId) {
+      console.log('[UserProfileScreen] Updating userId from params:', userIdFromParams);
       setUserId(userIdFromParams);
-    } else if (!userIdFromParams && currentUser?.id && userId !== currentUser.id) {
-      // If no userId in params (own profile), use currentUser.id
+    } else if (!userIdFromParams && !props.userId && currentUser?.id && userId !== currentUser.id) {
+      // If no userId in params or props (own profile), use currentUser.id
+      console.log('[UserProfileScreen] Updating userId to current user:', currentUser.id);
       setUserId(currentUser.id);
     }
-  }, [userIdFromParams, currentUser?.id, userId]);
+  }, [props.userId, userIdFromParams, currentUser?.id, userId]);
 
   // Handle call initiation with billing check (from TipCallScreenSimple)
   const handleStartCall = useCallback(

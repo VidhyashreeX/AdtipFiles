@@ -290,6 +290,7 @@ const Sidebar: React.FC = () => {
   const menuItems: MenuItemProps[] = useMemo(() => [
     {icon: 'home', label: 'Home', screen: 'TabHome'},
     {icon: 'user', label: 'View Profile', screen: 'Profile'},
+    {icon: 'phone', label: 'Tip Call', screen: 'TipCall'},
     {icon: 'users', label: 'Followers', screen: 'FollowersFollowing', customAction: () => navigateToFollowersFollowing('followers'), uniqueKey: 'followers'},
     {icon: 'user-plus', label: 'Following', screen: 'FollowersFollowing', customAction: () => navigateToFollowersFollowing('following'), uniqueKey: 'following'},
     {icon: 'indian-rupee', label: 'My Earnings', screen: 'Earnings'},

@@ -10,7 +10,7 @@ import {useNavigation} from '@react-navigation/native';
 
 import HomeScreen from '../screens/home/HomeScreen';
 import TipTubeScreen from '../screens/tiptube/TipTubeScreen';
-import TipCallScreenSimple from '../screens/tipcall/TipCallScreenSimple';
+import LiveStreamScreen from '../screens/livestream/LiveStreamScreen';
 import CreateContentModal from '../screens/content/CreateContentModal';
 import TipShortsEnhanced from '../screens/tipshorts/TipShortsEnhanced';
 
@@ -97,8 +97,8 @@ const TabNavigator = () => {
     <CirclePlay color={color} size={size} />
   );
 
-  const TipCallIcon = ({color, size}: {color: string, size: number}) => (
-    <Icon name="phone" color={color} size={size} />
+  const LiveStreamIcon = ({color, size}: {color: string, size: number}) => (
+    <Icon name="video" color={color} size={size} />
   );
 
   const ProfileIcon = ({color, size}: {color: string, size: number}) => (
@@ -128,7 +128,7 @@ const TabNavigator = () => {
   // Memoize tab press listeners for instant navigation
   const homeTabPress = useCallback(handleInstantNavigation('Home'), [handleInstantNavigation]);
   const tipTubeTabPress = useCallback(handleInstantNavigation('TipTube'), [handleInstantNavigation]);
-  const tipCallTabPress = useCallback(handleInstantNavigation('TipCall'), [handleInstantNavigation]);
+  const liveStreamTabPress = useCallback(handleInstantNavigation('LiveStream'), [handleInstantNavigation]);
   const profileTabPress = useCallback(handleInstantNavigation('Profile'), [handleInstantNavigation]);
 
   // Custom handler for TipShorts - navigate to fullscreen version
@@ -178,13 +178,13 @@ const TabNavigator = () => {
           }}
         />
         <Tab.Screen
-          name="TipCall"
-          component={TipCallScreenSimple}
+          name="LiveStream"
+          component={LiveStreamScreen}
           options={{
-            tabBarIcon: TipCallIcon,
+            tabBarIcon: LiveStreamIcon,
           }}
           listeners={{
-            tabPress: tipCallTabPress,
+            tabPress: liveStreamTabPress,
           }}
         />
         <Tab.Screen

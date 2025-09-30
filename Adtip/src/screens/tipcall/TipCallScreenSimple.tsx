@@ -540,9 +540,10 @@ const TipCallScreenSimple = () => {
   const [showUserProfileModal, setShowUserProfileModal] = useState(false)
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null)
   const openProfile = useCallback((uid: number) => {
+    console.log('[TipCallScreen] Opening profile for user ID:', uid, 'Current user ID:', user?.id)
     setSelectedUserId(uid)
     setShowUserProfileModal(true)
-  }, [])
+  }, [user?.id])
   // --------------------------------------------------
 
   // -------------- Blocklist Badge -------------------

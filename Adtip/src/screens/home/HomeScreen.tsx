@@ -1293,12 +1293,8 @@ const HomeScreen: React.FC = () => {
               {/* Active Live Streams Row - Show ongoing live streams */}
               <ActiveStreamsRow
                 onJoinStream={(meetingId, streamTitle) => {
-                  navigation.navigate('LiveStream', {
-                    meetingId,
-                    isHost: false,
-                    streamTitle,
-                    mode: 'join'
-                  });
+                  // Navigate to the LiveStream tab in the TabNavigator
+                  (navigation as any).navigate('LiveStream');
                 }}
               />
 

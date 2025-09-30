@@ -950,27 +950,36 @@ const TipShortsUploadScreen: React.FC = () => {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <Header 
         title="Create Short" 
-        showBackButton 
-        onBackPress={() => {
-          if (isUploading || isCompressing || isRecording) {
-            Alert.alert(
-              isRecording ? 'Recording in Progress' : 'Upload in Progress',
-              isRecording 
-                ? 'Are you sure you want to stop recording?' 
-                : 'Are you sure you want to cancel the upload?',
-              [
-                { text: isRecording ? 'Continue Recording' : 'Continue Upload', style: 'cancel' },
-                { 
-                  text: isRecording ? 'Stop Recording' : 'Cancel Upload', 
-                  style: 'destructive', 
-                  onPress: () => navigation.goBack() 
-                },
-              ],
-            );
-          } else {
-            navigation.goBack();
-          }
-        }}
+        showSearch={false}
+        showWallet={false}
+        showPremium={true}
+        leftComponent={
+          <TouchableOpacity
+            onPress={() => {
+              if (isUploading || isCompressing || isRecording) {
+                Alert.alert(
+                  isRecording ? 'Recording in Progress' : 'Upload in Progress',
+                  isRecording 
+                    ? 'Are you sure you want to stop recording?' 
+                    : 'Are you sure you want to cancel the upload?',
+                  [
+                    { text: isRecording ? 'Continue Recording' : 'Continue Upload', style: 'cancel' },
+                    { 
+                      text: isRecording ? 'Stop Recording' : 'Cancel Upload', 
+                      style: 'destructive', 
+                      onPress: () => navigation.goBack() 
+                    },
+                  ],
+                );
+              } else {
+                navigation.goBack();
+              }
+            }}
+            style={{ padding: 8, marginLeft: -8 }}
+          >
+            <Icon name="arrow-left" size={24} color={colors.text.primary} />
+          </TouchableOpacity>
+        }
       />
 
       <KeyboardAvoidingView 

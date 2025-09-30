@@ -159,10 +159,15 @@ const ContentCreatorPremiumApplicationScreen: React.FC = () => {
             <Award size={32} color="#000000" />
           </LinearGradient>
           <Text style={[styles.title, { color: colors.text.primary }]}>
-            Apply for Free Content Creator Premium
+            Eligibility for AdTip Free Premium 🎉
           </Text>
           <Text style={[styles.subtitle, { color: colors.text.secondary }]}>
-            Fill out the form below to apply for free Content Creator Premium. We'll review your application and get back to you.
+            To get 1 Month Free Premium, you must:{'\n\n'}
+            ✅ Have at least 10,000 followers on Instagram or YouTube{'\n\n'}
+            ✅ Create and post a video about AdTip on your Instagram or YouTube{'\n\n'}
+            ✅ Ensure the video gets at least 10,000 views on any one platform{'\n\n'}
+            ✅ Clearly mention AdTip and encourage your audience to join{'\n\n'}
+            👉 Once all conditions are met, you'll unlock 1 Month Free Premium on AdTip 🚀
           </Text>
         </View>
 

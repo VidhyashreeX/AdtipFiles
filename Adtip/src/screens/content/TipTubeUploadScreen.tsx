@@ -795,6 +795,14 @@ const TipTubeUploadScreen: React.FC = () => {
         showSearch={false}
         showWallet={false}
         showPremium={true}
+        leftComponent={
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={{ padding: 8, marginLeft: -8 }}
+          >
+            <Icon name="arrow-left" size={24} color={colors.text.primary} />
+          </TouchableOpacity>
+        }
       />
 
       <KeyboardAvoidingView 
