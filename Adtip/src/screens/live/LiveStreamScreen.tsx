@@ -408,11 +408,33 @@ const LiveStreamScreen: React.FC = () => {
 
     } catch (error) {
       Logger.error('LiveStreamScreen', 'Failed to start stream:', error);
-      Alert.alert(
-        'Stream Error',
-        'Failed to start live stream. Please try again.',
-        [{ text: 'OK' }]
-      );
+      
+      const errorMessage = (error as any)?.message || 'Unknown error occurred';
+      
+      // Check for specific VideoSDK errors
+      if (errorMessage.includes('Video streaming service is temporarily unavailable') || 
+          errorMessage.includes('Failed to start live stream')) {
+        Alert.alert(
+          'Service Configuration Issue',
+          'There is a temporary issue with the video streaming service. Our team has been notified and is working on a fix. Please try again in a few minutes.',
+          [
+            { text: 'Try Again', onPress: () => handleStartStream() },
+            { text: 'Cancel', style: 'cancel' }
+          ]
+        );
+      } else if (errorMessage.includes('missing meeting ID or token')) {
+        Alert.alert(
+          'Configuration Error',
+          'There was an issue setting up your stream. Please check your internet connection and try again.',
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert(
+          'Stream Error',
+          `Unable to start live stream: ${errorMessage}`,
+          [{ text: 'OK' }]
+        );
+      }
     } finally {
       setIsLoading(false);
     }

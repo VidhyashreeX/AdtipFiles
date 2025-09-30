@@ -65,25 +65,15 @@ class LiveStreamService {
     try {
       logVideoSDK('LiveStreamService', 'Creating live stream meeting...');
       
-      // Generate VideoSDK token
-      const tokenResponse = await fetch(`${process.env.API_BASE_URL}/api/generate-token/videosdk`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      }).then(res => res.json());
+      // Generate VideoSDK token using ApiService (has proper logging and error handling)
+      const tokenResponse = await ApiService.generateVideoSDKToken();
       
       if (!tokenResponse?.token) {
         throw new Error('Failed to generate VideoSDK token');
       }
       
-      // Create meeting with live streaming configuration
-      const meetingResponse = await fetch(`${process.env.API_BASE_URL}/api/create-meeting/videosdk`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          token: tokenResponse.token,
-          region: 'us001'
-        })
-      }).then(res => res.json());
+      // Create meeting with live streaming configuration using ApiService
+      const meetingResponse = await ApiService.createVideoSDKMeeting(tokenResponse.token, 'us001');
       
       if (!meetingResponse?.data?.roomId) {
         throw new Error('Failed to create VideoSDK meeting');
@@ -110,31 +100,15 @@ class LiveStreamService {
   /**
    * Start a new live stream with enhanced VideoSDK integration
    */
-  static async startStream(userId: number, meetingId: string, config: StreamConfig): Promise<LiveStreamResponse> {
+  static async startStream(userId: number, meetingId: string = '', config: StreamConfig): Promise<LiveStreamResponse> {
     try {
-      logVideoSDK('LiveStreamService', 'Starting enhanced live stream:', { userId, meetingId, config });
+      logVideoSDK('LiveStreamService', 'Starting enhanced live stream:', { userId, config });
 
-      // If no meeting ID provided, create a new one
-      let finalMeetingId = meetingId;
-      let streamToken = '';
-      
-      if (!meetingId) {
-        const meetingResult = await this.createLiveStreamMeeting();
-        if (!meetingResult.success) {
-          throw new Error(meetingResult.error || 'Failed to create meeting');
-        }
-        finalMeetingId = meetingResult.meetingId!;
-        streamToken = meetingResult.token!;
-      } else {
-        // Generate token for existing meeting
-        const tokenResponse = await ApiService.generateVideoSDKToken();
-        streamToken = tokenResponse.token;
-      }
-
-      // Start the live stream on backend
+      // Let the backend handle meeting creation and token generation internally
+      // Send empty string for meeting_id so backend creates its own
       const response = await ApiService.startLiveStream({
         user_id: userId,
-        meeting_id: finalMeetingId,
+        meeting_id: '', // Empty string - backend will auto-generate
         title: config.title,
         cost_per_minute: config.cost_per_minute,
         viewer_reward_per_minute: config.viewer_reward_per_minute || 0,
@@ -148,8 +122,7 @@ class LiveStreamService {
         message: 'Stream started successfully',
         data: {
           ...response.data,
-          meeting_id: finalMeetingId,
-          token: streamToken,
+          // The backend returns the actual meeting_id and token it created
           // Add streaming-specific data
           streaming_config: {
             hls_enabled: true,
@@ -162,9 +135,22 @@ class LiveStreamService {
 
     } catch (error) {
       logError('LiveStreamService', 'Failed to start enhanced stream', error);
+      
+      // Check for specific VideoSDK configuration errors
+      const errorMessage = (error as any)?.response?.data?.message || (error as any)?.message || 'Failed to start stream';
+      const errorData = (error as any)?.response?.data;
+      
+      // Handle VideoSDK 404 errors specifically
+      if (errorData?.error === 'Request failed with status code 404') {
+        return {
+          success: false,
+          message: 'Video streaming service is temporarily unavailable. Please try again later or contact support.'
+        };
+      }
+      
       return {
         success: false,
-        message: (error as any)?.response?.data?.message || (error as any)?.message || 'Failed to start stream'
+        message: errorMessage
       };
     }
   }
@@ -206,14 +192,14 @@ class LiveStreamService {
    */
   static async endStream(userId: number, meetingId: string): Promise<LiveStreamResponse> {
     try {
-      console.log('[LiveStreamService] Ending live stream:', { userId, meetingId });
+      logVideoSDK('LiveStreamService', 'Ending live stream:', { userId, meetingId });
 
       const response = await ApiService.endLiveStream({
         user_id: userId,
         meeting_id: meetingId
       });
 
-      console.log('[LiveStreamService] Stream ended successfully:', response);
+      logVideoSDK('LiveStreamService', 'Stream ended successfully:', response);
       return {
         success: true,
         message: 'Stream ended successfully',
@@ -221,7 +207,7 @@ class LiveStreamService {
       };
 
     } catch (error) {
-      console.error('[LiveStreamService] Failed to end stream:', error);
+      logError('LiveStreamService', 'Failed to end stream', error);
       return {
         success: false,
         message: (error as any)?.response?.data?.message || (error as any)?.message || 'Failed to end stream'
@@ -234,14 +220,14 @@ class LiveStreamService {
    */
   static async joinStream(userId: number, meetingId: string): Promise<LiveStreamResponse> {
     try {
-      console.log('[LiveStreamService] Joining live stream:', { userId, meetingId });
+      logVideoSDK('LiveStreamService', 'Joining live stream:', { userId, meetingId });
 
       const response = await ApiService.joinLiveStream({
         user_id: userId,
         meeting_id: meetingId
       });
 
-      console.log('[LiveStreamService] Joined stream successfully:', response);
+      logVideoSDK('LiveStreamService', 'Joined stream successfully:', response);
       return {
         success: true,
         message: 'Joined stream successfully',
@@ -249,7 +235,7 @@ class LiveStreamService {
       };
 
     } catch (error) {
-      console.error('[LiveStreamService] Failed to join stream:', error);
+      logError('LiveStreamService', 'Failed to join stream', error);
       return {
         success: false,
         message: (error as any)?.response?.data?.message || (error as any)?.message || 'Failed to join stream'
@@ -262,7 +248,7 @@ class LiveStreamService {
    */
   static async sendTip(userId: number, meetingId: string, tipData: TipData): Promise<LiveStreamResponse> {
     try {
-      console.log('[LiveStreamService] Sending tip:', { userId, meetingId, tipData });
+      logVideoSDK('LiveStreamService', 'Sending tip:', { userId, meetingId, tipData });
 
       const response = await ApiService.sendTip({
         user_id: userId,
@@ -271,7 +257,7 @@ class LiveStreamService {
         message: tipData.message || ''
       });
 
-      console.log('[LiveStreamService] Tip sent successfully:', response);
+      logVideoSDK('LiveStreamService', 'Tip sent successfully:', response);
       return {
         success: true,
         message: 'Tip sent successfully',
@@ -279,7 +265,7 @@ class LiveStreamService {
       };
 
     } catch (error) {
-      console.error('[LiveStreamService] Failed to send tip:', error);
+      logError('LiveStreamService', 'Failed to send tip', error);
       return {
         success: false,
         message: (error as any)?.response?.data?.message || (error as any)?.message || 'Failed to send tip'
@@ -292,12 +278,12 @@ class LiveStreamService {
    */
   static async getActiveStreams(page: number = 1, limit: number = 20): Promise<LiveStreamResponse> {
     try {
-      console.log('[LiveStreamService] Getting active streams:', { page, limit });
+      logVideoSDK('LiveStreamService', 'Getting active streams:', { page, limit });
 
       // Use getActiveStreams from ApiService properly
       const response = await ApiService.getActiveStreams({ page, limit });
 
-      console.log('[LiveStreamService] Retrieved active streams:', response);
+      logVideoSDK('LiveStreamService', 'Retrieved active streams:', response);
       
       // Handle the response structure properly
       if (response && response.data) {
@@ -315,7 +301,7 @@ class LiveStreamService {
       }
 
     } catch (error) {
-      console.error('[LiveStreamService] Failed to get active streams:', error);
+      logError('LiveStreamService', 'Failed to get active streams', error);
       return {
         success: false,
         message: (error as any)?.response?.data?.message || (error as any)?.message || 'Failed to get active streams'

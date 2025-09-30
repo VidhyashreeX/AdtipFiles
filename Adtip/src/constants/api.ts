@@ -5,7 +5,7 @@
 // Base URL for API calls
 export const API_BASE_URL = 'https://api.adtip.in';   // Production URL
 //export const API_BASE_URL = 'http://localhost:7082';   // Local Development URL
-//export const API_BASE_URL = 'http://10.63.249.8:7082';   // DEV URL
+//export const API_BASE_URL = 'http://192.168.1.6:7082';   // DEV URL
 //export const API_BASE_URL = 'https://api.adtip.in';   // Production URL
 //export const API_BASE_URL = 'http://10.215.83.1:7082';   // DEV URL
 //export const API_BASE_URL = 'http://192.168.0.104:7082';   // DEV URL
