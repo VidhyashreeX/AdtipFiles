@@ -249,16 +249,16 @@ const LiveStreamScreen: React.FC<LiveStreamScreenProps> = ({
       if (response.success && response.data && response.data.streams && Array.isArray(response.data.streams)) {
         // Transform live streams data to our UI format
         const liveStreams = response.data.streams.map((stream: any): LiveStream => ({
-          id: stream.id?.toString() || Math.random().toString(),
+          id: stream.meeting_id || stream.id?.toString() || Math.random().toString(), // Use meeting_id as the primary ID
           title: stream.title || 'Live Stream',
           streamerName: stream.streamer_name || 'Anonymous',
-          thumbnail: stream.thumbnail || 'https://images.unsplash.com/photo-1542751371-adc38448a05e',
+          thumbnail: stream.profile_image || stream.thumbnail || 'https://images.unsplash.com/photo-1542751371-adc38448a05e',
           viewerCount: stream.viewer_count || 0,
           duration: 'LIVE',
-          streamType: stream.cost_per_minute > 0 ? 'promote' : 'free',
+          streamType: parseFloat(stream.cost_per_minute) > 0 ? 'promote' : 'free',
           isLive: true,
-          pricePerMinute: stream.cost_per_minute || undefined,
-          user_id: stream.user_id,
+          pricePerMinute: parseFloat(stream.cost_per_minute) || undefined,
+          user_id: stream.streamer_id || stream.user_id,
           user_name: stream.streamer_name,
         }));
         
@@ -291,16 +291,32 @@ const LiveStreamScreen: React.FC<LiveStreamScreenProps> = ({
       return;
     }
 
-    // TODO: Navigate to live stream player or join stream
-    Alert.alert(
-      'Join Stream',
-      `Join ${stream.streamerName}'s live stream: ${stream.title}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Join', onPress: () => console.log('Joining stream:', stream.id) }
-      ]
-    );
-  }, [user]);
+    try {
+      console.log('[LiveStreamScreen] Joining live stream:', stream.id);
+      // Get the root navigation to avoid tab navigation conflicts
+      const rootNavigation = navigation.getParent();
+      if (rootNavigation) {
+        console.log('[LiveStreamScreen] Using root navigation to join stream');
+        (rootNavigation as any).navigate('LiveStream', { 
+          mode: 'viewer',
+          meetingId: stream.id,
+          streamTitle: stream.title,
+          streamerName: stream.streamerName
+        });
+      } else {
+        console.log('[LiveStreamScreen] Using direct navigation to join stream');
+        (navigation as any).navigate('LiveStream', { 
+          mode: 'viewer',
+          meetingId: stream.id,
+          streamTitle: stream.title,
+          streamerName: stream.streamerName
+        });
+      }
+    } catch (error) {
+      console.error('[LiveStreamScreen] Navigation error to join stream:', error);
+      Alert.alert('Error', 'Failed to join the live stream. Please try again.');
+    }
+  }, [user, navigation]);
 
   const handleStartStream = useCallback(() => {
     if (!user) {
