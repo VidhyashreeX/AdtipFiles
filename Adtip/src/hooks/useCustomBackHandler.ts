@@ -38,7 +38,7 @@ export const useCustomBackHandler = (options: BackHandlerOptions = {}) => {
         // For call screens, navigate based on source or to contacts/home
         if (navigationSource) {
           if (navigationSource === 'contacts' || navigationSource === 'ContactsList') {
-            navigation.navigate('TipCallScreenSimple' as never);
+            navigation.navigate('TipCall' as never);
           } else if (navigationSource === 'profile' || navigationSource === 'UserProfile') {
             navigation.goBack();
           } else if (navigationSource === 'chat') {
@@ -47,8 +47,8 @@ export const useCustomBackHandler = (options: BackHandlerOptions = {}) => {
             navigation.navigate(navigationSource as never);
           }
         } else {
-          // Default: go to contacts if in a call, otherwise home
-          navigation.navigate('TipCallScreenSimple' as never);
+          // Default: go to TipCall stack screen, not tab
+          navigation.navigate('TipCall' as never);
         }
         return true;
       }
@@ -57,7 +57,7 @@ export const useCustomBackHandler = (options: BackHandlerOptions = {}) => {
         // For profile screens, check navigation source
         if (navigationSource) {
           if (navigationSource === 'call' || navigationSource === 'TipCall') {
-            navigation.navigate('TipCallScreenSimple' as never);
+            navigation.navigate('TipCall' as never);
           } else if (navigationSource === 'chat' || navigationSource === 'ChatScreen') {
             navigation.goBack();
           } else if (navigationSource === 'search' || navigationSource === 'SearchResults') {

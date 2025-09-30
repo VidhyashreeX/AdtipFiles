@@ -175,6 +175,9 @@ const Sidebar: React.FC = () => {
       'TipTubeUpload': 'TabHome', 'TipShortsUpload': 'TipShorts', 'PromotePost': 'TabHome',
       'PlayToEarn': 'PlayToEarn', 'WatchToEarn': 'WatchToEarn', 'AdPassbook': 'AdPassbook',
       'FollowersFollowing': 'FollowersFollowing',
+      // Add TipCall screen mappings
+      'TipCall': 'TipCall', 'TipCallSimple': 'TipCall', 'TipCallScreenSimple': 'TipCall',
+      'MissedCalls': 'TipCall', 'Meeting': 'TipCall', 'TestCall': 'TipCall',
     };
     return screenMapping[screenName] || 'TabHome';
   }, []);

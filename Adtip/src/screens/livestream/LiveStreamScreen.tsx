@@ -11,6 +11,7 @@ import {
   RefreshControl,
   Alert,
   Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
@@ -20,6 +21,11 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useWallet } from '../../contexts/WalletContext';
 import Header from '../../components/common/Header';
 import LinearGradient from 'react-native-linear-gradient';
+
+import ApiService from '../../services/ApiService';
+import LiveStreamService from '../../services/LiveStreamService';
+import { HOME_ENDPOINTS } from '../../constants/apiEndpoints';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -35,64 +41,40 @@ interface LiveStream {
   streamType: StreamType;
   isLive: boolean;
   pricePerMinute?: number;
+  user_id?: number;
+  user_name?: string;
+  user_profile_image?: string;
+  media_url?: string;
+  created_at?: string;
 }
 
-// Sample stream data
-const sampleStreams: LiveStream[] = [
-  {
-    id: '1',
-    title: 'Epic Gaming Marathon - Latest AAA Games!',
-    streamerName: 'GamerPro2024',
-    thumbnail: 'https://images.unsplash.com/photo-1542751371-adc38448a05e',
-    viewerCount: 12453,
-    duration: '2:45:30',
-    streamType: 'free',
+// Transform post data to stream data
+const transformPostToStream = (post: any): LiveStream => {
+  // Determine stream type based on post properties
+  let streamType: StreamType = 'free';
+  if (post.is_promoted) {
+    streamType = 'promote';
+  } else if (post.is_premium) {
+    streamType = 'celebrate';
+  }
+
+  return {
+    id: post.id?.toString() || Math.random().toString(),
+    title: post.title || post.content || 'Live Stream',
+    streamerName: post.user_name || 'Anonymous',
+    thumbnail: post.media_url || post.user_profile_image || 'https://images.unsplash.com/photo-1542751371-adc38448a05e',
+    viewerCount: Math.floor(Math.random() * 10000) + 100, // Random viewer count for demo
+    duration: 'LIVE',
+    streamType,
     isLive: true,
-  },
-  {
-    id: '2',
-    title: 'New iPhone 15 Pro Max Unboxing & Review',
-    streamerName: 'TechReviews',
-    thumbnail: 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9',
-    viewerCount: 8924,
-    duration: '45:12',
-    streamType: 'promote',
-    isLive: true,
-    pricePerMinute: 2,
-  },
-  {
-    id: '3',
-    title: '🎉 1 Million Subscribers Celebration Party! 🎉',
-    streamerName: 'CelebQueen',
-    thumbnail: 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30',
-    viewerCount: 25673,
-    duration: '3:12:45',
-    streamType: 'celebrate',
-    isLive: true,
-    pricePerMinute: 2,
-  },
-  {
-    id: '4',
-    title: 'Master Chef Cooking Tutorial - Italian Cuisine',
-    streamerName: 'ChefMario',
-    thumbnail: 'https://images.unsplash.com/photo-1556909114-f6e7ad7d3136',
-    viewerCount: 5432,
-    duration: '1:20:15',
-    streamType: 'free',
-    isLive: true,
-  },
-  {
-    id: '5',
-    title: 'Latest Gadgets Review & Giveaway!',
-    streamerName: 'TechGuru',
-    thumbnail: 'https://images.unsplash.com/photo-1518717758536-85ae29035b6d',
-    viewerCount: 15234,
-    duration: '2:10:30',
-    streamType: 'promote',
-    isLive: false,
-    pricePerMinute: 2,
-  },
-];
+    pricePerMinute: streamType === 'promote' ? 2 : streamType === 'celebrate' ? 3 : undefined,
+    user_id: post.user_id,
+    user_name: post.user_name,
+    user_profile_image: post.user_profile_image,
+    media_url: post.media_url,
+    created_at: post.created_at,
+  };
+};
 
 const streamTypeConfig = {
   free: {
@@ -237,9 +219,10 @@ const LiveStreamScreen: React.FC<LiveStreamScreenProps> = ({
   const { colors, isDarkMode } = useTheme();
   const { user } = useAuth();
   const { balance } = useWallet();
+  const insets = useSafeAreaInsets();
 
   const [activeFilter, setActiveFilter] = useState<StreamType | 'all'>('all');
-  const [streams, setStreams] = useState<LiveStream[]>(sampleStreams);
+  const [streams, setStreams] = useState<LiveStream[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -258,11 +241,35 @@ const LiveStreamScreen: React.FC<LiveStreamScreenProps> = ({
 
   const loadStreams = useCallback(async () => {
     try {
-      // TODO: Replace with actual API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      setStreams(sampleStreams);
+      setLoading(true);
+      
+      // Use LiveStreamService to get active streams from the proper API endpoint
+      const response = await LiveStreamService.getActiveStreams(1, 20);
+      
+      if (response.success && response.data && response.data.streams && Array.isArray(response.data.streams)) {
+        // Transform live streams data to our UI format
+        const liveStreams = response.data.streams.map((stream: any): LiveStream => ({
+          id: stream.id?.toString() || Math.random().toString(),
+          title: stream.title || 'Live Stream',
+          streamerName: stream.streamer_name || 'Anonymous',
+          thumbnail: stream.thumbnail || 'https://images.unsplash.com/photo-1542751371-adc38448a05e',
+          viewerCount: stream.viewer_count || 0,
+          duration: 'LIVE',
+          streamType: stream.cost_per_minute > 0 ? 'promote' : 'free',
+          isLive: true,
+          pricePerMinute: stream.cost_per_minute || undefined,
+          user_id: stream.user_id,
+          user_name: stream.streamer_name,
+        }));
+        
+        setStreams(liveStreams);
+      } else {
+        console.warn('No active streams found');
+        setStreams([]);
+      }
     } catch (error) {
-      console.error('Failed to load streams:', error);
+      console.error('Failed to load active streams:', error);
+      setStreams([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -301,16 +308,22 @@ const LiveStreamScreen: React.FC<LiveStreamScreenProps> = ({
       return;
     }
 
-    // TODO: Navigate to stream setup or start streaming
-    Alert.alert(
-      'Start Live Stream',
-      'Ready to start your live stream?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Start', onPress: () => console.log('Starting new stream') }
-      ]
-    );
-  }, [user]);
+    try {
+      console.log('[LiveStreamScreen] Navigating to start live stream');
+      // Get the root navigation to avoid tab navigation conflicts
+      const rootNavigation = navigation.getParent();
+      if (rootNavigation) {
+        console.log('[LiveStreamScreen] Using root navigation');
+        (rootNavigation as any).navigate('LiveStream', { mode: 'host' });
+      } else {
+        console.log('[LiveStreamScreen] Using direct navigation');
+        (navigation as any).navigate('LiveStream', { mode: 'host' });
+      }
+    } catch (error) {
+      console.error('[LiveStreamScreen] Navigation error to LiveStream:', error);
+      Alert.alert('Error', 'Failed to start live streaming. Please try again.');
+    }
+  }, [user, navigation]);
 
   const renderStreamCard = useCallback(({ item }: { item: LiveStream }) => (
     <StreamCard
@@ -330,7 +343,7 @@ const LiveStreamScreen: React.FC<LiveStreamScreenProps> = ({
         showPremium={true}
       />
       
-      <View style={styles.content}>
+      <View style={[styles.content, { paddingBottom: 60 + Math.min(insets.bottom, 20) }]}>
         {/* Header Section */}
         <View style={[styles.headerSection, { backgroundColor: colors.card }]}>
           <View style={styles.headerContent}>
@@ -397,42 +410,52 @@ const LiveStreamScreen: React.FC<LiveStreamScreenProps> = ({
         </View>
 
         {/* Streams Grid */}
-        <FlatList
-          data={filteredStreams}
-          renderItem={renderStreamCard}
-          keyExtractor={(item) => item.id}
-          numColumns={2}
-          columnWrapperStyle={styles.gridRow}
-          contentContainerStyle={styles.streamsContainer}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={handleRefresh}
-              colors={[colors.primary]}
-              tintColor={colors.primary}
-            />
-          }
-          showsVerticalScrollIndicator={false}
-          ListEmptyComponent={
-            <View style={styles.emptyState}>
-              <Sparkles size={48} color={colors.text.tertiary} />
-              <Text style={[styles.emptyTitle, { color: colors.text.primary }]}>
-                No Live Streams
-              </Text>
-              <Text style={[styles.emptyMessage, { color: colors.text.secondary }]}>
-                Be the first to start streaming!
-              </Text>
-              <TouchableOpacity
-                style={[styles.emptyButton, { backgroundColor: colors.primary }]}
-                onPress={handleStartStream}
-              >
-                <Text style={[styles.emptyButtonText, { color: colors.white }]}>
-                  Start Streaming
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={[styles.loadingText, { color: colors.text.secondary }]}>
+              Loading streams...
+            </Text>
+          </View>
+        ) : (
+          <FlatList
+            data={filteredStreams}
+            renderItem={renderStreamCard}
+            keyExtractor={(item) => item.id}
+            numColumns={2}
+            columnWrapperStyle={filteredStreams.length > 1 ? styles.gridRow : null}
+            contentContainerStyle={[styles.streamsContainer, { paddingBottom: 20 }]}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={handleRefresh}
+                colors={[colors.primary]}
+                tintColor={colors.primary}
+              />
+            }
+            showsVerticalScrollIndicator={false}
+            ListEmptyComponent={
+              <View style={styles.emptyState}>
+                <Sparkles size={48} color={colors.text.tertiary} />
+                <Text style={[styles.emptyTitle, { color: colors.text.primary }]}>
+                  No Live Streams
                 </Text>
-              </TouchableOpacity>
-            </View>
-          }
-        />
+                <Text style={[styles.emptyMessage, { color: colors.text.secondary }]}>
+                  Be the first to start streaming or check back later for live content!
+                </Text>
+                <TouchableOpacity
+                  style={[styles.emptyButton, { backgroundColor: colors.primary }]}
+                  onPress={handleStartStream}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.emptyButtonText, { color: colors.white }]}>
+                    Start Streaming
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            }
+          />
+        )}
       </View>
     </SafeAreaView>
   );
@@ -605,6 +628,17 @@ const styles = StyleSheet.create({
   emptyButtonText: {
     fontSize: 14,
     fontWeight: '600',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  loadingText: {
+    fontSize: 16,
+    marginTop: 16,
+    textAlign: 'center',
   },
 });
 
