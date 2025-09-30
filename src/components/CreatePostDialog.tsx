@@ -1072,11 +1072,17 @@ const CreatePostDialog: React.FC<CreatePostDialogProps> = ({
                       <Input
                         id="videoPrice"
                         type="number"
-                        min="0"
+                        min="0.20"
+                        max="5.00"
                         step="0.01"
                         value={videoPrice}
-                        onChange={(e) => setVideoPrice(e.target.value)}
-                        placeholder="Enter price for content consumers"
+                        onChange={(e) => {
+                          const value = Number(e.target.value);
+                          if (value <= 5.00) {
+                            setVideoPrice(e.target.value);
+                          }
+                        }}
+                        placeholder="Enter price (₹0.20 - ₹5.00)"
                         required={isPaidVideo}
                       />
                       <p className="text-sm text-gray-500">
@@ -1197,11 +1203,17 @@ const CreatePostDialog: React.FC<CreatePostDialogProps> = ({
                       <Input
                         id="shortPrice"
                         type="number"
-                        min="0"
+                        min="0.20"
+                        max="5.00"
                         step="0.01"
                         value={shortPrice}
-                        onChange={(e) => setShortPrice(e.target.value)}
-                        placeholder="Enter price for content consumers"
+                        onChange={(e) => {
+                          const value = Number(e.target.value);
+                          if (value <= 5.00) {
+                            setShortPrice(e.target.value);
+                          }
+                        }}
+                        placeholder="Enter price (₹0.20 - ₹5.00)"
                         required={isPaidShort}
                       />
                       <p className="text-sm text-gray-500">

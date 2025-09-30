@@ -94,6 +94,23 @@ const ChannelPage = () => {
 
   // ✅ Fetch channel by userId from localStorage
   React.useEffect(() => {
+    // Pause any playing videos when navigating to channel page
+    const pauseAllVideos = () => {
+      // Pause any TipTube videos
+      document.querySelectorAll('video').forEach(video => {
+        if (!video.paused) {
+          video.pause();
+        }
+      });
+      
+      // Update TipShorts global playing state if it exists
+      if (localStorage.getItem('shortsGlobalPlaying')) {
+        localStorage.setItem('shortsGlobalPlaying', 'false');
+      }
+    };
+    
+    pauseAllVideos();
+    
     const fetchChannel = async () => {
       const storedUserId = localStorage.getItem("UserId");
 

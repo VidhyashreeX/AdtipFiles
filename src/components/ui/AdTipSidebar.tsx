@@ -18,7 +18,7 @@ import {
   PlusCircle, Gift, MessageSquare, FileText,
   ShoppingCart, BarChart3, Wallet, Store,
   User, Package, Heart, BadgeDollarSign,
-  Layout, Crown
+  Layout, Crown, Building2
 } from "lucide-react";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -77,6 +77,8 @@ interface NavItem {
   subtitle?: string;
   external?: boolean;
   onClick?: () => void;
+  special?: boolean;
+  state?: any;
 }
 
 const AdTipSidebar = () => {
@@ -97,6 +99,11 @@ const AdTipSidebar = () => {
   const [selectedPostType, setSelectedPostType] = React.useState<'create-post' | 'tip-tube' | 'tip-shorts'>('tip-tube');
     const navigate = useNavigate();
    const { isAuthenticated, logout } = useAuth();
+   
+   // State for seller dashboard
+   const [hasCompanies, setHasCompanies] = React.useState<boolean | null>(null);
+   const [isCheckingCompanies, setIsCheckingCompanies] = React.useState(false);
+   const [showSellerDialog, setShowSellerDialog] = React.useState(false);
    const handleLogout = async () => {
     try {
       if (user?.id) {
@@ -273,6 +280,40 @@ React.useEffect(() => {
   }
 }, [user?.id, user?.accessToken]); // Add accessToken to dependencies
 
+// Check if user has companies registered
+React.useEffect(() => {
+  const checkUserCompanies = async () => {
+    if (!user?.id) {
+      setHasCompanies(null);
+      return;
+    }
+
+    setIsCheckingCompanies(true);
+    try {
+      const response = await apiGetCompanyList(user.id.toString());
+      
+      if (response?.data?.status === 200 && response.data.data?.length > 0) {
+        setHasCompanies(true);
+      } else {
+        setHasCompanies(false);
+      }
+    } catch (error: any) {
+      console.error('Error checking user companies:', error);
+      // If 404 or not found, user has no companies
+      if (error.response?.status === 404 || 
+          error.response?.data?.message?.includes('not found')) {
+        setHasCompanies(false);
+      } else {
+        setHasCompanies(null); // Error state - don't show seller dashboard
+      }
+    } finally {
+      setIsCheckingCompanies(false);
+    }
+  };
+
+  checkUserCompanies();
+}, [user?.id]);
+
   
 
 const ecommerceItems = [
@@ -288,11 +329,19 @@ const ecommerceItems = [
     : []),
   { to: "/follow", label: "Follow", icon: <Users className="h-5 w-5" /> },
   { to: user ? "/wallet" : "/login", label: "My Wallet", icon: <Wallet className="h-5 w-5" /> },
-  { 
-    to: "/become-seller", 
-    label: "Become Advertiser", 
-    icon: <Store className="h-5 w-5" />
-  },
+  // Seller Dashboard - conditionally show based on companies
+  ...(hasCompanies !== null 
+    ? [
+        {
+          to: hasCompanies ? "/seller/dashboard" : "#",
+          label: "Seller Dashboard",
+          icon: <Building2 className="h-5 w-5" />,
+          onClick: hasCompanies ? undefined : () => setShowSellerDialog(true),
+          special: !hasCompanies
+        }
+      ]
+    : []),
+  { to: "/become-seller-full", label: "Become Advertiser", icon: <Store className="h-5 w-5" />, external: true },
   { to: "/post-ads", label: "Post Advertisements", icon: <BadgeDollarSign className="h-5 w-5" /> },
   { 
     to: "/chooseplan", 
@@ -515,11 +564,11 @@ const [showLogoutDialog, setShowLogoutDialog] = React.useState(false);
           )}
           <SidebarGroupContent>
             {ecommerceItems.map((item) => {
-              // Handle items with custom onClick handler
-              if (item.onClick) {
+              // Handle special seller dashboard item with onClick
+              if (item.special && item.onClick) {
                 return (
                   <button
-                    key={item.label}
+                    key={item.to}
                     onClick={() => {
                       item.onClick();
                       if (isMobile) setOpenMobile(false);
@@ -536,7 +585,7 @@ const [showLogoutDialog, setShowLogoutDialog] = React.useState(false);
                   </button>
                 );
               }
-                
+              
               // Handle items with state property using navigate
               if (item.state) {
                 return (
@@ -653,6 +702,53 @@ const [showLogoutDialog, setShowLogoutDialog] = React.useState(false);
     </DialogFooter>
   </DialogContent>
 </Dialog>
+
+        {/* Seller Dashboard Dialog for users without companies */}
+        <Dialog open={showSellerDialog} onOpenChange={setShowSellerDialog}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Building2 className="h-5 w-5" />
+                Seller Dashboard
+              </DialogTitle>
+              <DialogDescription>
+                Access your business management tools and analytics
+              </DialogDescription>
+            </DialogHeader>
+            <div className="py-4">
+              <div className="flex flex-col items-center text-center space-y-4">
+                <div className="p-3 bg-orange-100 rounded-full">
+                  <Store className="h-8 w-8 text-orange-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-900 mb-2">No Companies Registered</h3>
+                  <p className="text-sm text-gray-600 mb-4">
+                    You need to register at least one company to access the seller dashboard and start advertising your business.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <DialogFooter className="flex flex-col sm:flex-row gap-2">
+              <Button
+                variant="outline"
+                className="sm:flex-1"
+                onClick={() => setShowSellerDialog(false)}
+              >
+                Maybe Later
+              </Button>
+              <Button
+                className="sm:flex-1 bg-gradient-to-r from-[#00dcaa] to-[#00b894] hover:from-[#00b894] hover:to-[#00a085]"
+                onClick={() => {
+                  setShowSellerDialog(false);
+                  navigate('/seller/register');
+                  if (isMobile) setOpenMobile(false);
+                }}
+              >
+                Become Advertiser
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
       </div>
       
