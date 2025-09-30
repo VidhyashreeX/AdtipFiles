@@ -55,7 +55,7 @@ const ecommerceItems = [
   },
   {
     title: "Analysis",
-    url: "#",
+    url: "/analytics",
     icon: BarChart3,
   },
   {

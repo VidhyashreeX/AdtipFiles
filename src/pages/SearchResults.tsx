@@ -124,7 +124,7 @@ const SearchResults: React.FC = () => {
               className="w-full h-48 object-cover"
             />
           ) : (
-            <div className="w-full h-48 bg-gradient-to-br from-adtip-teal to-adtip-teal/80 flex items-center justify-center">
+            <div className="w-full h-48 bg-gradient-to-br from-adtip-teal to-adtip-teal/80 flex items-center justify-center text-white">
               {getContentIcon(item.type)}
             </div>
           )}

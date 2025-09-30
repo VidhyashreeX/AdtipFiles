@@ -10,26 +10,41 @@ type ProfileStatsProps = {
   views?: number;
   posts?: number;
   tipTubeVideos?: number;
+  // Add channel data prop
+  userChannel?: {
+    followers_count?: number;
+    following_count?: number;
+    posts_count?: number;
+    subscribers?: number;
+  };
+  // Add videos data props
+  totalVideos?: number;
+  totalShorts?: number;
 };
 
 const ProfileStats = ({ 
   userId, 
-  isNewUser = true,
+  isNewUser = false, // Changed default to false
   followers,
   following,
   likes,
   views,
   posts,
-  tipTubeVideos
+  tipTubeVideos,
+  userChannel,
+  totalVideos = 0,
+  totalShorts = 0
 }: ProfileStatsProps) => {
-  const [stats] = useState({
-    posts: posts || (isNewUser ? 0 : 42),
-    followers: followers || (isNewUser ? 0 : 1024),
-    following: following || (isNewUser ? 0 : 365),
-    likes: likes || (isNewUser ? 0 : 2048),
-    views: views || (isNewUser ? 0 : 50000),
-    tipTubeVideos: tipTubeVideos || (isNewUser ? 0 : 12),
-  });
+  // Use actual data from props, fallback to userChannel data, then to 0
+  const stats = {
+    posts: posts || userChannel?.posts_count || 0,
+    followers: followers || userChannel?.followers_count || userChannel?.subscribers || 0,
+    following: following || userChannel?.following_count || 0,
+    tipTubeVideos: tipTubeVideos || totalVideos || 0,
+    shorts: totalShorts || 0,
+    views: views || 0,
+    likes: likes || 0,
+  };
 
   return (
     <div className="grid grid-cols-4 divide-x divide-gray-200 py-3 text-center">

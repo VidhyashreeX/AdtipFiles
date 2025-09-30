@@ -24,6 +24,8 @@ interface CreatePostDialogProps {
   postType: 'create-post' | 'tip-tube' | 'tip-shorts';
 }
 
+// Ported and adapted from the Adtip React Native app's Create Content functionality
+// Ported and adapted from the Adtip React Native app's Create Content functionality
 const CreatePostDialog: React.FC<CreatePostDialogProps> = ({
   open,
   onOpenChange,
@@ -214,39 +216,58 @@ const CreatePostDialog: React.FC<CreatePostDialogProps> = ({
     }
 
     setIsLoading(true);
+    setUploadError(null);
+    setUploadSuccess(false);
     
     try {
-      // For posts, use contentType = 2 and create a simple text post
+      setUploadStage('Uploading images...');
+      const imageUrls: string[] = [];
+      if (postImages.length > 0) {
+        for (const image of postImages) {
+          const result = await uploadToR2(image, 'post-images', user.id);
+          imageUrls.push(result.url);
+        }
+      }
+      setUploadStage('Creating post...');
+
       const requestData = {
         title: postTitle,
         contentType: 2, // 2=Post
         categoryId: Number(postCategory) || 1,
         channelId: Number(user.channelId),
         contentDescription: postContent,
-        images: [], // No images for text posts
+        images: imageUrls, // Send uploaded image URLs
         userId: user.id,
         is_paid_promotional: isPromoted,
         promotional_price: isPromoted ? Number(promotionalPrice) || 0 : null
       };
 
       await api.post('/api/uploadcontent', requestData);
-    toast.success("Post created successfully!");
+      
+      setUploadSuccess(true);
+      toast.success("Post created successfully!");
     
-    // Trigger refresh event for ChannelPage
-    window.dispatchEvent(new CustomEvent('contentUploaded'));
-    
-    onOpenChange(false);
+      // Trigger refresh event for ChannelPage
+      window.dispatchEvent(new CustomEvent('contentUploaded'));
+      
+      setTimeout(() => {
+        onOpenChange(false);
+      }, 1500);
+
     } catch (error) {
       console.error('Post creation error:', error);
+      const errorMessage = (error as any)?.response?.data?.message || "Failed to create post. Please try again.";
+      setUploadError(errorMessage);
       // @ts-ignore
       const status = error?.response?.status;
       if (status === 401) {
         toast.error('Unauthorized. Please log in again.');
       } else {
-        toast.error("Failed to create post. Please try again.");
+        toast.error(errorMessage);
       }
     } finally {
       setIsLoading(false);
+      setUploadStage('');
     }
   };
 
@@ -359,57 +380,40 @@ const CreatePostDialog: React.FC<CreatePostDialogProps> = ({
     setUploadSuccess(false);
     
     try {
-      let processedVideo = selectedVideo;
-      
-      // Compress video if needed
-      if (compressionQuality !== 'high') {
-        setIsCompressing(true);
-        setUploadStage('Compressing video...');
-        
-        try {
-          processedVideo = await compressVideo(selectedVideo, compressionQuality);
-          console.log(`Video compressed: ${selectedVideo.size} -> ${processedVideo.size} bytes`);
-        } catch (error) {
-          console.warn('Video compression failed, using original:', error);
-          processedVideo = selectedVideo;
-        } finally {
-          setIsCompressing(false);
-        }
-      }
+      // The concept of "compression" on the web is different. We pass the quality
+      // preference to the upload service, which can decide on backend processing.
+      setUploadStage('Preparing upload...');
 
-      // Ensure we have a thumbnail file
-      if (!thumbnailFile && processedVideo) {
-        console.log('No thumbnail provided, will use video file as thumbnail');
+      // Ensure we have a thumbnail file. If not, the service should handle it.
+      if (!thumbnailFile) {
+        console.log('No thumbnail provided, UnifiedUploadService will handle generation.');
       }
 
       // Calculate video duration
-      const calculatedDuration = await calculateVideoDuration(processedVideo);
+      const calculatedDuration = await calculateVideoDuration(selectedVideo);
+      setVideoDuration(calculatedDuration);
       console.log('📹 Using calculated duration:', calculatedDuration);
 
       // Prepare upload data for UnifiedUploadService
       const uploadData: VideoUploadData = {
-        videoFile: processedVideo,
+        videoFile: selectedVideo,
         thumbnailFile: thumbnailFile || undefined,
         metadata: {
-        name: videoTitle,
+          name: videoTitle,
           description: videoDescription,
           categoryId: Number(videoCategory) || 1,
           channelId: Number(user.channelId),
           userId: user.id,
-          isShot: postType === 'tip-shorts',
+          isShot: false, // This is a TipTube video
           duration: calculatedDuration,
           is_paid_promotional: isPaidVideo,
           promotional_price: isPaidVideo ? Number(videoPrice) || 0 : undefined,
+          quality: videoQuality, // Pass quality selection
         }
       };
 
       // Use UnifiedUploadService for upload
-      const uploadService = UnifiedUploadService;
-      const uploadMethod = postType === 'tip-shorts' ? 
-        uploadService.uploadTipShorts.bind(uploadService) : 
-        uploadService.uploadTipTube.bind(uploadService);
-
-      const result = await uploadMethod(uploadData, (progress) => {
+      const result = await UnifiedUploadService.uploadTipTube(uploadData, (progress) => {
         setUploadProgress(progress);
         setUploadStage(progress.stage);
       });
@@ -421,21 +425,10 @@ const CreatePostDialog: React.FC<CreatePostDialogProps> = ({
         // Trigger refresh event for ChannelPage
         window.dispatchEvent(new CustomEvent('contentUploaded'));
         
-        // Reset form
-        setVideoTitle('');
-        setVideoDescription('');
-        setVideoCategory('');
-        setVideoQuality('');
-        setSelectedVideo(null);
-        setThumbnailFile(null);
-        setVideoPreview(null);
-        setThumbnailPreview(null);
-        setIsPaidVideo(false);
-        setVideoPrice('');
-        
-        // Close dialog after a short delay
+        // Reset form and close dialog after a delay
         setTimeout(() => {
-        onOpenChange(false);
+          onOpenChange(false);
+          resetForm();
         }, 1500);
       } else {
         throw new Error(result.error || 'Upload failed');
@@ -446,32 +439,17 @@ const CreatePostDialog: React.FC<CreatePostDialogProps> = ({
       let errorMessage = 'Upload failed';
       if (error instanceof Error) {
         errorMessage = error.message;
-        
-        // Provide more specific error messages
-        if (errorMessage.includes('video_Thumbnail')) {
-          errorMessage = 'Upload failed: Missing thumbnail. Please try again.';
-        } else if (errorMessage.includes('Authentication')) {
-          errorMessage = 'Upload failed: Authentication error. Please log in again.';
-        } else if (errorMessage.includes('500')) {
-          errorMessage = 'Upload failed: Server error. Please try again later.';
-        } else if (errorMessage.includes('400')) {
-          errorMessage = 'Upload failed: Invalid request. Please check your input.';
-        }
       }
       
       setUploadError(errorMessage);
-      
-      const status = (error as any)?.response?.status;
-      if (status === 401) {
-        toast.error('Unauthorized. Please log in again.');
-      } else {
-        toast.error(errorMessage);
-      }
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
-      setIsCompressing(false);
-      setUploadProgress(null);
-      setUploadStage('');
+      // Keep progress bar visible on success/error
+      if (!uploadSuccess) {
+        setUploadProgress(null);
+        setUploadStage('');
+      }
     }
   };
 
@@ -495,75 +473,67 @@ const CreatePostDialog: React.FC<CreatePostDialogProps> = ({
     }
 
     setIsLoading(true);
+    setUploadError(null);
+    setUploadSuccess(false);
     
     try {
+      setUploadStage('Preparing upload...');
+      
       // Calculate video duration
       const calculatedDuration = await calculateVideoDuration(shortVideo);
+      setShortDuration(calculatedDuration);
       console.log('📹 Short video duration:', calculatedDuration);
       
-      // Upload short video to R2
-      const videoResult = await uploadToR2(shortVideo, 'videos', user.id);
-      const videoUrl = videoResult.url;
-      
-      // Upload thumbnail if provided, otherwise create placeholder
-      let thumbnailUrl;
-      if (shortThumbnailFile) {
-        const thumbnailResult = await uploadToR2(shortThumbnailFile, 'thumbnails', user.id);
-        thumbnailUrl = thumbnailResult.url;
-      } else {
-      // Create placeholder thumbnail
-      const canvas = document.createElement('canvas');
-      canvas.width = 320;
-      canvas.height = 240;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.fillStyle = '#f0f0f0';
-        ctx.fillRect(0, 0, 320, 240);
-        ctx.fillStyle = '#666';
-        ctx.font = '16px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText('Short Video Thumbnail', 160, 120);
-      }
-      const blob = await new Promise<Blob>((resolve) => canvas.toBlob(resolve, 'image/png'));
-      const placeholderFile = new File([blob], 'placeholder.png', { type: 'image/png' });
-      const thumbnailResult = await uploadToR2(placeholderFile, 'thumbnails', user.id);
-        thumbnailUrl = thumbnailResult.url;
-      }
-
-      // Call API with R2 URLs using correct API structure
-      const requestData = {
-        title: shortTitle,
-        contentType: 1, // 1=Short
-        categoryId: Number(shortCategory) || 1,
-        channelId: Number(user.channelId),
-        videoLink: videoUrl,
-        video_Thumbnail: thumbnailUrl,
-        contentDescription: shortDescription,
-        duration: calculatedDuration, // Use calculated duration
-        userId: user.id,
-        is_paid_promotional: isPaidShort,
-        promotional_price: isPaidShort ? Number(shortPrice) || 0 : null
+      // Prepare upload data for UnifiedUploadService
+      const uploadData: VideoUploadData = {
+        videoFile: shortVideo,
+        thumbnailFile: shortThumbnailFile || undefined,
+        metadata: {
+          name: shortTitle,
+          description: shortDescription,
+          categoryId: Number(shortCategory) || 1,
+          channelId: Number(user.channelId),
+          userId: user.id,
+          isShot: true, // This is a TipShot
+          duration: calculatedDuration,
+          is_paid_promotional: isPaidShort,
+          promotional_price: isPaidShort ? Number(shortPrice) || 0 : undefined,
+          quality: shortQuality,
+        }
       };
 
-      await api.post('/api/uploadcontent', requestData);
+      // Use UnifiedUploadService for upload
+      const result = await UnifiedUploadService.uploadTipShorts(uploadData, (progress) => {
+        setUploadProgress(progress);
+        setUploadStage(progress.stage);
+      });
 
-        toast.success("Short video uploaded successfully!");
+      if (result.success) {
+        setUploadSuccess(true);
+        toast.success(`Short video uploaded successfully using ${result.method.toUpperCase()}!`);
         
         // Trigger refresh event for ChannelPage
         window.dispatchEvent(new CustomEvent('contentUploaded'));
         
-        onOpenChange(false);
-    } catch (error) {
-      console.error('Upload error:', error);
-      // @ts-ignore
-      const status = error?.response?.status;
-      if (status === 401) {
-        toast.error('Unauthorized. Please log in again.');
+        // Reset form and close dialog
+        setTimeout(() => {
+          onOpenChange(false);
+          resetForm();
+        }, 1500);
       } else {
-      toast.error("Failed to upload short video. Please try again.");
+        throw new Error(result.error || 'Upload failed');
       }
+    } catch (error) {
+      console.error('Short upload error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Upload failed';
+      setUploadError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
+      if (!uploadSuccess) {
+        setUploadProgress(null);
+        setUploadStage('');
+      }
     }
   };
 
@@ -650,6 +620,38 @@ const CreatePostDialog: React.FC<CreatePostDialogProps> = ({
             <DialogTitle>{getDialogTitle()}</DialogTitle>
             <DialogDescription>{getDialogDescription()}</DialogDescription>
           </DialogHeader>
+
+          {/* Upload Progress/Status Indicator */}
+          {isLoading && (
+            <div className="space-y-2 my-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-gray-600">{uploadStage || 'Processing...'}</span>
+                {uploadProgress && <span className="text-sm font-medium">{uploadProgress.percentage.toFixed(0)}%</span>}
+              </div>
+              {uploadProgress ? (
+                <Progress value={uploadProgress.percentage} className="w-full" />
+              ) : (
+                <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
+                  <div className="bg-blue-600 h-2.5 rounded-full animate-pulse"></div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {uploadError && !isLoading && (
+            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative flex items-center" role="alert">
+              <AlertCircle className="w-5 h-5 mr-2" />
+              <span className="block sm:inline">{uploadError}</span>
+            </div>
+          )}
+
+          {uploadSuccess && !isLoading && (
+            <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative flex items-center" role="alert">
+              <CheckCircle className="w-5 h-5 mr-2" />
+              <span className="block sm:inline">Upload successful!</span>
+            </div>
+          )}
+
 
           {/* Create Post Form */}
           {postType === 'create-post' && (
@@ -786,6 +788,7 @@ const CreatePostDialog: React.FC<CreatePostDialogProps> = ({
                       <button
                         type="button"
                         onClick={() => removeImage(index)}
+                        aria-label="Remove image"
                         className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs"
                       >
                         ×
@@ -809,11 +812,20 @@ const CreatePostDialog: React.FC<CreatePostDialogProps> = ({
                   multiple
                   onChange={handleImageSelect}
                   className="hidden"
+                  aria-label="Image upload"
+                  title="Image upload"
                 />
               </div>
 
               <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? 'Publishing...' : 'Publish Post'}
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    {uploadStage || 'Publishing...'}
+                  </>
+                ) : (
+                  'Publish Post'
+                )}
               </Button>
             </form>
           )}
@@ -866,6 +878,8 @@ const CreatePostDialog: React.FC<CreatePostDialogProps> = ({
                   accept="video/*"
                   onChange={handleVideoSelect}
                   className="hidden"
+                  aria-label="Video upload"
+                  title="Video upload"
                 />
               </div>
 
@@ -896,6 +910,8 @@ const CreatePostDialog: React.FC<CreatePostDialogProps> = ({
                   accept="image/*"
                   onChange={handleThumbnailSelect}
                   className="hidden"
+                  aria-label="Thumbnail upload"
+                  title="Thumbnail upload"
                 />
               </div>
 
@@ -1260,6 +1276,8 @@ const CreatePostDialog: React.FC<CreatePostDialogProps> = ({
                   accept="video/*"
                   onChange={handleShortVideoSelect}
                   className="hidden"
+                  aria-label="Short video upload"
+                  title="Short video upload"
                 />
               </div>
 
@@ -1290,11 +1308,20 @@ const CreatePostDialog: React.FC<CreatePostDialogProps> = ({
                   accept="image/*"
                   onChange={handleShortThumbnailSelect}
                   className="hidden"
+                  aria-label="Short thumbnail upload"
+                  title="Short thumbnail upload"
                 />
               </div>
 
               <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? 'Uploading...' : 'Upload Short'}
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    {uploadStage || 'Uploading...'}
+                  </>
+                ) : (
+                  'Upload Short'
+                )}
               </Button>
             </form>
           )}

@@ -140,6 +140,16 @@ const ChannelPage = () => {
     };
 
     fetchChannel();
+
+    const handleFocus = () => {
+      fetchChannel();
+    };
+
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+    };
   }, []);
 
   // ✅ Fetch earnings data
@@ -224,7 +234,7 @@ const ChannelPage = () => {
           
           // Parse description for posts (it's a JSON string)
           let description = item.description;
-          let images = [];
+          let images: string[] = []; // Ensure images is always an array
           if (type === 'post' && item.description) {
             try {
               const parsedDesc = JSON.parse(item.description);
@@ -233,6 +243,7 @@ const ChannelPage = () => {
             } catch (e) {
               // If parsing fails, use description as is
               description = item.description;
+              images = []; // Ensure images is an empty array on failure
             }
           }
 
@@ -251,7 +262,11 @@ const ChannelPage = () => {
             isPaid: item.is_paid === 1,
             createdAt: item.created_date,
             updatedAt: item.updated_date,
-            images: images // For posts
+            images: images, // For posts
+            user: { // Add user data to content
+              name: item.user_name,
+              avatar: item.user_avatar
+            }
           };
           return mappedItem;
         });
@@ -273,25 +288,51 @@ const ChannelPage = () => {
     fetchChannelContent();
   }, [fetchChannelContent]);
 
-  // Listen for content upload events
+  // Listen for content upload events and live updates
   React.useEffect(() => {
     const handleContentUploaded = () => {
+      console.log('🔄 Content uploaded event detected, refreshing...');
+      fetchChannelContent();
+      // Also refresh channel basic data to update counters
+      const storedUserId = localStorage.getItem("UserId");
+      if (storedUserId) {
+        userAPI.getChannel(storedUserId).then(response => {
+          if (response.status === 200 && response.data?.data?.length > 0) {
+            setChannelData(response.data.data[0]);
+          }
+        }).catch(console.error);
+      }
+    };
+
+    const handleFocus = () => {
+      console.log('🔄 Window focused, refreshing content...');
       fetchChannelContent();
     };
 
-    // Listen for custom event
-    window.addEventListener('contentUploaded', handleContentUploaded);
-    
-    // Also listen for focus events (when user comes back to tab)
-    const handleFocus = () => {
-      fetchChannelContent();
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        console.log('🔄 Page became visible, refreshing content...');
+        fetchChannelContent();
+      }
     };
-    
+
+    // Listen for multiple events to ensure real-time updates
+    window.addEventListener('contentUploaded', handleContentUploaded);
     window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    // Set up periodic refresh every 30 seconds when page is visible
+    const refreshInterval = setInterval(() => {
+      if (!document.hidden) {
+        fetchChannelContent();
+      }
+    }, 30000);
 
     return () => {
       window.removeEventListener('contentUploaded', handleContentUploaded);
       window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      clearInterval(refreshInterval);
     };
   }, [fetchChannelContent]);
 
@@ -325,18 +366,31 @@ const ChannelPage = () => {
 
   // Handle edit
   const handleEditClick = () => {
+    console.log('🔧 Edit clicked, channelData:', channelData);
+    
+    if (!channelData) {
+      toast.error("Channel data not available. Please refresh the page.");
+      return;
+    }
+    
     setFormData({
-      channelName: channelData.channelName,
-      description: channelData.description || "",
+      channelName: channelData.channelName || channelData.name || "",
+      description: channelData.description || channelData.bio || "",
       profilePhoto: null,
       coverPhoto: null,
     });
     setIsEditing(true);
+    console.log('✅ Edit mode activated');
   };
 
   // Save changes (with API)
   const handleSave = async () => {
-    if (!formData) return;
+    console.log('💾 Save clicked, formData:', formData, 'channelData:', channelData);
+    
+    if (!formData) {
+      toast.error("No changes to save");
+      return;
+    }
 
     // Check description length
     if (formData.description && formData.description.length > 250) {
@@ -355,6 +409,13 @@ const ChannelPage = () => {
     try {
       // ✅ Build payload with correct field names
       const channelId = channelData?.channelId || channelData?.id || channelData?.channel_id;
+      
+      if (!channelId) {
+        toast.error("Channel ID not found. Cannot save changes.");
+        setSaving(false);
+        return;
+      }
+      
       const payload = {
         id: channelId, // required by API
         name: formData.channelName,
@@ -373,8 +434,14 @@ const ChannelPage = () => {
 
 
       if (response.status === 200 && response.data.status) {
-        // Merge updated data locally
-        setChannelData((prev: any) => ({ ...prev, ...payload }));
+        // Fetch fresh channel data from server instead of merging locally
+        const storedUserId = localStorage.getItem("UserId");
+        if (storedUserId) {
+          const freshResponse = await userAPI.getChannel(storedUserId);
+          if (freshResponse.status === 200 && freshResponse.data?.data?.length > 0) {
+            setChannelData(freshResponse.data.data[0]);
+          }
+        }
         closeModal();
         toast.success("Channel updated successfully!");
       } else {
@@ -729,20 +796,26 @@ const ChannelPage = () => {
                 </>
               )}
             </div>
-          ) : item.thumbnail ? (
+          ) : (item.type === 'post' && item.images && item.images.length > 0) ? (
             /* Image Content (for posts) */
             <img
-              src={item.thumbnail}
+              src={item.images[0]}
               alt={item.title}
               className="w-full h-48 object-cover"
               onError={(e) => {
                 const target = e.target as HTMLImageElement;
                 target.style.display = 'none';
+                // Find the parent and show the fallback
+                const container = target.closest('.relative');
+                if (container) {
+                  const fallback = container.querySelector('.fallback-icon') as HTMLElement;
+                  if (fallback) fallback.style.display = 'flex';
+                }
               }}
             />
           ) : (
             /* Fallback for no media */
-            <div className="w-full h-48 bg-gradient-to-br from-adtip-teal to-adtip-teal/80 flex items-center justify-center">
+            <div className="fallback-icon w-full h-48 bg-gradient-to-br from-adtip-teal to-adtip-teal/80 flex items-center justify-center">
               {item.type === 'video' ? (
                 <Play className="w-12 h-12 text-white" />
               ) : item.type === 'short' ? (
@@ -761,7 +834,13 @@ const ChannelPage = () => {
         </div>
         
         <div className="p-4">
-          <h3 className="font-semibold text-sm mb-2 line-clamp-2 text-black">{item.title}</h3>
+          <div className="flex items-center mb-2">
+            <img src={item.user.avatar || '/path/to/default/avatar.png'} alt={item.user.name} className="w-8 h-8 rounded-full mr-3" />
+            <div>
+              <h3 className="font-semibold text-sm line-clamp-1 text-black">{item.title}</h3>
+              <p className="text-xs text-gray-500">{item.user.name}</p>
+            </div>
+          </div>
           
           {item.description && (
             <p className="text-xs text-gray-600 mb-2 line-clamp-2">{item.description}</p>

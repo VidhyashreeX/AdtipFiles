@@ -1,4 +1,5 @@
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
+import Analytics from './pages/Analytics';
 import App from "./App";
 import Index from "./pages/Index";
 import Home from "./pages/Home";
@@ -90,6 +91,10 @@ const router = createBrowserRouter([
 			{
 				path: "profile",
 				element: <Profile />,
+			},
+			{
+				path: "analytics",
+				element: <Analytics />,
 			},
 			{
 				path: "edit-profile",

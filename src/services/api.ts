@@ -222,13 +222,17 @@ export const contentAPI = {
   getVideos: (userId: string, categoryId: string = "0", offset: string = "1") =>
     api.get(`/api/getvideos/${userId}/${categoryId}/${offset}`),
 
-  // Get user's own videos (TipTube content) - using existing endpoint with user filter
+  // Updated: Use the proper recently uploaded videos endpoint
   getUserVideos: (userId: string) =>
-    api.get(`/api/getvideos/${userId}/0/1`),
+    api.get(`/api/getrecentlyuploadedvideo/${userId}`),
 
   // Get user's own shorts (TipShorts content) - using existing endpoint  
   getUserShorts: (userId: string) =>
     api.get(`/api/getshots/${userId}`),
+
+  // Get videos by channel - this matches mobile app pattern
+  getVideosByChannel: (videoType: string, channelId: string, userId: string) =>
+    api.get(`/api/getvideobychannel/${videoType}/${channelId}/${userId}`),
 
   getShorts: (userId: string) =>
     api.get(`/api/getshots/${userId}`),
@@ -250,11 +254,91 @@ export const userAPI = {
   getChannel: (userId: string) =>
     api.get(`/api/getchannelbyuserid/${userId}`),
 
+  // Updated to match mobile app's endpoint: /api/analytics/:channelId
   getAnalytics: (channelId: string) =>
     api.get(`/api/analytics/${channelId}`),
 
+  // Add channel analytics endpoints to match backend
+  getChannelAnalytics: (channelId: string) =>
+    api.get(`/api/channel-analytics/${channelId}`),
+
+  getChannelDashboard: (channelId: string) =>
+    api.get(`/api/channel-analytics/${channelId}/dashboard`),
+
   getChannelSubscribers: (channelId: string) =>
     api.get(`/api/channel/${channelId}/subscribers`),
+
+  // Add channel content endpoint
+  getChannelContent: (channelId: string) =>
+    api.get(`/api/channel/${channelId}/content`),
+
+  // Add channel earnings endpoint
+  getChannelEarnings: (channelId: string) =>
+    api.get(`/api/channel/${channelId}/earnings`),
+
+  // Add channel update endpoint
+  updateChannel: (channelId: string, data: any) =>
+    api.post(`/api/channel/${channelId}/update`, data),
+
+  // Get user's posts using the proper endpoint (matches mobile app)
+  getUserPosts: (userId: string, page: number = 1, limit: number = 10, loggedUserId: number = 0) =>
+    api.get(`/api/users/${userId}/posts?page=${page}&limit=${limit}&loggined_user_id=${loggedUserId}`),
+
+  // Get consolidated profile data (matches mobile app)
+  getConsolidatedProfile: (userId: string, loggedUserId?: number) => {
+    const params = loggedUserId ? `?loggined_user_id=${loggedUserId}` : '';
+    return api.get(`/api/users/${userId}/profile${params}`);
+  },
+
+  // Add comprehensive user data fetch (similar to mobile app)
+  getUserCompleteData: async (userId: string) => {
+    try {
+      const [channelResponse, videosResponse, shortsResponse, postsResponse] = await Promise.allSettled([
+        api.get(`/api/getchannelbyuserid/${userId}`),
+        api.get(`/api/getrecentlyuploadedvideo/${userId}`),
+        api.get(`/api/getshots/${userId}`),
+        api.get(`/api/users/${userId}/posts`)
+      ]);
+
+      const result: any = {
+        channel: null,
+        videos: [],
+        shorts: [],
+        posts: [],
+        errors: []
+      };
+
+      if (channelResponse.status === 'fulfilled' && channelResponse.value.data?.status) {
+        const channelData = channelResponse.value.data.data;
+        result.channel = Array.isArray(channelData) ? channelData[0] : channelData;
+      } else {
+        result.errors.push('Failed to fetch channel data');
+      }
+
+      if (videosResponse.status === 'fulfilled' && videosResponse.value.data?.status) {
+        result.videos = videosResponse.value.data.data || [];
+      } else {
+        result.errors.push('Failed to fetch videos');
+      }
+
+      if (shortsResponse.status === 'fulfilled' && shortsResponse.value.data?.status) {
+        result.shorts = shortsResponse.value.data.data || [];
+      } else {
+        result.errors.push('Failed to fetch shorts');
+      }
+
+      if (postsResponse.status === 'fulfilled' && postsResponse.value.data?.status) {
+        result.posts = postsResponse.value.data.data || [];
+      } else {
+        result.errors.push('Failed to fetch posts');
+      }
+
+      return result;
+    } catch (error) {
+      console.error('Error fetching complete user data:', error);
+      throw error;
+    }
+  },
 };
 
 export const uploadVideo = (formData: FormData, token: string) => {

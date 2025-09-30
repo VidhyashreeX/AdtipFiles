@@ -321,7 +321,7 @@ const ecommerceItems = [
   ...(channelData?.channelId
     ? [
         {
-          to: `/analysis/${channelData.channelId}`,
+          to: `/analytics`,
           label: "Analysis",
           icon: <BarChart3 className="h-5 w-5" />,
         },
