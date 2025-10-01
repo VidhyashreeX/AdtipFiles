@@ -135,6 +135,9 @@ import FollowersFollowingScreen from '../screens/profile/FollowersFollowingScree
 // Import LiveStreamScreen
 import LiveStreamScreen from '../screens/live/LiveStreamScreen';
 
+// Import GoLiveScreen
+import GoLiveScreen from '../screens/livestream/GoLiveScreen';
+
 // Profile component wrapper to avoid inline function
 const ProfileScreenWrapper: React.FC<{
   route: import('@react-navigation/native').RouteProp<
@@ -359,6 +362,13 @@ const MainNavigator = () => {
       <Stack.Screen
         name="LiveStream"
         component={LiveStreamScreen}
+        options={slideUpTransitionConfig}
+      />
+      
+      {/* Go Live screen for stream configuration */}
+      <Stack.Screen
+        name="GoLive"
+        component={GoLiveScreen}
         options={slideUpTransitionConfig}
       />
       

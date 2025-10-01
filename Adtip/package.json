@@ -44,6 +44,7 @@
     "@react-native-firebase/messaging": "^22.2.1",
     "@react-native-firebase/storage": "^22.2.1",
     "@react-native-oh-tpl/react-native-image-zoom-viewer": "^3.0.1-0.0.1",
+    "@react-native-picker/picker": "^2.11.2",
     "@react-navigation/bottom-tabs": "^7.3.14",
     "@react-navigation/native": "^7.1.10",
     "@react-navigation/native-stack": "^7.3.14",

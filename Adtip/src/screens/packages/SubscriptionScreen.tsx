@@ -52,7 +52,7 @@ const SubscriptionScreen = () => {
             setSelectedPlanId(response.plans[0].id);
           }
         } else {
-          Alert.alert('Error', 'Could not fetch subscription plans.');
+          Alert.alert('Error', 'Could not fetch premium plans.');
         }
       } catch (error) {
         Alert.alert('Error', 'An error occurred while fetching plans.');
@@ -65,7 +65,7 @@ const SubscriptionScreen = () => {
 
   const handlePayment = async () => {
     if (!selectedPlanId) {
-      Alert.alert('No Plan Selected', 'Please select a subscription plan.');
+      Alert.alert('No Plan Selected', 'Please select a premium plan.');
       return;
     }
 
@@ -77,14 +77,17 @@ const SubscriptionScreen = () => {
     setPaymentProcessing(true);
 
     try {
-      // Step 1: Create a subscription on Razorpay (no database storage yet)
-      const subResponse = await ApiService.createSubscription(selectedPlanId, user.id);
+      // Step 1: Create a one-time payment order (not a recurring subscription)
+      const orderResponse = await ApiService.createPremiumOrder({
+        plan_id: selectedPlanId, 
+        user_id: user.id
+      });
 
-      if (!subResponse.status || !subResponse.subscription_id) {
-        throw new Error(subResponse.message || 'Failed to create subscription.');
+      if (!orderResponse.status || !orderResponse.order_id) {
+        throw new Error(orderResponse.message || 'Failed to create payment order.');
       }
 
-      const { subscription_id } = subResponse;
+      const { order_id, amount, currency } = orderResponse;
 
       // Step 2: Fetch Razorpay key from backend
       const razorpayDetails = await ApiService.getRazorpayDetails();
@@ -93,12 +96,14 @@ const SubscriptionScreen = () => {
         throw new Error('Could not fetch Razorpay key.');
       }
 
-      // Step 3: Open Razorpay Checkout
+      // Step 3: Open Razorpay Checkout for one-time payment
       const options = {
         key,
-        subscription_id: subscription_id,
+        order_id: order_id, // Using order_id instead of subscription_id
+        amount: amount, // Amount in paisa
+        currency: currency || 'INR',
         name: 'Adtip Premium',
-        description: 'Your premium subscription',
+        description: 'One-time premium upgrade payment',
         prefill: {
           email: user.emailId,
           contact: user.mobile_number,
@@ -107,16 +112,16 @@ const SubscriptionScreen = () => {
         theme: { color: colors.primary },
       };
 
-      console.log('Razorpay options:', options);
+      console.log('🔄 [SubscriptionScreen] Razorpay one-time payment options:', options);
       RazorpayCheckout.open(options)
         .then(async (data: any) => {
             try {
-              console.log('🔄 [SubscriptionScreen] Payment completed, verifying...', data);
+              console.log('🔄 [SubscriptionScreen] One-time payment completed, verifying...', data);
               
-              // Verify payment first
-              const verificationResult = await ApiService.verifySubscriptionPayment({
+              // Verify one-time payment
+              const verificationResult = await ApiService.verifyPremiumPayment({
                 razorpay_payment_id: data.razorpay_payment_id,
-                razorpay_subscription_id: data.razorpay_subscription_id,
+                razorpay_order_id: data.razorpay_order_id,
                 razorpay_signature: data.razorpay_signature,
                 user_id: user.id,
                 plan_id: selectedPlanId
@@ -126,12 +131,12 @@ const SubscriptionScreen = () => {
                 throw new Error('Payment verification failed');
               }
               
-              console.log('✅ [SubscriptionScreen] Payment verified successfully');
+              console.log('✅ [SubscriptionScreen] One-time payment verified successfully');
               
               // Only navigate on successful verification
               Alert.alert(
                 'Success', 
-                'Your premium subscription has been activated successfully!',
+                'Your premium upgrade has been activated successfully! This is a one-time payment.',
                 [
                   {
                     text: 'OK',
@@ -333,11 +338,11 @@ const SubscriptionScreen = () => {
   if (loading) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-        <Header title="Subscription Plans" showSearch={false} showWallet={false} />
+        <Header title="Premium Upgrade" showSearch={false} showWallet={false} />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={[styles.loadingText, { color: colors.text.secondary }]}>
-            Loading subscription plans...
+            Loading premium plans...
           </Text>
         </View>
       </SafeAreaView>
@@ -353,7 +358,7 @@ const SubscriptionScreen = () => {
         barStyle={isDarkMode ? 'light-content' : 'dark-content'} 
       />
       
-      <Header title="Subscription Plans" showSearch={false} showWallet={false} />
+      <Header title="Premium Upgrade" showSearch={false} showWallet={false} />
       
       <ScrollView 
         style={styles.scrollView}
@@ -381,14 +386,12 @@ const SubscriptionScreen = () => {
 
         {/* Plans Section */}
         <View style={styles.plansSection}>
-          <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
-            Choose Your Plan
-          </Text>
-          <Text style={[styles.sectionSubtitle, { color: colors.text.secondary }]}>
-            Cancel anytime. No hidden fees.
-          </Text>
-          
-          <View style={styles.plansContainer}>
+        <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
+          Choose Your Plan
+        </Text>
+        <Text style={[styles.sectionSubtitle, { color: colors.text.secondary }]}>
+          One-time payment. No recurring charges.
+        </Text>          <View style={styles.plansContainer}>
             {plans.map(renderPlan)}
           </View>
         </View>

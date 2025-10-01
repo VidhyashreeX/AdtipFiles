@@ -12,6 +12,7 @@ import {
   Alert,
   Dimensions,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
@@ -24,12 +25,13 @@ import LinearGradient from 'react-native-linear-gradient';
 
 import ApiService from '../../services/ApiService';
 import LiveStreamService from '../../services/LiveStreamService';
+import EnhancedLiveStreamService from '../../services/EnhancedLiveStreamService';
 import { HOME_ENDPOINTS } from '../../constants/apiEndpoints';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width: screenWidth } = Dimensions.get('window');
 
-export type StreamType = 'free' | 'promote' | 'celebrate';
+export type StreamType = 'free' | 'influencer' | 'promotional';
 
 interface LiveStream {
   id: string;
@@ -41,38 +43,35 @@ interface LiveStream {
   streamType: StreamType;
   isLive: boolean;
   pricePerMinute?: number;
+  earningsPerMinute?: number;
   user_id?: number;
   user_name?: string;
   user_profile_image?: string;
   media_url?: string;
   created_at?: string;
+  product_service_name?: string;
+  product_service_description?: string;
 }
 
-// Transform post data to stream data
-const transformPostToStream = (post: any): LiveStream => {
-  // Determine stream type based on post properties
-  let streamType: StreamType = 'free';
-  if (post.is_promoted) {
-    streamType = 'promote';
-  } else if (post.is_premium) {
-    streamType = 'celebrate';
-  }
-
+// Transform API stream data to LiveStream interface
+const transformApiStreamToLiveStream = (stream: any): LiveStream => {
   return {
-    id: post.id?.toString() || Math.random().toString(),
-    title: post.title || post.content || 'Live Stream',
-    streamerName: post.user_name || 'Anonymous',
-    thumbnail: post.media_url || post.user_profile_image || 'https://images.unsplash.com/photo-1542751371-adc38448a05e',
-    viewerCount: Math.floor(Math.random() * 10000) + 100, // Random viewer count for demo
+    id: stream.id?.toString() || stream.meeting_id,
+    title: stream.title || 'Live Stream',
+    streamerName: stream.streamer_name || 'Anonymous',
+    thumbnail: stream.thumbnail_url || stream.profile_image || 'https://images.unsplash.com/photo-1542751371-adc38448a05e',
+    viewerCount: stream.viewer_count || 0,
     duration: 'LIVE',
-    streamType,
+    streamType: stream.stream_type || 'free',
     isLive: true,
-    pricePerMinute: streamType === 'promote' ? 2 : streamType === 'celebrate' ? 3 : undefined,
-    user_id: post.user_id,
-    user_name: post.user_name,
-    user_profile_image: post.user_profile_image,
-    media_url: post.media_url,
-    created_at: post.created_at,
+    pricePerMinute: stream.cost_per_minute,
+    earningsPerMinute: stream.company_pay_per_viewer_per_minute,
+    user_id: stream.streamer_id,
+    user_name: stream.streamer_name,
+    user_profile_image: stream.profile_image,
+    created_at: stream.start_time,
+    product_service_name: stream.product_service_name,
+    product_service_description: stream.product_service_description,
   };
 };
 
@@ -83,17 +82,17 @@ const streamTypeConfig = {
     description: 'Watch for free',
     icon: '🎉',
   },
-  promote: {
-    gradient: ['#FF6B35', '#FF8E53'],
-    text: 'Product Promo',
-    description: 'Get paid to watch',
-    icon: '💰',
+  influencer: {
+    gradient: ['#2196F3', '#1976D2'],
+    text: 'Influencer',
+    description: '₹1/min to watch',
+    icon: '�',
   },
-  celebrate: {
-    gradient: ['#9C27B0', '#E91E63'],
-    text: 'Celebration',
-    description: 'Pay to celebrate',
-    icon: '🎊',
+  promotional: {
+    gradient: ['#FF9800', '#F57C00'],
+    text: 'Promotional',
+    description: 'Earn while watching',
+    icon: '💰',
   },
 };
 
@@ -152,11 +151,19 @@ const StreamCard: React.FC<{
                 {stream.duration}
               </Text>
             </View>
-            {stream.pricePerMinute && (
+            {stream.streamType === 'influencer' && stream.pricePerMinute && (
               <View style={styles.statItem}>
-                <IndianRupee size={14} color={colors.primary} />
-                <Text style={[styles.statText, { color: colors.primary }]}>
+                <IndianRupee size={14} color={colors.error} />
+                <Text style={[styles.statText, { color: colors.error }]}>
                   ₹{stream.pricePerMinute}/min
+                </Text>
+              </View>
+            )}
+            {stream.streamType === 'promotional' && stream.earningsPerMinute && (
+              <View style={styles.statItem}>
+                <IndianRupee size={14} color={colors.success} />
+                <Text style={[styles.statText, { color: colors.success }]}>
+                  +₹{stream.earningsPerMinute}/min
                 </Text>
               </View>
             )}
@@ -225,6 +232,7 @@ const LiveStreamScreen: React.FC<LiveStreamScreenProps> = ({
   const [streams, setStreams] = useState<LiveStream[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [showStreamTypeModal, setShowStreamTypeModal] = useState(false);
 
   // Filter streams based on active filter
   const filteredStreams = activeFilter === 'all' 
@@ -235,33 +243,20 @@ const LiveStreamScreen: React.FC<LiveStreamScreenProps> = ({
   const streamCounts = {
     all: streams.length,
     free: streams.filter(s => s.streamType === 'free').length,
-    promote: streams.filter(s => s.streamType === 'promote').length,
-    celebrate: streams.filter(s => s.streamType === 'celebrate').length,
+    influencer: streams.filter(s => s.streamType === 'influencer').length,
+    promotional: streams.filter(s => s.streamType === 'promotional').length,
   };
 
   const loadStreams = useCallback(async () => {
     try {
       setLoading(true);
       
-      // Use LiveStreamService to get active streams from the proper API endpoint
-      const response = await LiveStreamService.getActiveStreams(1, 20);
+      // Use EnhancedLiveStreamService to get all active streams
+      const response = await EnhancedLiveStreamService.getAllActiveStreams(user?.id, 1, 20);
       
       if (response.success && response.data && response.data.streams && Array.isArray(response.data.streams)) {
-        // Transform live streams data to our UI format
-        const liveStreams = response.data.streams.map((stream: any): LiveStream => ({
-          id: stream.meeting_id || stream.id?.toString() || Math.random().toString(), // Use meeting_id as the primary ID
-          title: stream.title || 'Live Stream',
-          streamerName: stream.streamer_name || 'Anonymous',
-          thumbnail: stream.profile_image || stream.thumbnail || 'https://images.unsplash.com/photo-1542751371-adc38448a05e',
-          viewerCount: stream.viewer_count || 0,
-          duration: 'LIVE',
-          streamType: parseFloat(stream.cost_per_minute) > 0 ? 'promote' : 'free',
-          isLive: true,
-          pricePerMinute: parseFloat(stream.cost_per_minute) || undefined,
-          user_id: stream.streamer_id || stream.user_id,
-          user_name: stream.streamer_name,
-        }));
-        
+        // Transform API data using the helper function
+        const liveStreams = response.data.streams.map(transformApiStreamToLiveStream);
         setStreams(liveStreams);
       } else {
         console.warn('No active streams found');
@@ -269,12 +264,43 @@ const LiveStreamScreen: React.FC<LiveStreamScreenProps> = ({
       }
     } catch (error) {
       console.error('Failed to load active streams:', error);
-      setStreams([]);
+      // Fallback to original service if enhanced service fails
+      try {
+        const fallbackResponse = await LiveStreamService.getActiveStreams(1, 20);
+        if (fallbackResponse.success && fallbackResponse.data?.streams) {
+          const liveStreams = fallbackResponse.data.streams.map((stream: any): LiveStream => {
+            let streamType: StreamType = 'free';
+            if (parseFloat(stream.cost_per_minute) > 0) {
+              streamType = 'influencer';
+            }
+
+            return {
+              id: stream.meeting_id || stream.id?.toString() || Math.random().toString(),
+              title: stream.title || 'Live Stream',
+              streamerName: stream.streamer_name || 'Anonymous',
+              thumbnail: stream.profile_image || 'https://images.unsplash.com/photo-1542751371-adc38448a05e',
+              viewerCount: stream.viewer_count || 0,
+              duration: 'LIVE',
+              streamType,
+              isLive: true,
+              pricePerMinute: parseFloat(stream.cost_per_minute) || undefined,
+              user_id: stream.streamer_id || stream.user_id,
+              user_name: stream.streamer_name,
+            };
+          });
+          setStreams(liveStreams);
+        } else {
+          setStreams([]);
+        }
+      } catch (fallbackError) {
+        console.error('Fallback service also failed:', fallbackError);
+        setStreams([]);
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
     loadStreams();
@@ -323,23 +349,22 @@ const LiveStreamScreen: React.FC<LiveStreamScreenProps> = ({
       Alert.alert('Login Required', 'Please login to start live streaming.');
       return;
     }
+    
+    setShowStreamTypeModal(true);
+  }, [user]);
 
+  const handleStreamTypeSelect = useCallback((streamType: StreamType) => {
+    setShowStreamTypeModal(false);
+    
     try {
-      console.log('[LiveStreamScreen] Navigating to start live stream');
-      // Get the root navigation to avoid tab navigation conflicts
-      const rootNavigation = navigation.getParent();
-      if (rootNavigation) {
-        console.log('[LiveStreamScreen] Using root navigation');
-        (rootNavigation as any).navigate('LiveStream', { mode: 'host' });
-      } else {
-        console.log('[LiveStreamScreen] Using direct navigation');
-        (navigation as any).navigate('LiveStream', { mode: 'host' });
-      }
+      console.log(`[LiveStreamScreen] Creating ${streamType} stream`);
+      // Navigate to GoLive screen with pre-selected stream type
+      (navigation as any).navigate('GoLive', { initialStreamType: streamType });
     } catch (error) {
-      console.error('[LiveStreamScreen] Navigation error to LiveStream:', error);
-      Alert.alert('Error', 'Failed to start live streaming. Please try again.');
+      console.error('[LiveStreamScreen] Navigation error to GoLive:', error);
+      Alert.alert('Error', 'Failed to open stream creation. Please try again.');
     }
-  }, [user, navigation]);
+  }, [navigation]);
 
   const renderStreamCard = useCallback(({ item }: { item: LiveStream }) => (
     <StreamCard
@@ -407,19 +432,19 @@ const LiveStreamScreen: React.FC<LiveStreamScreenProps> = ({
               colors={colors}
             />
             <FilterButton
-              type="promote"
-              label="Promo"
-              count={streamCounts.promote}
-              isActive={activeFilter === 'promote'}
-              onPress={() => setActiveFilter('promote')}
+              type="influencer"
+              label="Influencer"
+              count={streamCounts.influencer}
+              isActive={activeFilter === 'influencer'}
+              onPress={() => setActiveFilter('influencer')}
               colors={colors}
             />
             <FilterButton
-              type="celebrate"
-              label="Celebrate"
-              count={streamCounts.celebrate}
-              isActive={activeFilter === 'celebrate'}
-              onPress={() => setActiveFilter('celebrate')}
+              type="promotional"
+              label="Promotional"
+              count={streamCounts.promotional}
+              isActive={activeFilter === 'promotional'}
+              onPress={() => setActiveFilter('promotional')}
               colors={colors}
             />
           </ScrollView>
@@ -473,6 +498,111 @@ const LiveStreamScreen: React.FC<LiveStreamScreenProps> = ({
           />
         )}
       </View>
+
+      {/* Floating Action Button */}
+      <TouchableOpacity
+        style={[styles.fabButton, { backgroundColor: colors.primary }]}
+        onPress={handleStartStream}
+        activeOpacity={0.8}
+      >
+        <Plus size={24} color="white" />
+      </TouchableOpacity>
+
+      {/* Stream Type Selection Modal */}
+      <Modal
+        visible={showStreamTypeModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowStreamTypeModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: colors.card }]}>
+            <Text style={[styles.modalTitle, { color: colors.text.primary }]}>
+              Choose Stream Type
+            </Text>
+            <Text style={[styles.modalSubtitle, { color: colors.text.secondary }]}>
+              Select how you want to go live
+            </Text>
+
+            {/* Free Stream Option */}
+            <TouchableOpacity
+              style={[styles.streamTypeOption, { borderColor: colors.border }]}
+              onPress={() => handleStreamTypeSelect('free')}
+              activeOpacity={0.7}
+            >
+              <LinearGradient
+                colors={streamTypeConfig.free.gradient}
+                style={styles.streamTypeGradient}
+              >
+                <Text style={styles.modalStreamTypeIcon}>{streamTypeConfig.free.icon}</Text>
+              </LinearGradient>
+              <View style={styles.streamTypeInfo}>
+                <Text style={[styles.streamTypeTitle, { color: colors.text.primary }]}>
+                  Free Live Stream
+                </Text>
+                <Text style={[styles.streamTypeDescription, { color: colors.text.secondary }]}>
+                  Anyone can join and watch for free
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            {/* Influencer Stream Option */}
+            <TouchableOpacity
+              style={[styles.streamTypeOption, { borderColor: colors.border }]}
+              onPress={() => handleStreamTypeSelect('influencer')}
+              activeOpacity={0.7}
+            >
+              <LinearGradient
+                colors={streamTypeConfig.influencer.gradient}
+                style={styles.streamTypeGradient}
+              >
+                <Text style={styles.modalStreamTypeIcon}>{streamTypeConfig.influencer.icon}</Text>
+              </LinearGradient>
+              <View style={styles.streamTypeInfo}>
+                <Text style={[styles.streamTypeTitle, { color: colors.text.primary }]}>
+                  Influencer Stream
+                </Text>
+                <Text style={[styles.streamTypeDescription, { color: colors.text.secondary }]}>
+                  Viewers pay ₹1 per minute to watch
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            {/* Promotional Stream Option */}
+            <TouchableOpacity
+              style={[styles.streamTypeOption, { borderColor: colors.border }]}
+              onPress={() => handleStreamTypeSelect('promotional')}
+              activeOpacity={0.7}
+            >
+              <LinearGradient
+                colors={streamTypeConfig.promotional.gradient}
+                style={styles.streamTypeGradient}
+              >
+                <Text style={styles.modalStreamTypeIcon}>{streamTypeConfig.promotional.icon}</Text>
+              </LinearGradient>
+              <View style={styles.streamTypeInfo}>
+                <Text style={[styles.streamTypeTitle, { color: colors.text.primary }]}>
+                  Promotional Stream
+                </Text>
+                <Text style={[styles.streamTypeDescription, { color: colors.text.secondary }]}>
+                  Company pays, viewers earn money
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            {/* Cancel Button */}
+            <TouchableOpacity
+              style={[styles.cancelButton, { borderColor: colors.border }]}
+              onPress={() => setShowStreamTypeModal(false)}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.cancelButtonText, { color: colors.text.secondary }]}>
+                Cancel
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -655,6 +785,85 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginTop: 16,
     textAlign: 'center',
+  },
+  fabButton: {
+    position: 'absolute',
+    bottom: 80,
+    right: 20,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 40,
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  modalSubtitle: {
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 32,
+  },
+  streamTypeOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    marginBottom: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  streamTypeGradient: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  modalStreamTypeIcon: {
+    fontSize: 24,
+  },
+  streamTypeInfo: {
+    flex: 1,
+  },
+  streamTypeTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  streamTypeDescription: {
+    fontSize: 14,
+  },
+  cancelButton: {
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
 

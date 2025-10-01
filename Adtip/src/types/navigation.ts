@@ -96,16 +96,22 @@ export type MainNavigatorParamList = {
   };
   // Live streaming screen types
   LiveStream: {
-    userId: number;
-    isHost?: boolean;
+    userId?: number;
+    mode?: 'host' | 'viewer';
     meetingId?: string;
     token?: string;
     streamTitle?: string;
+    streamType?: 'free' | 'influencer' | 'promotional';
   };
   
   // Live stream configuration screen
   LiveStreamConfig: {
     userId: number;
+  };
+
+  // Go Live screen for creating new streams
+  GoLive: {
+    initialStreamType?: 'free' | 'influencer' | 'promotional';
   };
   PlayToEarn: undefined;
   LudoGame: undefined;

@@ -2575,6 +2575,38 @@ export default class ApiService {
   }
 
   /**
+   * Create Razorpay order for premium subscription (one-time payment)
+   */
+  static async createPremiumOrder(data: {
+    plan_id: string;
+    user_id: number;
+  }): Promise<any> {
+    console.log('[ApiService] 💳 Creating premium order:', data);
+    return this.post('/api/premium-order', data);
+  }
+
+  /**
+   * Verify premium payment (one-time payment)
+   */
+  static async verifyPremiumPayment(data: {
+    razorpay_payment_id: string;
+    razorpay_order_id: string;
+    razorpay_signature: string;
+    user_id: number;
+    plan_id: string;
+  }): Promise<any> {
+    try {
+      console.log('[ApiService] ✅ Verifying premium payment:', data);
+      const response = await this.post('/api/verify-premium-payment', data);
+      console.log('[ApiService] ✅ Premium payment verification response:', response);
+      return response;
+    } catch (error) {
+      console.error('[ApiService] ❌ Error verifying premium payment:', error);
+      throw this.handleError(error);
+    }
+  }
+
+  /**
    * Add funds to wallet
    */
   static async addFunds(data: {
@@ -3349,10 +3381,7 @@ export default class ApiService {
     try {
       console.log('[ApiService] Syncing call billing:', params);
 
-      const response = await this.makeRequest('/api/call-billing-sync', {
-        method: 'POST',
-        body: JSON.stringify(params),
-      });
+      const response = await this.post('/api/call-billing-sync', params);
 
       console.log('[ApiService] Call billing sync response:', response);
       return response;
@@ -3374,16 +3403,13 @@ export default class ApiService {
     try {
       console.log('[ApiService] Debiting wallet for call:', params);
 
-      const response = await this.makeRequest('/withdrawFundFromWallet', {
-        method: 'POST',
-        body: JSON.stringify({
-          userId: params.userId,
-          withdraw_req_amount: params.amount,
-          transaction_type: 'Call Charge',
-          check_bal_flag: 'DEDUCT_BAL',
-          description: params.description,
-          reference_id: params.callId
-        }),
+      const response = await this.post('/withdrawFundFromWallet', {
+        userId: params.userId,
+        withdraw_req_amount: params.amount,
+        transaction_type: 'Call Charge',
+        check_bal_flag: 'DEDUCT_BAL',
+        description: params.description,
+        reference_id: params.callId
       });
 
       console.log('[ApiService] Wallet debit response:', response);
@@ -3406,19 +3432,16 @@ export default class ApiService {
     try {
       console.log('[ApiService] Crediting wallet for call:', params);
 
-      const response = await this.makeRequest('/addfunds', {
-        method: 'POST',
-        body: JSON.stringify({
-          createdby: params.userId,
-          amount: params.amount,
-          transactionStatus: '1',
-          transaction_type: 'Call Earnings',
-          order_id: `call_earnings_${params.callId}_${Date.now()}`,
-          payment_id: `call_payment_${params.callId}_${Date.now()}`,
-          isCron: true, // Skip transaction record creation
-          description: params.description,
-          reference_id: params.callId
-        }),
+      const response = await this.post('/addfunds', {
+        createdby: params.userId,
+        amount: params.amount,
+        transactionStatus: '1',
+        transaction_type: 'Call Earnings',
+        order_id: `call_earnings_${params.callId}_${Date.now()}`,
+        payment_id: `call_payment_${params.callId}_${Date.now()}`,
+        isCron: true, // Skip transaction record creation
+        description: params.description,
+        reference_id: params.callId
       });
 
       console.log('[ApiService] Wallet credit response:', response);
@@ -3436,9 +3459,7 @@ export default class ApiService {
     try {
       console.log('[ApiService] Getting wallet transaction history:', { userId, limit });
 
-      const response = await this.makeRequest(`/getfunds/${userId}?limit=${limit}`, {
-        method: 'GET',
-      });
+      const response = await this.get(`/getfunds/${userId}?limit=${limit}`);
 
       console.log('[ApiService] Wallet transaction history response:', response);
       return response;
@@ -3467,17 +3488,14 @@ export default class ApiService {
     try {
       console.log('[ApiService] Processing call settlement:', params);
 
-      const response = await this.makeRequest('/call/settlement', {
-        method: 'POST',
-        body: JSON.stringify({
-          callerId: String(params.callerId),
-          receiverId: String(params.receiverId),
-          callDuration: params.callDuration,
-          callerDebitAmount: params.callerDebitAmount,
-          receiverCreditAmount: params.receiverCreditAmount,
-          callId: params.callId,
-          callType: params.callType
-        }),
+      const response = await this.post('/call/settlement', {
+        callerId: String(params.callerId),
+        receiverId: String(params.receiverId),
+        callDuration: params.callDuration,
+        callerDebitAmount: params.callerDebitAmount,
+        receiverCreditAmount: params.receiverCreditAmount,
+        callId: params.callId,
+        callType: params.callType
       });
 
       console.log('[ApiService] Call settlement response:', response);
@@ -3499,11 +3517,8 @@ export default class ApiService {
     try {
       console.log('[ApiService] Getting call settlement history:', { userId, limit, offset });
 
-      const response = await this.makeRequest(
-        `/call/settlement/history/${userId}?limit=${limit}&offset=${offset}`,
-        {
-          method: 'GET',
-        }
+      const response = await this.get(
+        `/call/settlement/history/${userId}?limit=${limit}&offset=${offset}`
       );
 
       console.log('[ApiService] Call settlement history response:', response);
