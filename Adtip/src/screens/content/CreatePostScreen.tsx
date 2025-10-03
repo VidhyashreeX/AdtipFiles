@@ -217,18 +217,16 @@ const CreatePostScreen = () => {
       console.log('[CreatePost] Launching media picker (images and videos)');
 
       ImagePicker.openPicker({
-        width: 1200,
-        height: 1200,
         multiple: true,
         cropping: false,
         compressImageQuality: 0.8,
-        // mediaType removed to allow both images and videos selection
+        mediaType: 'any', // 'any' allows both images and videos in react-native-image-crop-picker
         maxFiles: 5 - images.length,
       })
         .then(selectedImages => {
-          // Limit to 5 images total
+          // Limit to 5 media files total
           if (images.length + selectedImages.length > 5) {
-            Alert.alert('Limit Exceeded', 'You can upload maximum 5 images');
+            Alert.alert('Limit Exceeded', 'You can upload maximum 5 media files');
             return;
           }
 
@@ -240,7 +238,7 @@ const CreatePostScreen = () => {
             height: img.height,
           }));
 
-          console.log('[CreatePost] Selected images:', newImages.length);
+          console.log('[CreatePost] Selected media files:', newImages.length);
           setImages([...images, ...newImages]);
         })
         .catch(err => {
@@ -782,7 +780,7 @@ const CreatePostScreen = () => {
 
           <View style={styles.imageCountWrapper}>
             <Text style={[styles.imageCountText, {color: colors.text.secondary}]}>
-              {images.length}/5 images
+              {images.length}/5 media
             </Text>
           </View>
         </View>

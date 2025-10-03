@@ -1290,13 +1290,13 @@ const HomeScreen: React.FC = () => {
                 />
               )} */}
 
-              {/* Active Live Streams Row - Show ongoing live streams */}
+              {/* Active Live Streams Row - Show ongoing live streams 
               <ActiveStreamsRow
                 onJoinStream={(meetingId, streamTitle) => {
                   // Navigate to the LiveStream tab in the TabNavigator
                   (navigation as any).navigate('LiveStream');
                 }}
-              />
+              />*/}
 
               <CategoriesRow categories={displayCategories} selectedCategory={selectedCategoryState} onCategoryPress={handleCategoryPress} isLoading={categoriesLoading} />
               {/* Rearranged banner sections: Carousel (first), Survey Banner (restored), Survey Offerwalls (hidden per user request) */}
