@@ -794,18 +794,24 @@ const TipTubeUploadScreen: React.FC = () => {
   // Handle paid video toggle
   const handlePaidVideoToggle = (value: boolean) => {
     if (value && !isContentCreatorPremium) {
-      // Show premium required alert
+      // Show premium encouragement alert (not blocking)
       Alert.alert(
-        'Content Creator Premium Required',
-        'Paid video feature is only available for Content Creator Premium users. Upgrade to unlock this feature and earn more from your content.',
+        'Upgrade to Content Creator Premium',
+        'Content Creator Premium members get higher earnings, priority support, and exclusive features. Upgrade now to maximize your revenue from paid videos!',
         [
           {
-            text: 'Cancel',
+            text: 'Continue Without Premium',
             style: 'cancel',
+            onPress: () => {
+              setIsPaidVideo(true);
+            },
           },
           {
-            text: 'Upgrade',
-            onPress: () => navigation.navigate('ContentCreatorPremium' as never),
+            text: 'Upgrade Now',
+            onPress: () => {
+              navigation.navigate('ContentCreatorPremium' as never);
+              // Don't set isPaidVideo here, let them come back and toggle again after upgrade
+            },
           },
         ]
       );

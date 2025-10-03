@@ -222,7 +222,7 @@ const CreatePostScreen = () => {
         multiple: true,
         cropping: false,
         compressImageQuality: 0.8,
-        mediaType: 'any', // Changed from 'photo' to 'any' to allow both images and videos
+        // mediaType removed to allow both images and videos selection
         maxFiles: 5 - images.length,
       })
         .then(selectedImages => {
