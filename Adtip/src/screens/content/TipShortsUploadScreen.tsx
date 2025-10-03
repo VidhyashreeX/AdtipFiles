@@ -163,8 +163,17 @@ const TipShortsUploadScreen: React.FC = () => {
         console.error('[TipShortsUpload] No channel found for user');
         Alert.alert(
           'Channel Required',
-          'You need to create a channel before uploading videos. Please create a channel first.',
-          [{ text: 'OK', onPress: () => navigation.goBack() }]
+          'You need to create a channel before uploading videos. Would you like to create one now?',
+          [
+            { text: 'Cancel', style: 'cancel', onPress: () => navigation.goBack() },
+            { 
+              text: 'Create Channel', 
+              onPress: () => {
+                // Navigate to channel creation
+                navigation.navigate('CreateChannel' as never);
+              }
+            },
+          ]
         );
       }
     } catch (error) {

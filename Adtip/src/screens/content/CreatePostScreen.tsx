@@ -30,6 +30,7 @@ import CategoryChip from '../../components/common/CategoryChip';
 
 // Context and services
 import {useTheme} from '../../contexts/ThemeContext';
+import {useAuth} from '../../contexts/AuthContext';
 import ApiService from '../../services/ApiService';
 import CloudflareUploadService from '../../services/CloudflareUploadService';
 import { useCreatePost } from '../../hooks/useQueries';
@@ -37,6 +38,7 @@ import { useCreatePost } from '../../hooks/useQueries';
 const CreatePostScreen = () => {
   const {colors, isDarkMode} = useTheme();
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
+  const {user} = useAuth();
   
   // Form state
   const [title, setTitle] = useState('');
@@ -45,6 +47,8 @@ const CreatePostScreen = () => {
   const [selectedCategory, setSelectedCategory] = useState<any>(null);
   const [isPromoted, setIsPromoted] = useState(false);
   const [userId, setUserId] = useState<string>('');
+  const [channelId, setChannelId] = useState<number | null>(null);
+  const [isCheckingChannel, setIsCheckingChannel] = useState(false);
   
   // Upload progress state
   const [isUploading, setIsUploading] = useState(false);
@@ -58,7 +62,7 @@ const CreatePostScreen = () => {
   // Create dynamic styles based on theme
   const styles = createStyles(colors, isDarkMode);
 
-  // Get user ID on component mount
+  // Get user ID and check channel on component mount
   useEffect(() => {
     const getUserId = async () => {
       try {
@@ -72,6 +76,7 @@ const CreatePostScreen = () => {
     };
     
     getUserId();
+    checkUserChannel();
     
     // Focus input when screen loads
     const timer = setTimeout(() => {
@@ -82,6 +87,33 @@ const CreatePostScreen = () => {
 
     return () => clearTimeout(timer);
   }, []);
+
+  // Check if user has a channel
+  const checkUserChannel = async () => {
+    if (!user?.id) return;
+
+    try {
+      setIsCheckingChannel(true);
+      console.log('[CreatePost] Checking channel for user:', user.id);
+
+      const response = await ApiService.getChannelByUserId(user.id);
+      console.log('[CreatePost] Channel response:', response);
+
+      if (response.status === 200 && response.data && response.data.length > 0) {
+        const userChannelId = response.data[0].channelId;
+        setChannelId(userChannelId);
+        console.log('[CreatePost] Channel ID set to:', userChannelId);
+      } else {
+        console.log('[CreatePost] No channel found for user');
+        setChannelId(null);
+      }
+    } catch (error) {
+      console.error('[CreatePost] Error checking channel:', error);
+      setChannelId(null);
+    } finally {
+      setIsCheckingChannel(false);
+    }
+  };
 
   // Permission handling for image picker
   const requestStoragePermission = async (): Promise<boolean> => {
@@ -173,7 +205,7 @@ const CreatePostScreen = () => {
     }
   };
 
-  // Handle image picking
+  // Handle image picking (now supports both images and videos)
   const handlePickImage = async () => {
     try {
       // Request permission first
@@ -182,7 +214,7 @@ const CreatePostScreen = () => {
         return;
       }
 
-      console.log('[CreatePost] Launching image picker');
+      console.log('[CreatePost] Launching media picker (images and videos)');
 
       ImagePicker.openPicker({
         width: 1200,
@@ -190,7 +222,7 @@ const CreatePostScreen = () => {
         multiple: true,
         cropping: false,
         compressImageQuality: 0.8,
-        mediaType: 'photo',
+        mediaType: 'any', // Changed from 'photo' to 'any' to allow both images and videos
         maxFiles: 5 - images.length,
       })
         .then(selectedImages => {
@@ -342,12 +374,12 @@ const CreatePostScreen = () => {
     }
   };
 
-  // Upload images using CloudflareUploadService
+  // Upload images and videos using CloudflareUploadService
   const uploadImages = async (): Promise<string[]> => {
     if (images.length === 0) return [];
 
     try {
-      console.log('[CreatePost] Starting image upload process for', images.length, 'images');
+      console.log('[CreatePost] Starting media upload process for', images.length, 'items');
       setIsUploading(true);
       setUploadProgress(0);
 
@@ -358,17 +390,25 @@ const CreatePostScreen = () => {
       const uploadedUrls: string[] = [];
       const totalImages = images.length;
 
-      // Upload images one by one using CloudflareUploadService
+      // Upload media files one by one using CloudflareUploadService
       for (let i = 0; i < images.length; i++) {
         const img = images[i];
-        console.log(`[CreatePost] Uploading image ${i + 1}/${totalImages}:`, img.uri);
+        const isVideo = img.type?.startsWith('video/');
+        const mediaType = isVideo ? 'video' : 'image';
+        
+        console.log(`[CreatePost] Uploading ${mediaType} ${i + 1}/${totalImages}:`, img.uri);
 
         try {
-          // Upload single image using CloudflareUploadService
+          // Determine upload folder based on media type
+          const uploadFolder = isVideo ? 'videos' : 'images';
+          const fileExtension = isVideo ? '.mp4' : '.jpg';
+          const fileName = img.name || `post_${mediaType}_${Date.now()}_${i}${fileExtension}`;
+
+          // Upload single media file using CloudflareUploadService
           const uploadResult = await CloudflareUploadService.uploadFile(
             img.uri,
-            'images', // Upload to images folder
-            img.name || `post_image_${Date.now()}_${i}.jpg`,
+            uploadFolder,
+            fileName,
             parseInt(userId),
             (progress) => {
               // Calculate overall progress
@@ -380,15 +420,15 @@ const CreatePostScreen = () => {
           );
 
           if (!uploadResult.success) {
-            throw new Error(uploadResult.error || `Failed to upload image ${i + 1}`);
+            throw new Error(uploadResult.error || `Failed to upload ${mediaType} ${i + 1}`);
           }
 
-          console.log(`[CreatePost] Successfully uploaded image ${i + 1}:`, uploadResult.url);
+          console.log(`[CreatePost] Successfully uploaded ${mediaType} ${i + 1}:`, uploadResult.url);
           uploadedUrls.push(uploadResult.url);
 
         } catch (imageError: any) {
-          console.error(`[CreatePost] Error uploading image ${i + 1}:`, imageError);
-          throw new Error(`Failed to upload image ${i + 1}: ${imageError.message}`);
+          console.error(`[CreatePost] Error uploading media ${i + 1}:`, imageError);
+          throw new Error(`Failed to upload media ${i + 1}: ${imageError.message}`);
         }
       }
 
@@ -407,6 +447,27 @@ const CreatePostScreen = () => {
 
   // Validation helper function
   const validatePostData = (): string | null => {
+    // Check if user has a channel when uploading videos
+    const hasVideo = images.some(img => img.type?.startsWith('video/'));
+    if (hasVideo && !channelId) {
+      Alert.alert(
+        'Channel Required',
+        'You need to create a channel before uploading videos. Please create a channel first.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { 
+            text: 'Create Channel', 
+            onPress: () => {
+              // Navigate to channel creation
+              // @ts-ignore
+              navigation.navigate('CreateChannel');
+            }
+          },
+        ]
+      );
+      return 'Channel required for video uploads';
+    }
+
     if (!title.trim()) return 'Please add a title to your post';
     if (title.trim().length < 3) return 'Title must be at least 3 characters long';
     if (!content.trim() && images.length === 0) return 'Please add some content or images to your post';
@@ -441,12 +502,23 @@ const CreatePostScreen = () => {
         return date.toISOString().slice(0, 19).replace('T', ' ');
       };
 
+      // Detect media type based on uploaded files
+      let mediaType: 'video' | 'image' | 'audio' = 'image';
+      if (images.length > 0) {
+        const firstMedia = images[0];
+        if (firstMedia.type?.startsWith('video/')) {
+          mediaType = 'video';
+        } else if (firstMedia.type?.startsWith('audio/')) {
+          mediaType = 'audio';
+        }
+      }
+
       const postData = {
         user_id: parseInt(userId),
         title: title.trim(),
         content: content.trim() || undefined, // Don't send empty string
         media_url: mediaUrls.length > 0 ? mediaUrls[0] : undefined, // Don't send empty string
-        media_type: mediaUrls.length > 0 ? 'image' as 'video' | 'image' | 'audio' : 'image', // Default to image, backend will handle
+        media_type: mediaType, // Properly detect media type from file
         is_promoted: isPromoted,
         video_category_id: selectedCategory?.id || undefined,
         start_date: formatMySQLDateTime(now),
@@ -578,26 +650,34 @@ const CreatePostScreen = () => {
               editable={!createPostMutation.isPending && !isUploading}
             />
 
-            {/* Image preview section */}
+            {/* Image/Video preview section */}
             {images.length > 0 && (
               <View style={styles.imagePreviewContainer}>
-                {images.map((img, index) => (
-                  <View key={index} style={styles.imageWrapper}>
-                    <Image
-                      source={{uri: img.uri}}
-                      style={styles.imagePreview}
-                    />
-                    <TouchableOpacity
-                      style={[
-                        styles.removeImageBtn,
-                        {backgroundColor: colors.error},
-                      ]}
-                      onPress={() => handleRemoveImage(index)}
-                      disabled={createPostMutation.isPending || isUploading}>
-                      <Icon name="x" size={12} color={colors.white} />
-                    </TouchableOpacity>
-                  </View>
-                ))}
+                {images.map((img, index) => {
+                  const isVideo = img.type?.startsWith('video/');
+                  return (
+                    <View key={index} style={styles.imageWrapper}>
+                      <Image
+                        source={{uri: img.uri}}
+                        style={styles.imagePreview}
+                      />
+                      {isVideo && (
+                        <View style={[styles.videoIndicator, {backgroundColor: 'rgba(0,0,0,0.6)'}]}>
+                          <Icon name="play-circle" size={24} color={colors.white} />
+                        </View>
+                      )}
+                      <TouchableOpacity
+                        style={[
+                          styles.removeImageBtn,
+                          {backgroundColor: colors.error},
+                        ]}
+                        onPress={() => handleRemoveImage(index)}
+                        disabled={createPostMutation.isPending || isUploading}>
+                        <Icon name="x" size={12} color={colors.white} />
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })}
               </View>
             )}
 
@@ -605,7 +685,7 @@ const CreatePostScreen = () => {
             {isUploading && (
               <View style={styles.uploadProgressContainer}>
                 <Text style={[styles.uploadProgressText, {color: colors.text.secondary}]}>
-                  Uploading images... {Math.round(uploadProgress)}%
+                  Uploading media... {Math.round(uploadProgress)}%
                 </Text>
                 <View style={[styles.progressBar, {backgroundColor: colors.gray?.[200]}]}>
                   <View 
@@ -748,6 +828,16 @@ const createStyles = (colors: any, isDarkMode: boolean) => StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 8,
+  },
+  videoIndicator: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   removeImageBtn: {
     position: 'absolute',

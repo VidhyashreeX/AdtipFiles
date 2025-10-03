@@ -23,6 +23,7 @@ import { launchImageLibrary, ImagePickerResponse, MediaType } from 'react-native
 import Icon from 'react-native-vector-icons/Feather';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { useContentCreatorPremium } from '../../contexts/ContentCreatorPremiumContext';
 import Header from '../../components/common/Header';
 import VideoCompressionService, { VideoCompressionOptions } from '../../services/VideoCompressionService';
 import ApiService from '../../services/ApiService';
@@ -93,6 +94,7 @@ const TipTubeUploadScreen: React.FC = () => {
   const navigation = useNavigation();
   const { colors, isDarkMode } = useTheme();
   const { user } = useAuth();
+  const { isContentCreatorPremium } = useContentCreatorPremium();
 
   // Form State
   const [title, setTitle] = useState('');
@@ -144,8 +146,17 @@ const TipTubeUploadScreen: React.FC = () => {
         console.error('[TipTubeUpload] No channel found for user');
         Alert.alert(
           'Channel Required',
-          'You need to create a channel before uploading videos. Please create a channel first.',
-          [{ text: 'OK', onPress: () => navigation.goBack() }]
+          'You need to create a channel before uploading videos. Would you like to create one now?',
+          [
+            { text: 'Cancel', style: 'cancel', onPress: () => navigation.goBack() },
+            { 
+              text: 'Create Channel', 
+              onPress: () => {
+                // Navigate to channel creation
+                navigation.navigate('CreateChannel' as never);
+              }
+            },
+          ]
         );
       }
     } catch (error) {
@@ -782,6 +793,25 @@ const TipTubeUploadScreen: React.FC = () => {
 
   // Handle paid video toggle
   const handlePaidVideoToggle = (value: boolean) => {
+    if (value && !isContentCreatorPremium) {
+      // Show premium required alert
+      Alert.alert(
+        'Content Creator Premium Required',
+        'Paid video feature is only available for Content Creator Premium users. Upgrade to unlock this feature and earn more from your content.',
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+          },
+          {
+            text: 'Upgrade',
+            onPress: () => navigation.navigate('ContentCreatorPremium' as never),
+          },
+        ]
+      );
+      return;
+    }
+
     setIsPaidVideo(value);
     if (!value) {
       setPromotionalPrice('');
