@@ -554,90 +554,108 @@ const LiveStreamContainer: React.FC<{
     }
   }, []);
 
-  const meeting = useMeeting({
-    onParticipantJoined: (participant) => {
-      logInfo('LiveStreaming', 'Participant joined', { id: participant.id, mode: participant.mode });
-    },
-    onParticipantLeft: (participant) => {
-      logInfo('LiveStreaming', 'Participant left', { id: participant.id });
-    },
-    onMeetingJoined: async () => {
-      logInfo('LiveStreaming', `Joined live stream as ${isHost ? 'host' : 'viewer'}`);
+  // Memoize all event handlers to prevent re-registration
+  const handleParticipantJoined = useCallback((participant: any) => {
+    logInfo('LiveStreaming', 'Participant joined', { id: participant.id, mode: participant.mode });
+  }, []);
+
+  const handleParticipantLeft = useCallback((participant: any) => {
+    logInfo('LiveStreaming', 'Participant left', { id: participant.id });
+  }, []);
+
+  const handleMeetingJoined = useCallback(async () => {
+    // Prevent multiple initializations using ref instead of state
+    if (hasInitializedDevices.current) {
+      logWarn('LiveStreaming', 'onMeetingJoined called but already initialized, ignoring');
+      return;
+    }
+
+    logInfo('LiveStreaming', `Joined live stream as ${isHost ? 'host' : 'viewer'}`);
+    
+    // Mark as joined immediately to prevent race conditions
+    setJoined(true);
+    
+    // For hosts, enable devices and configure audio after joining
+    if (isHost) {
+      setIsInitializing(true);
+      hasInitializedDevices.current = true;
       
-      // For hosts, enable devices and configure audio after joining
-      if (isHost && !hasInitializedDevices.current) {
-        setIsInitializing(true);
-        hasInitializedDevices.current = true;
-        
-        try {
-          const currentMeeting = meetingRef.current;
-          if (currentMeeting) {
-            logInfo('LiveStreaming', 'Initializing host devices...');
+      try {
+        const currentMeeting = meetingRef.current;
+        if (currentMeeting) {
+          logInfo('LiveStreaming', 'Initializing host devices...');
+          
+          // Small delay to ensure meeting is fully initialized
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          // Configure audio output to prevent echo
+          // For hosts in live streaming, we should use EARPIECE or WIRED_HEADSET
+          // to prevent hearing their own voice through speakers
+          try {
+            const audioDevices = await getAudioDeviceList();
+            logInfo('LiveStreaming', 'Available audio devices:', audioDevices);
             
-            // Small delay to ensure meeting is fully initialized
-            await new Promise(resolve => setTimeout(resolve, 500));
-            
-            // Configure audio output to prevent echo
-            // For hosts in live streaming, we should use EARPIECE or WIRED_HEADSET
-            // to prevent hearing their own voice through speakers
-            try {
-              const audioDevices = await getAudioDeviceList();
-              logInfo('LiveStreaming', 'Available audio devices:', audioDevices);
-              
-              // Prefer WIRED_HEADSET or EARPIECE over SPEAKER_PHONE
-              if (audioDevices.includes('WIRED_HEADSET')) {
-                await switchAudioDevice('WIRED_HEADSET');
-                logInfo('LiveStreaming', 'Audio switched to WIRED_HEADSET');
-              } else if (audioDevices.includes('BLUETOOTH')) {
-                await switchAudioDevice('BLUETOOTH');
-                logInfo('LiveStreaming', 'Audio switched to BLUETOOTH');
-              } else if (audioDevices.includes('EARPIECE')) {
-                await switchAudioDevice('EARPIECE');
-                logInfo('LiveStreaming', 'Audio switched to EARPIECE');
-              } else {
-                // Fallback to speaker but log warning
-                logWarn('LiveStreaming', 'No earpiece/headset found, using SPEAKER_PHONE (may cause echo)');
-              }
-            } catch (audioError) {
-              logWarn('LiveStreaming', 'Failed to configure audio device', audioError);
+            // Prefer WIRED_HEADSET or EARPIECE over SPEAKER_PHONE
+            if (audioDevices.includes('WIRED_HEADSET')) {
+              await switchAudioDevice('WIRED_HEADSET');
+              logInfo('LiveStreaming', 'Audio switched to WIRED_HEADSET');
+            } else if (audioDevices.includes('BLUETOOTH')) {
+              await switchAudioDevice('BLUETOOTH');
+              logInfo('LiveStreaming', 'Audio switched to BLUETOOTH');
+            } else if (audioDevices.includes('EARPIECE')) {
+              await switchAudioDevice('EARPIECE');
+              logInfo('LiveStreaming', 'Audio switched to EARPIECE');
+            } else {
+              // Fallback to speaker but log warning
+              logWarn('LiveStreaming', 'No earpiece/headset found, using SPEAKER_PHONE (may cause echo)');
             }
-            
-            // Enable webcam first
-            const webcamResult = await safeCallMeetingMethod(currentMeeting, 'enableWebcam');
-            if (!webcamResult.success) {
-              logWarn('LiveStreaming', 'Failed to enable webcam', webcamResult.error);
-            }
-            
-            // Then enable mic
-            const micResult = await safeCallMeetingMethod(currentMeeting, 'unmuteMic');
-            if (!micResult.success) {
-              logWarn('LiveStreaming', 'Failed to enable mic', micResult.error);
-            }
-            
-            logInfo('LiveStreaming', 'Host devices initialized successfully');
+          } catch (audioError) {
+            logWarn('LiveStreaming', 'Failed to configure audio device', audioError);
           }
-        } catch (error) {
-          logError('LiveStreaming', 'Error initializing host devices', error);
-        } finally {
-          setIsInitializing(false);
+          
+          // Enable webcam first
+          const webcamResult = await safeCallMeetingMethod(currentMeeting, 'enableWebcam');
+          if (!webcamResult.success) {
+            logWarn('LiveStreaming', 'Failed to enable webcam', webcamResult.error);
+          }
+          
+          // Then enable mic
+          const micResult = await safeCallMeetingMethod(currentMeeting, 'unmuteMic');
+          if (!micResult.success) {
+            logWarn('LiveStreaming', 'Failed to enable mic', micResult.error);
+          }
+          
+          logInfo('LiveStreaming', 'Host devices initialized successfully');
         }
+      } catch (error) {
+        logError('LiveStreaming', 'Error initializing host devices', error);
+      } finally {
+        setIsInitializing(false);
       }
-      
-      setJoined(true);
-    },
-    onMeetingLeft: async () => {
-      logInfo('LiveStreaming', 'Meeting left, cleaning up...');
-      await cleanupDevices();
-      // Navigate to LiveStream tab
-      (navigation as any).navigate('TabHome', { screen: 'LiveStream' });
-    },
-    onError: async (error: any) => {
-      logError('LiveStreaming', 'Meeting error', error);
-      await cleanupDevices();
-      Alert.alert('Stream Error', error?.message || 'An error occurred during the stream');
-      // Navigate to LiveStream tab
-      (navigation as any).navigate('TabHome', { screen: 'LiveStream' });
-    },
+    }
+  }, [isHost]);
+
+  const handleMeetingLeft = useCallback(async () => {
+    logInfo('LiveStreaming', 'Meeting left, cleaning up...');
+    await cleanupDevices();
+    // Navigate to LiveStream tab
+    (navigation as any).navigate('TabHome', { screen: 'LiveStream' });
+  }, [cleanupDevices, navigation]);
+
+  const handleMeetingError = useCallback(async (error: any) => {
+    logError('LiveStreaming', 'Meeting error', error);
+    await cleanupDevices();
+    Alert.alert('Stream Error', error?.message || 'An error occurred during the stream');
+    // Navigate to LiveStream tab
+    (navigation as any).navigate('TabHome', { screen: 'LiveStream' });
+  }, [cleanupDevices, navigation]);
+
+  const meeting = useMeeting({
+    onParticipantJoined: handleParticipantJoined,
+    onParticipantLeft: handleParticipantLeft,
+    onMeetingJoined: handleMeetingJoined,
+    onMeetingLeft: handleMeetingLeft,
+    onError: handleMeetingError,
   });
 
   const { join, leave, end } = meeting;
