@@ -12,6 +12,7 @@ import {
   TextInput,
   Modal,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
@@ -739,27 +740,71 @@ const LiveStreamContainer: React.FC<{
       // Call backend API to end stream and update database
       if (user?.id && meetingId) {
         try {
-          const response = await fetch(`${API_BASE_URL}/api/live-stream/end`, {
+          // Get auth token
+          const token = await AsyncStorage.getItem('accessToken') || await AsyncStorage.getItem('@auth_token');
+          
+          const apiUrl = `${API_BASE_URL}/api/live-stream/end`;
+          const requestBody = {
+            user_id: user.id,
+            meeting_id: meetingId,
+          };
+
+          // Log the API request
+          logInfo('LiveStreaming', `[API REQUEST] POST ${apiUrl}`, {
+            body: requestBody,
+            hasToken: !!token,
+          });
+
+          const response = await fetch(apiUrl, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
+              ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
             },
-            body: JSON.stringify({
-              user_id: user.id,
-              meeting_id: meetingId,
-            }),
+            body: JSON.stringify(requestBody),
           });
 
-          const result = await response.json();
-          if (result.success) {
-            logInfo('LiveStreaming', 'Stream ended on backend', result.data);
+          // Log response status
+          logInfo('LiveStreaming', `[API RESPONSE] Status: ${response.status} ${response.statusText}`);
+
+          // Try to parse response
+          const responseText = await response.text();
+          logInfo('LiveStreaming', '[API RESPONSE] Raw response:', responseText.substring(0, 200));
+
+          let result;
+          try {
+            result = JSON.parse(responseText);
+          } catch (parseError) {
+            logError('LiveStreaming', 'Failed to parse API response as JSON', parseError);
+            throw new Error(`Invalid JSON response: ${responseText.substring(0, 100)}`);
+          }
+
+          // Log parsed result
+          logInfo('LiveStreaming', '[API RESPONSE] Parsed result:', result);
+
+          if (response.ok && result.success) {
+            logInfo('LiveStreaming', '✅ Stream ended successfully on backend', result.data);
           } else {
-            logWarn('LiveStreaming', 'Failed to end stream on backend', result.message);
+            logWarn('LiveStreaming', `⚠️ Failed to end stream on backend: ${result.message || 'Unknown error'}`, {
+              status: response.status,
+              statusText: response.statusText,
+              result,
+            });
           }
         } catch (apiError) {
-          logError('LiveStreaming', 'API error ending stream', apiError);
+          logError('LiveStreaming', '❌ API error ending stream', apiError);
+          logError('LiveStreaming', 'Error details:', {
+            message: apiError instanceof Error ? apiError.message : String(apiError),
+            name: apiError instanceof Error ? apiError.name : 'Unknown',
+          });
           // Continue with VideoSDK cleanup even if API fails
         }
+      } else {
+        logWarn('LiveStreaming', 'Cannot call end stream API: missing user.id or meetingId', {
+          hasUser: !!user,
+          userId: user?.id,
+          meetingId,
+        });
       }
       
       // Cleanup devices first
