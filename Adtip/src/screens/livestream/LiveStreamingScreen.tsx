@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -21,6 +21,7 @@ import {
   RTCView,
   MediaStream,
   Constants,
+  createCameraVideoTrack,
 } from '@videosdk.live/react-native-sdk';
 import {
   Mic,
@@ -52,6 +53,51 @@ interface LiveStreamingScreenProps {
   streamTitle: string;
   streamType: 'free' | 'influencer' | 'promotional';
 }
+
+type SafeCallResult = {
+  success: boolean;
+  error?: Error;
+};
+
+const getErrorMessage = (error: unknown, fallback: string): string => {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (typeof error === 'string') {
+    return error;
+  }
+
+  if (error && typeof error === 'object' && 'message' in error && typeof (error as any).message === 'string') {
+    return (error as any).message;
+  }
+
+  return fallback;
+};
+
+const safeCallMeetingMethod = async (
+  meeting: any,
+  methodName: string,
+  args: any[] = []
+): Promise<SafeCallResult> => {
+  if (!meeting || typeof meeting[methodName] !== 'function') {
+    return { success: false };
+  }
+
+  try {
+    const result = meeting[methodName](...args);
+    if (result && typeof result.then === 'function') {
+      await result;
+    }
+    return { success: true };
+  } catch (error) {
+    logError('LiveStreaming', `Failed to execute meeting.${methodName}`, error);
+    return {
+      success: false,
+      error: error instanceof Error ? error : new Error(getErrorMessage(error, 'Operation failed')),
+    };
+  }
+};
 
 // Message Component for Live Chat
 const ChatMessage: React.FC<{ 
@@ -219,51 +265,178 @@ const ViewerMode: React.FC<{ colors: any; streamTitle: string; streamType: strin
   );
 };
 
-// Host Component - Shows host video with controls
-const HostMode: React.FC<{ colors: any; streamTitle: string; streamType: string }> = ({ 
-  colors, 
-  streamTitle, 
-  streamType 
+interface HostControlsProps {
+  participantId: string;
+  onToggleMic: () => Promise<void>;
+  onToggleWebcam: () => Promise<void>;
+  onEndStream: () => Promise<void>;
+}
+
+const HostControls: React.FC<HostControlsProps> = ({
+  participantId,
+  onToggleMic,
+  onToggleWebcam,
+  onEndStream,
 }) => {
-  const { 
-    participants, 
-    localParticipant, 
-    toggleMic, 
-    toggleWebcam, 
-    leave 
-  } = useMeeting();
-  
-  const [micOn, setMicOn] = useState(true);
-  const [webcamOn, setWebcamOn] = useState(true);
+  const { micOn, webcamOn } = useParticipant(participantId);
+  const [micLoading, setMicLoading] = useState(false);
+  const [cameraLoading, setCameraLoading] = useState(false);
+  const [ending, setEnding] = useState(false);
 
-  const handleToggleMic = () => {
-    toggleMic();
-    setMicOn(prev => !prev);
-  };
+  const handleToggleMic = useCallback(async () => {
+    if (micLoading) {
+      return;
+    }
 
-  const handleToggleWebcam = () => {
-    toggleWebcam();
-    setWebcamOn(prev => !prev);
-  };
+    setMicLoading(true);
+    try {
+      await onToggleMic();
+    } catch (error) {
+      logError('LiveStreaming', 'Failed to toggle microphone', error);
+      Alert.alert('Microphone Error', getErrorMessage(error, 'Unable to toggle microphone.'));
+    } finally {
+      setMicLoading(false);
+    }
+  }, [micLoading, onToggleMic]);
 
-  const handleEndStream = () => {
+  const handleToggleWebcam = useCallback(async () => {
+    if (cameraLoading) {
+      return;
+    }
+
+    setCameraLoading(true);
+    try {
+      await onToggleWebcam();
+    } catch (error) {
+      logError('LiveStreaming', 'Failed to toggle camera', error);
+      Alert.alert('Camera Error', getErrorMessage(error, 'Unable to toggle camera.'));
+    } finally {
+      setCameraLoading(false);
+    }
+  }, [cameraLoading, onToggleWebcam]);
+
+  const handleEndStream = useCallback(() => {
+    if (ending) {
+      return;
+    }
+
     Alert.alert(
       'End Live Stream',
       'Are you sure you want to end the live stream? This will disconnect all viewers.',
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'End Stream', onPress: leave, style: 'destructive' },
+        {
+          text: 'End Stream',
+          style: 'destructive',
+          onPress: async () => {
+            setEnding(true);
+            try {
+              await onEndStream();
+            } catch (error) {
+              logError('LiveStreaming', 'Failed to end live stream', error);
+              Alert.alert('End Stream Error', getErrorMessage(error, 'Unable to end the live stream.'));
+            } finally {
+              setEnding(false);
+            }
+          },
+        },
       ]
     );
-  };
+  }, [ending, onEndStream]);
+
+  return (
+    <View style={styles.hostControls}>
+      <TouchableOpacity
+        style={[
+          styles.controlButton,
+          { backgroundColor: micOn ? 'rgba(255, 255, 255, 0.2)' : 'rgba(255, 0, 0, 0.8)' },
+        ]}
+        onPress={handleToggleMic}
+        disabled={micLoading}
+      >
+        {micLoading ? (
+          <ActivityIndicator size="small" color="white" />
+        ) : micOn ? (
+          <Mic size={24} color="white" />
+        ) : (
+          <MicOff size={24} color="white" />
+        )}
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={[
+          styles.controlButton,
+          { backgroundColor: webcamOn ? 'rgba(255, 255, 255, 0.2)' : 'rgba(255, 0, 0, 0.8)' },
+        ]}
+        onPress={handleToggleWebcam}
+        disabled={cameraLoading}
+      >
+        {cameraLoading ? (
+          <ActivityIndicator size="small" color="white" />
+        ) : webcamOn ? (
+          <Camera size={24} color="white" />
+        ) : (
+          <CameraOff size={24} color="white" />
+        )}
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={[styles.endStreamButton, { backgroundColor: 'rgba(255, 0, 0, 0.8)' }]}
+        onPress={handleEndStream}
+        disabled={ending}
+      >
+        {ending ? (
+          <ActivityIndicator size="small" color="white" />
+        ) : (
+          <PhoneOff size={24} color="white" />
+        )}
+      </TouchableOpacity>
+    </View>
+  );
+};
+
+interface HostModeProps {
+  colors: any;
+  streamTitle: string;
+  streamType: string;
+  onToggleMic: () => Promise<void>;
+  onToggleWebcam: () => Promise<void>;
+  onEndStream: () => Promise<void>;
+}
+
+// Host Component - Shows host video with controls
+const HostMode: React.FC<HostModeProps> = ({
+  colors,
+  streamTitle,
+  streamType,
+  onToggleMic,
+  onToggleWebcam,
+  onEndStream,
+}) => {
+  const { participants, localParticipant } = useMeeting();
+
+  if (!localParticipant) {
+    return (
+      <View style={[styles.loadingContainer, { backgroundColor: 'black' }]}> 
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={[styles.loadingText, { color: colors.white }]}>Preparing your live stream...</Text>
+      </View>
+    );
+  }
+
+  const participantCount = participants instanceof Map ? participants.size : participants?.size ?? 0;
+  const viewerCount = Math.max(participantCount - 1, 0);
+  const streamTypeLabel = streamType === 'influencer'
+    ? 'Influencer Stream'
+    : streamType === 'promotional'
+      ? 'Promotional Stream'
+      : 'Free Stream';
 
   return (
     <View style={styles.hostContainer}>
       {/* Main Video Area */}
       <View style={styles.hostVideoContainer}>
-        {localParticipant && (
-          <HostVideoView participantId={localParticipant.id} />
-        )}
+        <HostVideoView participantId={localParticipant.id} />
       </View>
 
       {/* Stream Info */}
@@ -274,43 +447,23 @@ const HostMode: React.FC<{ colors: any; streamTitle: string; streamType: string 
         <Text style={[styles.streamTitle, { color: colors.white }]} numberOfLines={1}>
           {streamTitle}
         </Text>
+        <Text style={[styles.streamTypeSubtitle, { color: colors.white }]} numberOfLines={1}>
+          {streamTypeLabel}
+        </Text>
         <View style={[styles.viewerCount, { backgroundColor: 'rgba(0, 0, 0, 0.6)' }]}>
           <Users size={16} color="white" />
           <Text style={[styles.viewerCountText, { color: colors.white }]}>
-            {participants.size - 1} {participants.size - 1 === 1 ? 'viewer' : 'viewers'}
+            {viewerCount} {viewerCount === 1 ? 'viewer' : 'viewers'}
           </Text>
         </View>
       </View>
 
-      {/* Host Controls */}
-      <View style={styles.hostControls}>
-        <TouchableOpacity
-          style={[
-            styles.controlButton,
-            { backgroundColor: micOn ? 'rgba(255, 255, 255, 0.2)' : 'rgba(255, 0, 0, 0.8)' }
-          ]}
-          onPress={handleToggleMic}
-        >
-          {micOn ? <Mic size={24} color="white" /> : <MicOff size={24} color="white" />}
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[
-            styles.controlButton,
-            { backgroundColor: webcamOn ? 'rgba(255, 255, 255, 0.2)' : 'rgba(255, 0, 0, 0.8)' }
-          ]}
-          onPress={handleToggleWebcam}
-        >
-          {webcamOn ? <Camera size={24} color="white" /> : <CameraOff size={24} color="white" />}
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.endStreamButton, { backgroundColor: 'rgba(255, 0, 0, 0.8)' }]}
-          onPress={handleEndStream}
-        >
-          <PhoneOff size={24} color="white" />
-        </TouchableOpacity>
-      </View>
+      <HostControls
+        participantId={localParticipant.id}
+        onToggleMic={onToggleMic}
+        onToggleWebcam={onToggleWebcam}
+        onEndStream={onEndStream}
+      />
     </View>
   );
 };
@@ -319,13 +472,25 @@ const HostMode: React.FC<{ colors: any; streamTitle: string; streamType: string 
 const HostVideoView: React.FC<{ participantId: string }> = ({ participantId }) => {
   const { webcamStream, webcamOn } = useParticipant(participantId);
 
-  return webcamOn && webcamStream ? (
-    <RTCView
-      streamURL={new MediaStream([webcamStream?.track]).toURL()}
-      objectFit="cover"
-      style={styles.videoView}
-    />
-  ) : (
+  const streamURL = useMemo(() => {
+    if (webcamOn && webcamStream?.track) {
+      return new MediaStream([webcamStream.track]).toURL();
+    }
+    return undefined;
+  }, [webcamOn, webcamStream?.track]);
+
+  if (webcamOn && streamURL) {
+    return (
+      <RTCView
+        streamURL={streamURL}
+        objectFit="cover"
+        mirror
+        style={styles.videoView}
+      />
+    );
+  }
+
+  return (
     <View style={styles.noVideoView}>
       <Camera size={48} color="rgba(255, 255, 255, 0.5)" />
       <Text style={styles.noVideoText}>Camera Off</Text>
@@ -342,47 +507,247 @@ const LiveStreamContainer: React.FC<{
   streamType: string;
 }> = ({ meetingId, token, isHost, streamTitle, streamType }) => {
   const { colors } = useTheme();
-  const { user } = useAuth();
   const [joined, setJoined] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(false);
   const navigation = useNavigation();
+  const meetingRef = useRef<any>(null);
+  const hasInitializedDevices = useRef(false);
 
-  const { join } = useMeeting({
-    onMeetingJoined: () => {
-      setJoined(true);
+  const cleanupDevices = useCallback(async () => {
+    const currentMeeting = meetingRef.current;
+    if (!currentMeeting) {
+      logInfo('LiveStreaming', 'No meeting to cleanup');
+      return;
+    }
+
+    logInfo('LiveStreaming', 'Cleaning up devices...');
+
+    try {
+      // Mute mic
+      const localParticipant = currentMeeting.localParticipant;
+      if (localParticipant?.micOn) {
+        await safeCallMeetingMethod(currentMeeting, 'muteMic');
+      }
+
+      // Disable webcam
+      if (localParticipant?.webcamOn) {
+        await safeCallMeetingMethod(currentMeeting, 'disableWebcam');
+      }
+
+      logInfo('LiveStreaming', 'Devices cleaned up successfully');
+    } catch (error) {
+      logError('LiveStreaming', 'Error during device cleanup', error);
+    }
+  }, []);
+
+  const meeting = useMeeting({
+    onMeetingJoined: async () => {
       logInfo('LiveStreaming', `Joined live stream as ${isHost ? 'host' : 'viewer'}`);
+      
+      // For hosts, enable devices after joining
+      if (isHost && !hasInitializedDevices.current) {
+        setIsInitializing(true);
+        hasInitializedDevices.current = true;
+        
+        try {
+          const currentMeeting = meetingRef.current;
+          if (currentMeeting) {
+            logInfo('LiveStreaming', 'Initializing host devices...');
+            
+            // Small delay to ensure meeting is fully initialized
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            // Enable webcam first
+            const webcamResult = await safeCallMeetingMethod(currentMeeting, 'enableWebcam');
+            if (!webcamResult.success) {
+              logWarn('LiveStreaming', 'Failed to enable webcam', webcamResult.error);
+            }
+            
+            // Then enable mic
+            const micResult = await safeCallMeetingMethod(currentMeeting, 'unmuteMic');
+            if (!micResult.success) {
+              logWarn('LiveStreaming', 'Failed to enable mic', micResult.error);
+            }
+            
+            logInfo('LiveStreaming', 'Host devices initialized successfully');
+          }
+        } catch (error) {
+          logError('LiveStreaming', 'Error initializing host devices', error);
+        } finally {
+          setIsInitializing(false);
+        }
+      }
+      
+      setJoined(true);
     },
-    onMeetingLeft: () => {
+    onMeetingLeft: async () => {
+      logInfo('LiveStreaming', 'Meeting left, cleaning up...');
+      await cleanupDevices();
       navigation.goBack();
-      logInfo('LiveStreaming', 'Left live stream');
     },
-    onError: (error: any) => {
+    onError: async (error: any) => {
       logError('LiveStreaming', 'Meeting error', error);
-      Alert.alert('Error', error.message || 'An error occurred');
+      await cleanupDevices();
+      Alert.alert('Stream Error', error?.message || 'An error occurred during the stream');
+      navigation.goBack();
     },
   });
 
+  const { join, leave, end } = meeting;
+
+  useEffect(() => {
+    meetingRef.current = meeting;
+  }, [meeting]);
+
   useEffect(() => {
     // Auto-join when component mounts
-    const timer = setTimeout(() => {
-      join();
-    }, 100);
+    if (!joined) {
+      const timer = setTimeout(() => {
+        if (typeof join === 'function') {
+          logInfo('LiveStreaming', 'Auto-joining meeting...');
+          join();
+        }
+      }, 100);
 
-    return () => clearTimeout(timer);
-  }, [join]);
+      return () => clearTimeout(timer);
+    }
+  }, [join, joined]);
 
-  if (!joined) {
+  useEffect(() => {
+    // Cleanup on unmount
+    return () => {
+      cleanupDevices().catch((error) => {
+        logError('LiveStreaming', 'Failed to cleanup devices on unmount', error);
+      });
+    };
+  }, [cleanupDevices]);
+
+  const safeToggleMic = useCallback(async () => {
+    const currentMeeting = meetingRef.current;
+    if (!currentMeeting) {
+      logError('LiveStreaming', 'Meeting not initialized for mic toggle');
+      return;
+    }
+
+    try {
+      const localParticipant = currentMeeting.localParticipant;
+      const isMicOn = localParticipant?.micOn;
+      
+      logInfo('LiveStreaming', `Toggling mic: current state=${isMicOn}`);
+
+      if (isMicOn) {
+        const result = await safeCallMeetingMethod(currentMeeting, 'muteMic');
+        if (result.success) {
+          logInfo('LiveStreaming', 'Mic muted successfully');
+        } else {
+          throw result.error || new Error('Failed to mute mic');
+        }
+      } else {
+        const result = await safeCallMeetingMethod(currentMeeting, 'unmuteMic');
+        if (result.success) {
+          logInfo('LiveStreaming', 'Mic unmuted successfully');
+        } else {
+          throw result.error || new Error('Failed to unmute mic');
+        }
+      }
+    } catch (error) {
+      logError('LiveStreaming', 'Error toggling mic', error);
+      Alert.alert('Microphone Error', 'Failed to toggle microphone');
+    }
+  }, []);
+
+  const safeToggleWebcam = useCallback(async () => {
+    const currentMeeting = meetingRef.current;
+    if (!currentMeeting) {
+      logError('LiveStreaming', 'Meeting not initialized for webcam toggle');
+      return;
+    }
+
+    try {
+      const localParticipant = currentMeeting.localParticipant;
+      const isWebcamOn = localParticipant?.webcamOn;
+      
+      logInfo('LiveStreaming', `Toggling webcam: current state=${isWebcamOn}`);
+
+      if (isWebcamOn) {
+        const result = await safeCallMeetingMethod(currentMeeting, 'disableWebcam');
+        if (result.success) {
+          logInfo('LiveStreaming', 'Webcam disabled successfully');
+        } else {
+          throw result.error || new Error('Failed to disable webcam');
+        }
+      } else {
+        const result = await safeCallMeetingMethod(currentMeeting, 'enableWebcam');
+        if (result.success) {
+          logInfo('LiveStreaming', 'Webcam enabled successfully');
+        } else {
+          throw result.error || new Error('Failed to enable webcam');
+        }
+      }
+    } catch (error) {
+      logError('LiveStreaming', 'Error toggling webcam', error);
+      Alert.alert('Camera Error', 'Failed to toggle camera');
+    }
+  }, []);
+
+  const handleHostEndStream = useCallback(async () => {
+    const currentMeeting = meetingRef.current;
+    if (!currentMeeting) {
+      logError('LiveStreaming', 'Meeting not initialized for ending stream');
+      navigation.goBack();
+      return;
+    }
+
+    try {
+      logInfo('LiveStreaming', 'Ending live stream...');
+      
+      // Cleanup devices first
+      await cleanupDevices();
+      
+      // End the meeting (this will trigger onMeetingLeft)
+      const result = await safeCallMeetingMethod(currentMeeting, 'end');
+      if (!result.success) {
+        logWarn('LiveStreaming', 'End meeting failed, trying leave...', result.error);
+        
+        // Fallback to leave
+        const leaveResult = await safeCallMeetingMethod(currentMeeting, 'leave');
+        if (!leaveResult.success) {
+          throw leaveResult.error || new Error('Failed to end the live stream');
+        }
+      }
+      
+      logInfo('LiveStreaming', 'Live stream ended successfully');
+    } catch (error) {
+      logError('LiveStreaming', 'Error ending stream', error);
+      Alert.alert('Error', 'Failed to end the stream properly');
+      // Force navigation back even on error
+      navigation.goBack();
+    }
+  }, [cleanupDevices, navigation]);
+
+  if (!joined || (isHost && isInitializing)) {
     return (
       <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" color={colors.primary} />
         <Text style={[styles.loadingText, { color: colors.text.primary }]}>
-          {isHost ? 'Starting your live stream...' : 'Joining live stream...'}
+          {!joined 
+            ? (isHost ? 'Starting your live stream...' : 'Joining live stream...')
+            : 'Initializing camera and microphone...'
+          }
         </Text>
       </View>
     );
   }
 
   return isHost ? (
-    <HostMode colors={colors} streamTitle={streamTitle} streamType={streamType} />
+    <HostMode
+      colors={colors}
+      streamTitle={streamTitle}
+      streamType={streamType}
+      onToggleMic={safeToggleMic}
+      onToggleWebcam={safeToggleWebcam}
+      onEndStream={handleHostEndStream}
+    />
   ) : (
     <ViewerMode colors={colors} streamTitle={streamTitle} streamType={streamType} />
   );
@@ -419,16 +784,20 @@ const LiveStreamingScreen: React.FC = () => {
     );
   }
 
-  const mode = isHost ? Constants.modes.SEND_AND_RECV : Constants.modes.RECV_ONLY;
+  // Use CONFERENCE mode for proper host streaming
+  const mode = isHost ? Constants.modes.CONFERENCE : Constants.modes.VIEWER;
 
   return (
     <MeetingProvider
       config={{
         meetingId,
-        micEnabled: isHost,
-        webcamEnabled: isHost,
+        // Start with devices disabled, will be enabled after join for hosts
+        micEnabled: false,
+        webcamEnabled: false,
         name: user?.name || (isHost ? 'Host' : 'Viewer'),
-        mode: mode as "SEND_AND_RECV" | "RECV_ONLY",
+        mode: mode as any,
+        // Disable multistream for better performance
+        multiStream: false,
       }}
       token={token}
     >
@@ -552,6 +921,12 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     marginBottom: 8,
+  },
+  streamTypeSubtitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 8,
+    opacity: 0.85,
   },
   viewerCount: {
     flexDirection: 'row',
