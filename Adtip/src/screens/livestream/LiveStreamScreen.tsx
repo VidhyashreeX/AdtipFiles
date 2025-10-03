@@ -311,7 +311,7 @@ const LiveStreamScreen: React.FC<LiveStreamScreenProps> = ({
     loadStreams();
   }, [loadStreams]);
 
-  const handleStreamPress = useCallback((stream: LiveStream) => {
+  const handleStreamPress = useCallback(async (stream: LiveStream) => {
     if (!user) {
       Alert.alert('Login Required', 'Please login to watch live streams.');
       return;
@@ -319,27 +319,25 @@ const LiveStreamScreen: React.FC<LiveStreamScreenProps> = ({
 
     try {
       console.log('[LiveStreamScreen] Joining live stream:', stream.id);
-      // Get the root navigation to avoid tab navigation conflicts
-      const rootNavigation = navigation.getParent();
-      if (rootNavigation) {
-        console.log('[LiveStreamScreen] Using root navigation to join stream');
-        (rootNavigation as any).navigate('LiveStream', { 
-          mode: 'viewer',
+      
+      // Call API to join the stream and get token
+      const joinResponse = await LiveStreamService.joinStream(user.id, stream.id);
+      
+      if (joinResponse.success && joinResponse.data?.token) {
+        console.log('[LiveStreamScreen] Successfully joined stream, navigating to LiveStreaming');
+        // Navigate to the proper live streaming interface as viewer
+        (navigation as any).navigate('LiveStreaming', {
           meetingId: stream.id,
+          token: joinResponse.data.token,
+          isHost: false,
           streamTitle: stream.title,
-          streamerName: stream.streamerName
+          streamType: stream.streamType
         });
       } else {
-        console.log('[LiveStreamScreen] Using direct navigation to join stream');
-        (navigation as any).navigate('LiveStream', { 
-          mode: 'viewer',
-          meetingId: stream.id,
-          streamTitle: stream.title,
-          streamerName: stream.streamerName
-        });
+        Alert.alert('Error', joinResponse.message || 'Failed to join the live stream. Please try again.');
       }
     } catch (error) {
-      console.error('[LiveStreamScreen] Navigation error to join stream:', error);
+      console.error('[LiveStreamScreen] Error joining stream:', error);
       Alert.alert('Error', 'Failed to join the live stream. Please try again.');
     }
   }, [user, navigation]);

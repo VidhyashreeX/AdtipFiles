@@ -113,6 +113,15 @@ export type MainNavigatorParamList = {
   GoLive: {
     initialStreamType?: 'free' | 'influencer' | 'promotional';
   };
+
+  // New proper live streaming interface with ILS
+  LiveStreaming: {
+    meetingId: string;
+    token: string;
+    isHost: boolean;
+    streamTitle: string;
+    streamType: 'free' | 'influencer' | 'promotional';
+  };
   PlayToEarn: undefined;
   LudoGame: undefined;
   WatchToEarn: undefined;

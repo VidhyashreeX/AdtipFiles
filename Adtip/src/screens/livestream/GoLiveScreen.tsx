@@ -393,14 +393,15 @@ const GoLiveScreen: React.FC = () => {
         setShowModal(false);
         
         if (selectedStreamType === 'promotional') {
-          // Handle Razorpay payment
-          handleRazorpayPayment(response.data);
+          // Handle Razorpay payment, pass the title along
+          handleRazorpayPayment({...response.data, title: formData.title});
         } else {
-          // Navigate to live stream screen
-          navigation.navigate('LiveStream', {
-            mode: 'host',
+          // Navigate to the proper live streaming interface
+          navigation.navigate('LiveStreaming', {
             meetingId: response.data.meeting_id,
             token: response.data.token,
+            isHost: true,
+            streamTitle: payload.title || 'Live Stream',
             streamType: selectedStreamType || 'free'
           });
         }
@@ -449,10 +450,11 @@ const GoLiveScreen: React.FC = () => {
             Alert.alert('Success', 'Payment confirmed! Your promotional stream is now active.', [
               {
                 text: 'Start Streaming',
-                onPress: () => navigation.navigate('LiveStream', {
-                  mode: 'host',
+                onPress: () => navigation.navigate('LiveStreaming', {
                   meetingId: confirmResponse.data.meeting_id,
                   token: confirmResponse.data.token,
+                  isHost: true,
+                  streamTitle: paymentData.title || 'Promotional Stream',
                   streamType: 'promotional'
                 })
               }

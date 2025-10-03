@@ -138,6 +138,9 @@ import LiveStreamScreen from '../screens/live/LiveStreamScreen';
 // Import GoLiveScreen
 import GoLiveScreen from '../screens/livestream/GoLiveScreen';
 
+// Import LiveStreamingScreen
+import LiveStreamingScreen from '../screens/livestream/LiveStreamingScreen';
+
 // Profile component wrapper to avoid inline function
 const ProfileScreenWrapper: React.FC<{
   route: import('@react-navigation/native').RouteProp<
@@ -370,6 +373,18 @@ const MainNavigator = () => {
         name="GoLive"
         component={GoLiveScreen}
         options={slideUpTransitionConfig}
+      />
+      
+      {/* Live Streaming screen for proper streaming interface */}
+      <Stack.Screen
+        name="LiveStreaming"
+        component={LiveStreamingScreen}
+        options={{
+          presentation: 'fullScreenModal',
+          animation: 'fade',
+          gestureEnabled: false,
+          headerShown: false,
+        }}
       />
       
       {/* Media viewing with custom transitions */}
