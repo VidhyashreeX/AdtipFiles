@@ -40,27 +40,52 @@ const SubscriptionScreen = () => {
   const [paymentProcessing, setPaymentProcessing] = useState(false);
 
   useEffect(() => {
-    const fetchPlans = async () => {
+    const loadPlans = () => {
       try {
-        const response = await ApiService.getSubscriptionPlans();
-        if (response.status) {
-          setPlans(response.plans);
-          // Pre-select the middle plan
-          if (response.plans.length > 1) {
-            setSelectedPlanId(response.plans[1].id);
-          } else if (response.plans.length > 0) {
-            setSelectedPlanId(response.plans[0].id);
+        console.log('[SubscriptionScreen] Loading hardcoded premium plans...');
+        
+        // Use the correct existing plan IDs from database
+        const premiumPlans = [
+          {
+            id: 'plan_Qjrw31WPrhunxz',
+            name: 'Premium - 1 Month',
+            description: 'Access to premium features for 1 month',
+            amount: '200',
+            period: 'month',
+            interval: 1
+          },
+          {
+            id: 'plan_QtQX5aXkVvBfAV',
+            name: 'Premium - 6 Months',
+            description: 'Access to premium features for 6 months',
+            amount: '1200',
+            period: 'months',
+            interval: 6
+          },
+          {
+            id: 'plan_QtQYdr9DICra6h',
+            name: 'Premium - 12 Months',
+            description: 'Access to premium features for 12 months',
+            amount: '2400',
+            period: 'months',
+            interval: 12
           }
-        } else {
-          Alert.alert('Error', 'Could not fetch premium plans.');
-        }
+        ];
+        
+        setPlans(premiumPlans);
+        // Pre-select the middle plan (6 months)
+        setSelectedPlanId('plan_QtQX5aXkVvBfAV');
+        
+        console.log('[SubscriptionScreen] Premium plans loaded successfully:', premiumPlans);
       } catch (error) {
-        Alert.alert('Error', 'An error occurred while fetching plans.');
+        console.error('[SubscriptionScreen] Error loading plans:', error);
+        Alert.alert('Error', 'Failed to load premium plans.');
       } finally {
         setLoading(false);
       }
     };
-    fetchPlans();
+    
+    loadPlans();
   }, []);
 
   const handlePayment = async () => {

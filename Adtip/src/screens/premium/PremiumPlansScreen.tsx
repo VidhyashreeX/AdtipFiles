@@ -37,89 +37,52 @@ const SubscriptionScreen = () => {
   const [apiCallTimeout, setApiCallTimeout] = useState<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    const fetchPlans = async () => {
-      // Set a timeout to detect if API call is hanging
-      const timeout = setTimeout(() => {
-        console.warn('[PremiumPlansScreen] API call timeout - plans fetch taking too long');
-        Alert.alert('Timeout', 'The request is taking too long. Please check your connection and try again.');
-        setLoading(false);
-      }, 30000); // 30 second timeout
-      
-      setApiCallTimeout(timeout);
-
+    const loadPlans = () => {
       try {
-        console.log('[PremiumPlansScreen] Fetching subscription plans...');
+        console.log('[PremiumPlansScreen] Loading hardcoded premium plans...');
         
-        // Test API connection first
-        try {
-          const testResponse = await fetch('https://api.adtip.in/api/subscription-plans', {
-            method: 'GET',
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json',
-              'Authorization': `Bearer ${await AsyncStorage.getItem('accessToken')}`
-            }
-          });
-          console.log('[PremiumPlansScreen] Direct fetch test - Status:', testResponse.status);
-          const testData = await testResponse.json();
-          console.log('[PremiumPlansScreen] Direct fetch test - Data:', testData);
-        } catch (fetchError) {
-          console.error('[PremiumPlansScreen] Direct fetch test failed:', fetchError);
-        }
-        
-        // Try test endpoints first, then fallback to production
-        let response;
-        try {
-          console.log('[PremiumPlansScreen] Trying test subscription plans first...');
-          response = await ApiService.getSubscriptionPlansTest();
-          console.log('[PremiumPlansScreen] Test plans response:', response);
-        } catch (testError) {
-          console.log('[PremiumPlansScreen] Test plans failed, trying production plans...');
-          response = await ApiService.getSubscriptionPlans();
-        }
-        console.log('[PremiumPlansScreen] Plans response:', response);
-        
-        // Clear timeout since we got a response
-        clearTimeout(timeout);
-        setApiCallTimeout(null);
-        
-        if (response && response.status) {
-          setPlans(response.plans || []);
-          // Pre-select the middle plan
-          if (response.plans && response.plans.length > 1) {
-            setSelectedPlanId(response.plans[1].id);
-          } else if (response.plans && response.plans.length > 0) {
-            setSelectedPlanId(response.plans[0].id);
+        // Use the correct existing plan IDs from database
+        const premiumPlans = [
+          {
+            id: 'plan_Qjrw31WPrhunxz',
+            name: 'Premium - 1 Month',
+            description: 'Access to premium features for 1 month',
+            amount: '200',
+            period: 'month',
+            interval: 1
+          },
+          {
+            id: 'plan_QtQX5aXkVvBfAV',
+            name: 'Premium - 6 Months',
+            description: 'Access to premium features for 6 months',
+            amount: '1200',
+            period: 'months',
+            interval: 6
+          },
+          {
+            id: 'plan_QtQYdr9DICra6h',
+            name: 'Premium - 12 Months',
+            description: 'Access to premium features for 12 months',
+            amount: '2400',
+            period: 'months',
+            interval: 12
           }
-        } else {
-          console.error('[PremiumPlansScreen] API returned status false:', response);
-          Alert.alert('Error', response?.message || 'Could not fetch subscription plans.');
-        }
-      } catch (error: any) {
-        // Clear timeout on error
-        clearTimeout(timeout);
-        setApiCallTimeout(null);
+        ];
         
-        console.error('[PremiumPlansScreen] Error fetching plans:', error);
-        console.error('[PremiumPlansScreen] Error details:', {
-          message: error.message,
-          response: error.response?.data,
-          status: error.response?.status,
-          config: error.config
-        });
-        Alert.alert('Error', error.message || 'An error occurred while fetching plans.');
+        setPlans(premiumPlans);
+        // Pre-select the middle plan (6 months)
+        setSelectedPlanId('plan_QtQX5aXkVvBfAV');
+        
+        console.log('[PremiumPlansScreen] Premium plans loaded successfully:', premiumPlans);
+      } catch (error: any) {
+        console.error('[PremiumPlansScreen] Error loading plans:', error);
+        Alert.alert('Error', 'Failed to load premium plans.');
       } finally {
         setLoading(false);
       }
     };
-    fetchPlans();
-
-    // Cleanup timeout on unmount
-    return () => {
-      if (apiCallTimeout) {
-        clearTimeout(apiCallTimeout);
-      }
-    };
+    
+    loadPlans();
   }, []);
 
   const handlePayment = async () => {
@@ -143,42 +106,27 @@ const SubscriptionScreen = () => {
     }, 45000); // 45 second timeout for payment setup
 
     try {
-      // Step 1: Create a subscription on Razorpay (no database storage yet)
-      console.log('[PremiumPlansScreen] Creating subscription with plan_id:', selectedPlanId, 'user_id:', user.id);
+      // Step 1: Create a one-time payment order (not a recurring subscription)
+      console.log('[PremiumPlansScreen] Creating premium order with plan_id:', selectedPlanId, 'user_id:', user.id);
       
-      // Try test endpoint first, then fallback to production
-      let subResponse;
-      try {
-        console.log('[PremiumPlansScreen] Trying test subscription creation first...');
-        subResponse = await ApiService.createSubscriptionTest(selectedPlanId, user.id);
-        console.log('[PremiumPlansScreen] Test subscription creation response:', subResponse);
-      } catch (testError) {
-        console.log('[PremiumPlansScreen] Test subscription failed, trying production...');
-        subResponse = await ApiService.createSubscription(selectedPlanId, user.id);
-      }
-      console.log('[PremiumPlansScreen] Create subscription response:', subResponse);
+      const orderResponse = await ApiService.createPremiumOrder({
+        plan_id: selectedPlanId, 
+        user_id: user.id
+      });
+      console.log('[PremiumPlansScreen] Create premium order response:', orderResponse);
 
-      if (!subResponse || !subResponse.status || !subResponse.subscription_id) {
-        console.error('[PremiumPlansScreen] Create subscription failed:', subResponse);
-        throw new Error(subResponse?.message || 'Failed to create subscription.');
+      if (!orderResponse || !orderResponse.status || !orderResponse.order_id) {
+        console.error('[PremiumPlansScreen] Create premium order failed:', orderResponse);
+        throw new Error(orderResponse?.message || 'Failed to create payment order.');
       }
 
-      const { subscription_id } = subResponse;
-      console.log('[PremiumPlansScreen] Subscription created with ID:', subscription_id);
+      const { order_id, amount, currency } = orderResponse;
+      console.log('[PremiumPlansScreen] Premium order created with ID:', order_id);
 
       // Step 2: Fetch Razorpay key from backend
       console.log('[PremiumPlansScreen] Fetching Razorpay details...');
       
-      // Try test endpoint first, then fallback to production
-      let razorpayDetails;
-      try {
-        console.log('[PremiumPlansScreen] Trying test Razorpay details first...');
-        razorpayDetails = await ApiService.getRazorpayDetailsTest();
-        console.log('[PremiumPlansScreen] Test Razorpay details response:', razorpayDetails);
-      } catch (testError) {
-        console.log('[PremiumPlansScreen] Test Razorpay details failed, trying production...');
-        razorpayDetails = await ApiService.getRazorpayDetails();
-      }
+      const razorpayDetails = await ApiService.getRazorpayDetails();
       console.log('[PremiumPlansScreen] Razorpay details response:', razorpayDetails);
       const key = razorpayDetails?.api_key;
       if (!key) {
@@ -186,12 +134,14 @@ const SubscriptionScreen = () => {
         throw new Error('Could not fetch Razorpay key.');
       }
 
-      // Step 3: Open Razorpay Checkout
+      // Step 3: Open Razorpay Checkout for one-time payment
       const options = {
         key,
-        subscription_id: subscription_id,
+        order_id: order_id, // Using order_id instead of subscription_id
+        amount: amount, // Amount in paisa
+        currency: currency || 'INR',
         name: 'Adtip Premium',
-        description: 'Your premium subscription',
+        description: 'One-time premium upgrade payment',
         prefill: {
           email: user.emailId,
           contact: user.mobile_number,
@@ -200,16 +150,16 @@ const SubscriptionScreen = () => {
         theme: { color: colors.primary },
       };
 
-      console.log('Razorpay options:', options);
+      console.log('🔄 [PremiumPlansScreen] Razorpay one-time payment options:', options);
       RazorpayCheckout.open(options)
         .then(async (data: any) => {
             try {
-              console.log('🔄 [SubscriptionScreen] Payment completed, verifying...', data);
+              console.log('🔄 [PremiumPlansScreen] One-time payment completed, verifying...', data);
               
-              // Verify payment first
-              const verificationResult = await ApiService.verifySubscriptionPayment({
+              // Verify one-time payment
+              const verificationResult = await ApiService.verifyPremiumPayment({
                 razorpay_payment_id: data.razorpay_payment_id,
-                razorpay_subscription_id: data.razorpay_subscription_id,
+                razorpay_order_id: data.razorpay_order_id,
                 razorpay_signature: data.razorpay_signature,
                 user_id: user.id,
                 plan_id: selectedPlanId
@@ -219,12 +169,12 @@ const SubscriptionScreen = () => {
                 throw new Error('Payment verification failed');
               }
               
-              console.log('✅ [SubscriptionScreen] Payment verified successfully');
+              console.log('✅ [PremiumPlansScreen] One-time payment verified successfully');
               
               // Only navigate on successful verification
               Alert.alert(
                 'Success', 
-                'Your premium subscription has been activated successfully!',
+                'Your premium upgrade has been activated successfully! This is a one-time payment.',
                 [
                   {
                     text: 'OK',
@@ -237,7 +187,7 @@ const SubscriptionScreen = () => {
               );
               
             } catch (error: any) {
-              console.error('❌ [SubscriptionScreen] Payment verification failed:', error);
+              console.error('❌ [PremiumPlansScreen] Payment verification failed:', error);
               Alert.alert(
                 'Payment Verification Failed', 
                 'Your payment was processed but verification failed. Please contact support.',
@@ -246,7 +196,7 @@ const SubscriptionScreen = () => {
             }
         })
         .catch((error: any) => {
-            console.error('❌ [SubscriptionScreen] Payment failed:', error);
+            console.error('❌ [PremiumPlansScreen] Payment failed:', error);
             // Clear payment timeout on payment completion
             clearTimeout(paymentTimeout);
             // Show user-friendly messages for payment cancelled or failed
@@ -355,11 +305,11 @@ const SubscriptionScreen = () => {
   if (loading) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-        <Header title="Subscription Plans" showSearch={false} showWallet={false} />
+        <Header title="Premium Upgrade" showSearch={false} showWallet={false} />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={[styles.loadingText, { color: colors.text.secondary }]}>
-            Loading subscription plans...
+            Loading premium plans...
           </Text>
         </View>
       </SafeAreaView>
@@ -404,7 +354,7 @@ const SubscriptionScreen = () => {
             Choose Your Plan
           </Text>
           <Text style={[styles.sectionSubtitle, { color: colors.text.secondary }]}>
-            Cancel anytime. No hidden fees.
+            One-time payment. No recurring charges.
           </Text>
           
           <View style={styles.plansContainer}>
