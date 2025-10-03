@@ -628,19 +628,15 @@ const LiveStreamContainer: React.FC<{
     onMeetingLeft: async () => {
       logInfo('LiveStreaming', 'Meeting left, cleaning up...');
       await cleanupDevices();
-      // Go back to previous screen (LiveStream tab)
-      if (navigation.canGoBack()) {
-        navigation.goBack();
-      }
+      // Navigate to LiveStream tab
+      (navigation as any).navigate('TabHome', { screen: 'LiveStream' });
     },
     onError: async (error: any) => {
       logError('LiveStreaming', 'Meeting error', error);
       await cleanupDevices();
       Alert.alert('Stream Error', error?.message || 'An error occurred during the stream');
-      // Go back to previous screen
-      if (navigation.canGoBack()) {
-        navigation.goBack();
-      }
+      // Navigate to LiveStream tab
+      (navigation as any).navigate('TabHome', { screen: 'LiveStream' });
     },
   });
 
@@ -727,10 +723,8 @@ const LiveStreamContainer: React.FC<{
     const currentMeeting = meetingRef.current;
     if (!currentMeeting) {
       logError('LiveStreaming', 'Meeting not initialized for ending stream');
-      // Go back to main navigation
-      if (navigation.canGoBack()) {
-        navigation.goBack();
-      }
+      // Navigate to LiveStream tab
+      (navigation as any).navigate('TabHome', { screen: 'LiveStream' });
       return;
     }
 
@@ -823,17 +817,13 @@ const LiveStreamContainer: React.FC<{
       }
       
       logInfo('LiveStreaming', 'Live stream ended successfully');
-      // Go back to LiveStream tab
-      if (navigation.canGoBack()) {
-        navigation.goBack();
-      }
+      // Navigate to LiveStream tab
+      (navigation as any).navigate('TabHome', { screen: 'LiveStream' });
     } catch (error) {
       logError('LiveStreaming', 'Error ending stream', error);
       Alert.alert('Error', 'Failed to end the stream properly');
-      // Force navigation back even on error
-      if (navigation.canGoBack()) {
-        navigation.goBack();
-      }
+      // Force navigation to LiveStream tab even on error
+      (navigation as any).navigate('TabHome', { screen: 'LiveStream' });
     }
   }, [cleanupDevices, navigation]);
 
