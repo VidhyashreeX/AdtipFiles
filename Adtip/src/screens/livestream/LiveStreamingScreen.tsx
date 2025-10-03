@@ -23,6 +23,7 @@ import {
   Constants,
   createCameraVideoTrack,
 } from '@videosdk.live/react-native-sdk';
+import { getAudioDeviceList, switchAudioDevice } from '@videosdk.live/react-native-sdk';
 import {
   Mic,
   MicOff,
@@ -544,7 +545,7 @@ const LiveStreamContainer: React.FC<{
     onMeetingJoined: async () => {
       logInfo('LiveStreaming', `Joined live stream as ${isHost ? 'host' : 'viewer'}`);
       
-      // For hosts, enable devices after joining
+      // For hosts, enable devices and configure audio after joining
       if (isHost && !hasInitializedDevices.current) {
         setIsInitializing(true);
         hasInitializedDevices.current = true;
@@ -556,6 +557,31 @@ const LiveStreamContainer: React.FC<{
             
             // Small delay to ensure meeting is fully initialized
             await new Promise(resolve => setTimeout(resolve, 500));
+            
+            // Configure audio output to prevent echo
+            // For hosts in live streaming, we should use EARPIECE or WIRED_HEADSET
+            // to prevent hearing their own voice through speakers
+            try {
+              const audioDevices = await getAudioDeviceList();
+              logInfo('LiveStreaming', 'Available audio devices:', audioDevices);
+              
+              // Prefer WIRED_HEADSET or EARPIECE over SPEAKER_PHONE
+              if (audioDevices.includes('WIRED_HEADSET')) {
+                await switchAudioDevice('WIRED_HEADSET');
+                logInfo('LiveStreaming', 'Audio switched to WIRED_HEADSET');
+              } else if (audioDevices.includes('BLUETOOTH')) {
+                await switchAudioDevice('BLUETOOTH');
+                logInfo('LiveStreaming', 'Audio switched to BLUETOOTH');
+              } else if (audioDevices.includes('EARPIECE')) {
+                await switchAudioDevice('EARPIECE');
+                logInfo('LiveStreaming', 'Audio switched to EARPIECE');
+              } else {
+                // Fallback to speaker but log warning
+                logWarn('LiveStreaming', 'No earpiece/headset found, using SPEAKER_PHONE (may cause echo)');
+              }
+            } catch (audioError) {
+              logWarn('LiveStreaming', 'Failed to configure audio device', audioError);
+            }
             
             // Enable webcam first
             const webcamResult = await safeCallMeetingMethod(currentMeeting, 'enableWebcam');
@@ -630,25 +656,16 @@ const LiveStreamContainer: React.FC<{
     }
 
     try {
-      const localParticipant = currentMeeting.localParticipant;
-      const isMicOn = localParticipant?.micOn;
+      // Use toggleMic directly - it handles the state internally
+      // This is the recommended approach from VideoSDK docs
+      logInfo('LiveStreaming', 'Toggling microphone...');
       
-      logInfo('LiveStreaming', `Toggling mic: current state=${isMicOn}`);
-
-      if (isMicOn) {
-        const result = await safeCallMeetingMethod(currentMeeting, 'muteMic');
-        if (result.success) {
-          logInfo('LiveStreaming', 'Mic muted successfully');
-        } else {
-          throw result.error || new Error('Failed to mute mic');
-        }
+      const result = await safeCallMeetingMethod(currentMeeting, 'toggleMic');
+      if (result.success) {
+        const newState = currentMeeting.localParticipant?.micOn;
+        logInfo('LiveStreaming', `Mic toggled successfully. New state: ${newState ? 'ON' : 'OFF'}`);
       } else {
-        const result = await safeCallMeetingMethod(currentMeeting, 'unmuteMic');
-        if (result.success) {
-          logInfo('LiveStreaming', 'Mic unmuted successfully');
-        } else {
-          throw result.error || new Error('Failed to unmute mic');
-        }
+        throw result.error || new Error('Failed to toggle mic');
       }
     } catch (error) {
       logError('LiveStreaming', 'Error toggling mic', error);
@@ -664,25 +681,16 @@ const LiveStreamContainer: React.FC<{
     }
 
     try {
-      const localParticipant = currentMeeting.localParticipant;
-      const isWebcamOn = localParticipant?.webcamOn;
+      // Use toggleWebcam directly - it handles the state internally
+      // This is the recommended approach from VideoSDK docs
+      logInfo('LiveStreaming', 'Toggling webcam...');
       
-      logInfo('LiveStreaming', `Toggling webcam: current state=${isWebcamOn}`);
-
-      if (isWebcamOn) {
-        const result = await safeCallMeetingMethod(currentMeeting, 'disableWebcam');
-        if (result.success) {
-          logInfo('LiveStreaming', 'Webcam disabled successfully');
-        } else {
-          throw result.error || new Error('Failed to disable webcam');
-        }
+      const result = await safeCallMeetingMethod(currentMeeting, 'toggleWebcam');
+      if (result.success) {
+        const newState = currentMeeting.localParticipant?.webcamOn;
+        logInfo('LiveStreaming', `Webcam toggled successfully. New state: ${newState ? 'ON' : 'OFF'}`);
       } else {
-        const result = await safeCallMeetingMethod(currentMeeting, 'enableWebcam');
-        if (result.success) {
-          logInfo('LiveStreaming', 'Webcam enabled successfully');
-        } else {
-          throw result.error || new Error('Failed to enable webcam');
-        }
+        throw result.error || new Error('Failed to toggle webcam');
       }
     } catch (error) {
       logError('LiveStreaming', 'Error toggling webcam', error);
@@ -784,7 +792,8 @@ const LiveStreamingScreen: React.FC = () => {
     );
   }
 
-  // Use CONFERENCE mode for proper host streaming
+  // Use CONFERENCE mode for hosts (allows broadcasting)
+  // Use VIEWER mode for viewers (receive-only)
   const mode = isHost ? Constants.modes.CONFERENCE : Constants.modes.VIEWER;
 
   return (
@@ -798,6 +807,12 @@ const LiveStreamingScreen: React.FC = () => {
         mode: mode as any,
         // Disable multistream for better performance
         multiStream: false,
+        // Audio configuration to prevent echo
+        audioConfig: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
       }}
       token={token}
     >
