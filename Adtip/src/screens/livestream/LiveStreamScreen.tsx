@@ -86,7 +86,7 @@ const streamTypeConfig = {
     gradient: ['#2196F3', '#1976D2'],
     text: 'Influencer',
     description: '₹1/min to watch',
-    icon: '�',
+    icon: '⭐',
   },
   promotional: {
     gradient: ['#FF9800', '#F57C00'],

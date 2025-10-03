@@ -40,7 +40,8 @@ import {
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { MainNavigatorParamList } from '../../types/navigation';
-import { logError, logInfo } from '../../utils/ProductionLogger';
+import { logError, logInfo, logWarn } from '../../utils/ProductionLogger';
+import { API_BASE_URL } from '../../constants/api';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -415,6 +416,19 @@ const HostMode: React.FC<HostModeProps> = ({
   onEndStream,
 }) => {
   const { participants, localParticipant } = useMeeting();
+  const [viewerCount, setViewerCount] = useState(0);
+
+  // Track viewer count properly using participants Map
+  useEffect(() => {
+    if (participants) {
+      const participantsArray = Array.from(participants.values());
+      const viewers = participantsArray.filter(
+        (p) => p.mode === Constants.modes.VIEWER || p.mode === 'RECV_ONLY'
+      );
+      setViewerCount(viewers.length);
+      logInfo('LiveStreaming', `Viewer count updated: ${viewers.length}`);
+    }
+  }, [participants]);
 
   if (!localParticipant) {
     return (
@@ -424,9 +438,6 @@ const HostMode: React.FC<HostModeProps> = ({
       </View>
     );
   }
-
-  const participantCount = participants instanceof Map ? participants.size : participants?.size ?? 0;
-  const viewerCount = Math.max(participantCount - 1, 0);
   const streamTypeLabel = streamType === 'influencer'
     ? 'Influencer Stream'
     : streamType === 'promotional'
@@ -508,6 +519,7 @@ const LiveStreamContainer: React.FC<{
   streamType: string;
 }> = ({ meetingId, token, isHost, streamTitle, streamType }) => {
   const { colors } = useTheme();
+  const { user } = useAuth();
   const [joined, setJoined] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
   const navigation = useNavigation();
@@ -542,6 +554,12 @@ const LiveStreamContainer: React.FC<{
   }, []);
 
   const meeting = useMeeting({
+    onParticipantJoined: (participant) => {
+      logInfo('LiveStreaming', 'Participant joined', { id: participant.id, mode: participant.mode });
+    },
+    onParticipantLeft: (participant) => {
+      logInfo('LiveStreaming', 'Participant left', { id: participant.id });
+    },
     onMeetingJoined: async () => {
       logInfo('LiveStreaming', `Joined live stream as ${isHost ? 'host' : 'viewer'}`);
       
@@ -609,13 +627,19 @@ const LiveStreamContainer: React.FC<{
     onMeetingLeft: async () => {
       logInfo('LiveStreaming', 'Meeting left, cleaning up...');
       await cleanupDevices();
-      navigation.goBack();
+      // Go back to previous screen (LiveStream tab)
+      if (navigation.canGoBack()) {
+        navigation.goBack();
+      }
     },
     onError: async (error: any) => {
       logError('LiveStreaming', 'Meeting error', error);
       await cleanupDevices();
       Alert.alert('Stream Error', error?.message || 'An error occurred during the stream');
-      navigation.goBack();
+      // Go back to previous screen
+      if (navigation.canGoBack()) {
+        navigation.goBack();
+      }
     },
   });
 
@@ -702,12 +726,41 @@ const LiveStreamContainer: React.FC<{
     const currentMeeting = meetingRef.current;
     if (!currentMeeting) {
       logError('LiveStreaming', 'Meeting not initialized for ending stream');
-      navigation.goBack();
+      // Go back to main navigation
+      if (navigation.canGoBack()) {
+        navigation.goBack();
+      }
       return;
     }
 
     try {
       logInfo('LiveStreaming', 'Ending live stream...');
+      
+      // Call backend API to end stream and update database
+      if (user?.id && meetingId) {
+        try {
+          const response = await fetch(`${API_BASE_URL}/api/live-stream/end`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              user_id: user.id,
+              meeting_id: meetingId,
+            }),
+          });
+
+          const result = await response.json();
+          if (result.success) {
+            logInfo('LiveStreaming', 'Stream ended on backend', result.data);
+          } else {
+            logWarn('LiveStreaming', 'Failed to end stream on backend', result.message);
+          }
+        } catch (apiError) {
+          logError('LiveStreaming', 'API error ending stream', apiError);
+          // Continue with VideoSDK cleanup even if API fails
+        }
+      }
       
       // Cleanup devices first
       await cleanupDevices();
@@ -725,11 +778,17 @@ const LiveStreamContainer: React.FC<{
       }
       
       logInfo('LiveStreaming', 'Live stream ended successfully');
+      // Go back to LiveStream tab
+      if (navigation.canGoBack()) {
+        navigation.goBack();
+      }
     } catch (error) {
       logError('LiveStreaming', 'Error ending stream', error);
       Alert.alert('Error', 'Failed to end the stream properly');
       // Force navigation back even on error
-      navigation.goBack();
+      if (navigation.canGoBack()) {
+        navigation.goBack();
+      }
     }
   }, [cleanupDevices, navigation]);
 
@@ -807,12 +866,6 @@ const LiveStreamingScreen: React.FC = () => {
         mode: mode as any,
         // Disable multistream for better performance
         multiStream: false,
-        // Audio configuration to prevent echo
-        audioConfig: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
       }}
       token={token}
     >
