@@ -421,15 +421,26 @@ const HostMode: React.FC<HostModeProps> = ({
 
   // Track viewer count properly using participants Map
   useEffect(() => {
-    if (participants) {
+    if (participants && localParticipant) {
       const participantsArray = Array.from(participants.values());
+      // Filter for actual viewers only, excluding the local participant (host)
       const viewers = participantsArray.filter(
-        (p) => p.mode === Constants.modes.VIEWER || p.mode === 'RECV_ONLY'
+        (p) => {
+          // Exclude local participant (the host)
+          const isLocalHost = p.id === localParticipant.id;
+          // Include only viewers (VIEWER or RECV_ONLY mode)
+          const isViewer = p.mode === Constants.modes.VIEWER || p.mode === 'RECV_ONLY';
+          return !isLocalHost && isViewer;
+        }
       );
       setViewerCount(viewers.length);
-      logInfo('LiveStreaming', `Viewer count updated: ${viewers.length}`);
+      logInfo('LiveStreaming', `Viewer count updated: ${viewers.length}`, {
+        totalParticipants: participantsArray.length,
+        localParticipantId: localParticipant.id,
+        viewerIds: viewers.map(v => v.id)
+      });
     }
-  }, [participants]);
+  }, [participants, localParticipant]);
 
   if (!localParticipant) {
     return (
@@ -526,6 +537,7 @@ const LiveStreamContainer: React.FC<{
   const navigation = useNavigation();
   const meetingRef = useRef<any>(null);
   const hasInitializedDevices = useRef(false);
+  const hasCalledJoin = useRef(false);
 
   const cleanupDevices = useCallback(async () => {
     const currentMeeting = meetingRef.current;
@@ -556,7 +568,12 @@ const LiveStreamContainer: React.FC<{
 
   // Memoize all event handlers to prevent re-registration
   const handleParticipantJoined = useCallback((participant: any) => {
-    logInfo('LiveStreaming', 'Participant joined', { id: participant.id, mode: participant.mode });
+    logInfo('LiveStreaming', 'Participant joined', { 
+      id: participant.id, 
+      mode: participant.mode,
+      displayName: participant.displayName,
+      isLocal: participant.isLocal 
+    });
   }, []);
 
   const handleParticipantLeft = useCallback((participant: any) => {
@@ -566,11 +583,14 @@ const LiveStreamContainer: React.FC<{
   const handleMeetingJoined = useCallback(async () => {
     // Prevent multiple initializations using ref instead of state
     if (hasInitializedDevices.current) {
-      logWarn('LiveStreaming', 'onMeetingJoined called but already initialized, ignoring');
+      logWarn('LiveStreaming', 'onMeetingJoined called but already initialized, ignoring duplicate event');
       return;
     }
 
-    logInfo('LiveStreaming', `Joined live stream as ${isHost ? 'host' : 'viewer'}`);
+    logInfo('LiveStreaming', `Successfully joined live stream meeting as ${isHost ? 'host' : 'viewer'}`, {
+      meetingId: meetingRef.current?.id,
+      localParticipantId: meetingRef.current?.localParticipant?.id
+    });
     
     // Mark as joined immediately to prevent race conditions
     setJoined(true);
@@ -665,22 +685,26 @@ const LiveStreamContainer: React.FC<{
   }, [meeting]);
 
   useEffect(() => {
-    // Auto-join when component mounts
-    if (!joined) {
+    // Auto-join when component mounts - only once
+    // Use ref to prevent multiple join calls even if component re-renders
+    if (!joined && !hasCalledJoin.current) {
       const timer = setTimeout(() => {
-        if (typeof join === 'function') {
-          logInfo('LiveStreaming', 'Auto-joining meeting...');
+        if (typeof join === 'function' && !hasCalledJoin.current) {
+          hasCalledJoin.current = true;
+          logInfo('LiveStreaming', 'Auto-joining meeting (first time only)...');
           join();
         }
       }, 100);
 
       return () => clearTimeout(timer);
     }
-  }, [join, joined]);
+  }, [joined]);
 
   useEffect(() => {
     // Cleanup on unmount
     return () => {
+      // Reset join flag for potential remounts
+      hasCalledJoin.current = false;
       cleanupDevices().catch((error) => {
         logError('LiveStreaming', 'Failed to cleanup devices on unmount', error);
       });
