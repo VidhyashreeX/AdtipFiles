@@ -389,6 +389,13 @@ const GoLiveScreen: React.FC = () => {
 
       const response = await ApiService.post(endpoint, payload);
 
+      // Debug logging to understand response structure
+      console.log('[GoLiveScreen] ===== RESPONSE DEBUG =====');
+      console.log('[GoLiveScreen] response.success:', response.success);
+      console.log('[GoLiveScreen] response.message:', response.message);
+      console.log('[GoLiveScreen] response.data:', response.data);
+      console.log('[GoLiveScreen] typeof response.data:', typeof response.data);
+
       if (response.success) {
         setShowModal(false);
         
@@ -396,10 +403,25 @@ const GoLiveScreen: React.FC = () => {
           // Handle Razorpay payment, pass the title along
           handleRazorpayPayment({...response.data, title: formData.title});
         } else {
-          // Navigate to the proper live streaming interface
+          // Backend returns {success, message, data: {meeting_id, token, ...}}
+          // ApiService.post returns response.data, so we get the outer object
+          // Therefore, response.data contains {meeting_id, token, ...}
+          const streamData = response.data;
+          
+          console.log('[GoLiveScreen] streamData:', streamData);
+          console.log('[GoLiveScreen] streamData.meeting_id:', streamData?.meeting_id);
+          console.log('[GoLiveScreen] streamData.token:', streamData?.token ? `${streamData.token.substring(0, 20)}...` : 'undefined');
+          console.log('[GoLiveScreen] ========================');
+          
+          if (!streamData?.meeting_id || !streamData?.token) {
+            console.error('[GoLiveScreen] ERROR: Missing meeting_id or token in response!');
+            Alert.alert('Error', 'Invalid response from server. Please try again.');
+            return;
+          }
+          
           navigation.navigate('LiveStreaming', {
-            meetingId: response.data.meeting_id,
-            token: response.data.token,
+            meetingId: streamData.meeting_id,
+            token: streamData.token,
             isHost: true,
             streamTitle: payload.title || 'Live Stream',
             streamType: selectedStreamType || 'free'
@@ -446,13 +468,27 @@ const GoLiveScreen: React.FC = () => {
             razorpay_signature: data.razorpay_signature
           });
 
+          console.log('[GoLiveScreen] Payment confirmation response:', confirmResponse);
+
           if (confirmResponse.success) {
+            // Backend returns {success, message, data: {meeting_id, token, ...}}
+            // ApiService.post returns the outer object, so response.data is the stream data
+            const streamData = confirmResponse.data;
+            
+            console.log('[GoLiveScreen] Payment confirmed streamData:', streamData);
+            
+            if (!streamData?.meeting_id || !streamData?.token) {
+              console.error('[GoLiveScreen] ERROR: Missing meeting_id or token in payment confirmation!');
+              Alert.alert('Error', 'Invalid response from server. Please contact support.');
+              return;
+            }
+            
             Alert.alert('Success', 'Payment confirmed! Your promotional stream is now active.', [
               {
                 text: 'Start Streaming',
                 onPress: () => navigation.navigate('LiveStreaming', {
-                  meetingId: confirmResponse.data.meeting_id,
-                  token: confirmResponse.data.token,
+                  meetingId: streamData.meeting_id,
+                  token: streamData.token,
                   isHost: true,
                   streamTitle: paymentData.title || 'Promotional Stream',
                   streamType: 'promotional'

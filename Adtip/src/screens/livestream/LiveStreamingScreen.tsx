@@ -123,11 +123,48 @@ const ViewerMode: React.FC<{ colors: any; streamTitle: string; streamType: strin
   const [showChat, setShowChat] = useState(false);
   const [chatMessage, setChatMessage] = useState('');
   const [messages, setMessages] = useState<Array<{id: string; user: string; text: string; timestamp: number}>>([]);
+  const [isWaitingForHost, setIsWaitingForHost] = useState(true);
 
-  // Get host participants (SEND_AND_RECV mode)
+  // Get host participants - look for non-local participants with webcam enabled
+  // Since both host and viewer are in CONFERENCE mode, differentiate by webcam status
   const hosts = Array.from(participants.values()).filter(
-    participant => participant.mode === Constants.modes.SEND_AND_RECV
+    participant => 
+      !participant.local &&
+      participant.webcamOn // Host should have webcam enabled for streaming
   );
+
+  // Debug logging for participant detection
+  useEffect(() => {
+    const allParticipants = Array.from(participants.values());
+    console.log('[ViewerMode] Participants update:', {
+      totalCount: allParticipants.length,
+      hostsFound: hosts.length,
+      participants: allParticipants.map(p => ({
+        id: p.id,
+        isLocal: p.local,
+        webcamOn: p.webcamOn,
+        micOn: p.micOn,
+        mode: p.mode
+      }))
+    });
+    
+    // Update waiting state based on host availability
+    if (hosts.length > 0) {
+      setIsWaitingForHost(false);
+    } else {
+      // Give some time for hosts to initialize their webcam
+      const timer = setTimeout(() => {
+        const currentHosts = Array.from(participants.values()).filter(
+          p => !p.local && p.webcamOn
+        );
+        if (currentHosts.length === 0) {
+          setIsWaitingForHost(true);
+        }
+      }, 2000); // Wait 2 seconds before showing "waiting" state
+      
+      return () => clearTimeout(timer);
+    }
+  }, [participants, hosts.length]);
 
   const handleSendMessage = () => {
     if (chatMessage.trim()) {
@@ -146,14 +183,14 @@ const ViewerMode: React.FC<{ colors: any; streamTitle: string; streamType: strin
     <View style={styles.viewerContainer}>
       {/* Main Video Area */}
       <View style={styles.mainVideoContainer}>
-        {hosts.length > 0 ? (
+        {hosts.length > 0 && !isWaitingForHost ? (
           hosts.map(host => (
             <HostVideoView key={host.id} participantId={host.id} />
           ))
         ) : (
           <View style={[styles.noStreamContainer, { backgroundColor: colors.surface }]}>
             <Text style={[styles.noStreamText, { color: colors.text.secondary }]}>
-              Waiting for host to start streaming...
+              {isWaitingForHost ? 'Waiting for host to start streaming...' : 'Loading stream...'}
             </Text>
             <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 16 }} />
           </View>
@@ -567,20 +604,39 @@ const LiveStreamContainer: React.FC<{
   }, []);
 
   // Memoize all event handlers to prevent re-registration
+  const participantsSeenRef = useRef(new Set<string>());
+  
   const handleParticipantJoined = useCallback((participant: any) => {
-    logInfo('LiveStreaming', 'Participant joined', { 
-      id: participant.id, 
+    // Prevent duplicate logs for the same participant
+    if (participantsSeenRef.current.has(participant.id)) {
+      return;
+    }
+    participantsSeenRef.current.add(participant.id);
+    
+    logInfo('LiveStreaming', 'Participant joined', {
+      id: participant.id,
       mode: participant.mode,
       displayName: participant.displayName,
-      isLocal: participant.isLocal 
+      isLocal: participant.local,
+      webcamOn: participant.webcamOn,
+      micOn: participant.micOn
     });
-  }, []);
 
-  const handleParticipantLeft = useCallback((participant: any) => {
+    // If this is a host with webcam enabled joining, update viewer state
+    if (!participant.local && participant.webcamOn && !isHost) {
+      logInfo('LiveStreaming', 'Host with video detected, viewers should see stream now');
+    }
+  }, [isHost]);  const handleParticipantLeft = useCallback((participant: any) => {
     logInfo('LiveStreaming', 'Participant left', { id: participant.id });
   }, []);
 
   const handleMeetingJoined = useCallback(async () => {
+    // ✅ Prevent multiple calls - check if already joined
+    if (joined) {
+      logWarn('LiveStreaming', 'onMeetingJoined called but already joined, ignoring duplicate event');
+      return;
+    }
+    
     // Prevent multiple initializations using ref instead of state
     if (hasInitializedDevices.current) {
       logWarn('LiveStreaming', 'onMeetingJoined called but already initialized, ignoring duplicate event');
@@ -588,14 +644,14 @@ const LiveStreamContainer: React.FC<{
     }
 
     logInfo('LiveStreaming', `Successfully joined live stream meeting as ${isHost ? 'host' : 'viewer'}`, {
-      meetingId: meetingRef.current?.id,
+      meetingId: meetingId, // ✅ Use the meetingId prop, not meeting.id
       localParticipantId: meetingRef.current?.localParticipant?.id
     });
     
     // Mark as joined immediately to prevent race conditions
     setJoined(true);
     
-    // For hosts, enable devices and configure audio after joining
+    // For hosts, configure audio and verify devices are enabled after joining
     if (isHost) {
       setIsInitializing(true);
       hasInitializedDevices.current = true;
@@ -603,10 +659,10 @@ const LiveStreamContainer: React.FC<{
       try {
         const currentMeeting = meetingRef.current;
         if (currentMeeting) {
-          logInfo('LiveStreaming', 'Initializing host devices...');
+          logInfo('LiveStreaming', 'Configuring host audio and verifying devices...');
           
           // Small delay to ensure meeting is fully initialized
-          await new Promise(resolve => setTimeout(resolve, 500));
+          await new Promise(resolve => setTimeout(resolve, 1000));
           
           // Configure audio output to prevent echo
           // For hosts in live streaming, we should use EARPIECE or WIRED_HEADSET
@@ -633,16 +689,28 @@ const LiveStreamContainer: React.FC<{
             logWarn('LiveStreaming', 'Failed to configure audio device', audioError);
           }
           
-          // Enable webcam first
-          const webcamResult = await safeCallMeetingMethod(currentMeeting, 'enableWebcam');
-          if (!webcamResult.success) {
-            logWarn('LiveStreaming', 'Failed to enable webcam', webcamResult.error);
+          // Verify and ensure webcam is enabled (should already be enabled from MeetingProvider config)
+          if (!currentMeeting.localParticipant?.webcamOn) {
+            const webcamResult = await safeCallMeetingMethod(currentMeeting, 'enableWebcam');
+            if (webcamResult.success) {
+              logInfo('LiveStreaming', '✅ Host webcam re-enabled successfully');
+            } else {
+              logWarn('LiveStreaming', 'Failed to re-enable webcam', webcamResult.error);
+            }
+          } else {
+            logInfo('LiveStreaming', '✅ Host webcam already enabled');
           }
           
-          // Then enable mic
-          const micResult = await safeCallMeetingMethod(currentMeeting, 'unmuteMic');
-          if (!micResult.success) {
-            logWarn('LiveStreaming', 'Failed to enable mic', micResult.error);
+          // Verify and ensure mic is enabled
+          if (currentMeeting.localParticipant?.micOn === false) {
+            const micResult = await safeCallMeetingMethod(currentMeeting, 'unmuteMic');
+            if (micResult.success) {
+              logInfo('LiveStreaming', '✅ Host microphone re-enabled successfully');
+            } else {
+              logWarn('LiveStreaming', 'Failed to re-enable mic', micResult.error);
+            }
+          } else {
+            logInfo('LiveStreaming', '✅ Host microphone already enabled');
           }
           
           logInfo('LiveStreaming', 'Host devices initialized successfully');
@@ -653,10 +721,11 @@ const LiveStreamContainer: React.FC<{
         setIsInitializing(false);
       }
     }
-  }, [isHost]);
+  }, [isHost, joined, meetingId]); // ✅ Add joined and meetingId to dependencies
 
   const handleMeetingLeft = useCallback(async () => {
     logInfo('LiveStreaming', 'Meeting left, cleaning up...');
+    participantsSeenRef.current.clear(); // ✅ Clear participants tracking
     await cleanupDevices();
     // Navigate to LiveStream tab
     (navigation as any).navigate('TabHome', { screen: 'LiveStream' });
@@ -687,24 +756,34 @@ const LiveStreamContainer: React.FC<{
   useEffect(() => {
     // Auto-join when component mounts - only once
     // Use ref to prevent multiple join calls even if component re-renders
-    if (!joined && !hasCalledJoin.current) {
+    if (!joined && !hasCalledJoin.current && join && typeof join === 'function') {
+      // Mark as called immediately to prevent race conditions
+      hasCalledJoin.current = true;
+      
       const timer = setTimeout(() => {
-        if (typeof join === 'function' && !hasCalledJoin.current) {
-          hasCalledJoin.current = true;
+        // Final check before joining
+        if (!joined) {
           logInfo('LiveStreaming', 'Auto-joining meeting (first time only)...');
           join();
+        } else {
+          logWarn('LiveStreaming', 'Skipped join - already joined');
         }
       }, 100);
 
-      return () => clearTimeout(timer);
+      return () => {
+        clearTimeout(timer);
+      };
     }
-  }, [joined]);
+  }, [joined, join]);
 
   useEffect(() => {
     // Cleanup on unmount
     return () => {
+      logInfo('LiveStreaming', 'Component unmounting, cleaning up...');
       // Reset join flag for potential remounts
       hasCalledJoin.current = false;
+      hasInitializedDevices.current = false;
+      participantsSeenRef.current.clear();
       cleanupDevices().catch((error) => {
         logError('LiveStreaming', 'Failed to cleanup devices on unmount', error);
       });
@@ -912,7 +991,17 @@ const LiveStreamingScreen: React.FC = () => {
     streamType = 'free'
   } = route.params || {};
 
+  // Log the received parameters for debugging
+  console.log('[LiveStreamingScreen] Initializing with params:', {
+    meetingId,
+    token: token ? `${token.substring(0, 20)}...` : 'undefined',
+    isHost,
+    streamTitle,
+    streamType
+  });
+
   if (!meetingId || !token) {
+    console.error('[LiveStreamingScreen] Invalid parameters:', { meetingId, token: !!token });
     return (
       <SafeAreaView style={[styles.errorContainer, { backgroundColor: colors.background }]}>
         <Text style={[styles.errorText, { color: colors.text.primary }]}>
@@ -928,20 +1017,20 @@ const LiveStreamingScreen: React.FC = () => {
     );
   }
 
-  // Use CONFERENCE mode for hosts (allows broadcasting)
-  // Use VIEWER mode for viewers (receive-only)
-  const mode = isHost ? Constants.modes.CONFERENCE : Constants.modes.VIEWER;
+  // Use CONFERENCE mode for both hosts and viewers to enable proper video streaming
+  // Host will have webcam/mic enabled, viewer will have them disabled
+  const mode = Constants.modes.CONFERENCE;
 
   return (
     <MeetingProvider
       config={{
         meetingId,
-        // Start with devices disabled, will be enabled after join for hosts
-        micEnabled: false,
-        webcamEnabled: false,
+        // For hosts, start with devices enabled; for viewers, disabled
+        micEnabled: isHost,
+        webcamEnabled: isHost,
         name: user?.name || (isHost ? 'Host' : 'Viewer'),
         mode: mode as any,
-        // Disable multistream for better performance
+        // Disable multistream for better performance in live streaming
         multiStream: false,
       }}
       token={token}

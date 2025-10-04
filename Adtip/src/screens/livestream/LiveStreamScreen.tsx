@@ -35,6 +35,7 @@ export type StreamType = 'free' | 'influencer' | 'promotional';
 
 interface LiveStream {
   id: string;
+  meeting_id: string; // ✅ The actual VideoSDK meeting ID for joining
   title: string;
   streamerName: string;
   thumbnail: string;
@@ -56,7 +57,8 @@ interface LiveStream {
 // Transform API stream data to LiveStream interface
 const transformApiStreamToLiveStream = (stream: any): LiveStream => {
   return {
-    id: stream.id?.toString() || stream.meeting_id,
+    id: stream.id?.toString() || stream.meeting_id, // Database ID for display
+    meeting_id: stream.meeting_id, // ✅ VideoSDK meeting ID for joining
     title: stream.title || 'Live Stream',
     streamerName: stream.streamer_name || 'Anonymous',
     thumbnail: stream.thumbnail_url || stream.profile_image || 'https://images.unsplash.com/photo-1542751371-adc38448a05e',
@@ -311,36 +313,68 @@ const LiveStreamScreen: React.FC<LiveStreamScreenProps> = ({
     loadStreams();
   }, [loadStreams]);
 
+  const [joiningStream, setJoiningStream] = useState<string | null>(null);
+
   const handleStreamPress = useCallback(async (stream: LiveStream) => {
     if (!user) {
       Alert.alert('Login Required', 'Please login to watch live streams.');
       return;
     }
 
+    // Prevent duplicate joins
+    if (joiningStream === stream.meeting_id) {
+      console.log('[LiveStreamScreen] Already joining this stream, ignoring duplicate press');
+      return;
+    }
+
+    setJoiningStream(stream.meeting_id);
+
     try {
-      console.log('[LiveStreamScreen] Joining live stream:', stream.id);
+      console.log('[LiveStreamScreen] Joining live stream:', {
+        id: stream.id,
+        meeting_id: stream.meeting_id // ✅ Log both IDs for debugging
+      });
       
-      // Call API to join the stream and get token
-      const joinResponse = await LiveStreamService.joinStream(user.id, stream.id);
+      // ✅ Use meeting_id (VideoSDK ID) for joining, NOT id (database ID)
+      const joinResponse = await LiveStreamService.joinStream(user.id, stream.meeting_id);
       
-      if (joinResponse.success && joinResponse.data?.token) {
+      console.log('[LiveStreamScreen] Join response:', {
+        success: joinResponse.success,
+        message: joinResponse.message,
+        hasData: !!joinResponse.data,
+        dataKeys: joinResponse.data ? Object.keys(joinResponse.data) : []
+      });
+      
+      // LiveStreamService returns: { success, message, data: {token, stream_info} }
+      // The 'data' property contains the actual response from ApiService.joinLiveStream
+      // which is {token, stream_info}
+      const streamData = joinResponse.data;
+      
+      console.log('[LiveStreamScreen] streamData:', streamData);
+      console.log('[LiveStreamScreen] Token:', streamData?.token ? `${streamData.token.substring(0, 20)}...` : 'Missing');
+      
+      if (joinResponse.success && streamData?.token) {
         console.log('[LiveStreamScreen] Successfully joined stream, navigating to LiveStreaming');
         // Navigate to the proper live streaming interface as viewer
+        // ✅ Use meeting_id for navigation
         (navigation as any).navigate('LiveStreaming', {
-          meetingId: stream.id,
-          token: joinResponse.data.token,
+          meetingId: stream.meeting_id,
+          token: streamData.token,
           isHost: false,
           streamTitle: stream.title,
           streamType: stream.streamType
         });
       } else {
+        console.error('[LiveStreamScreen] Join failed - missing token or unsuccessful');
         Alert.alert('Error', joinResponse.message || 'Failed to join the live stream. Please try again.');
       }
     } catch (error) {
       console.error('[LiveStreamScreen] Error joining stream:', error);
       Alert.alert('Error', 'Failed to join the live stream. Please try again.');
+    } finally {
+      setJoiningStream(null);
     }
-  }, [user, navigation]);
+  }, [user, navigation, joiningStream]);
 
   const handleStartStream = useCallback(() => {
     if (!user) {
