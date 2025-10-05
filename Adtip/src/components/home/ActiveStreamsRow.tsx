@@ -1,5 +1,5 @@
 // src/components/home/ActiveStreamsRow.tsx - Live streaming status component
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -14,6 +14,7 @@ import {
 import { Video, Zap, Users, Eye } from 'lucide-react-native';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { useWallet } from '../../contexts/WalletContext';
 import { useNavigation } from '@react-navigation/native';
 import LiveStreamService from '../../services/LiveStreamService';
 import Logger from '../../utils/logger';
@@ -49,6 +50,7 @@ const ActiveStreamsRow: React.FC<ActiveStreamsRowProps> = ({
 }) => {
   const { colors } = useTheme();
   const { user } = useAuth();
+  const { balance } = useWallet();
   const navigation = useNavigation();
   
   const [activeStreams, setActiveStreams] = useState<ActiveStream[]>([]);
@@ -107,6 +109,9 @@ const ActiveStreamsRow: React.FC<ActiveStreamsRowProps> = ({
     return () => clearInterval(interval);
   }, [loadActiveStreams]);
 
+  // ✅ DUPLICATE JOIN FIX: Use useRef for synchronous duplicate prevention
+  const joiningStreamRef = useRef<string | null>(null);
+
   const handleJoinStream = useCallback(async (stream: ActiveStream) => {
     try {
       if (!user) {
@@ -118,13 +123,58 @@ const ActiveStreamsRow: React.FC<ActiveStreamsRowProps> = ({
         return;
       }
 
+      // ✅ SYNCHRONOUS duplicate join prevention using ref (not async state)
+      if (joiningStreamRef.current === stream.meeting_id) {
+        Logger.info('ActiveStreamsRow', `Already joining stream ${stream.meeting_id}, ignoring duplicate press`);
+        return;
+      }
+
+      joiningStreamRef.current = stream.meeting_id;
+
       if (stream.is_private) {
         Alert.alert(
           'Private Stream',
           'This is a private stream. Contact the streamer for access.',
           [{ text: 'OK' }]
         );
+        joiningStreamRef.current = null; // Reset ref
         return;
+      }
+
+      // ✅ CHECK WALLET BALANCE for paid streams (influencer streams with cost > 0)
+      const costPerMinute = stream.cost_per_minute || 0;
+      if (costPerMinute > 0) {
+        const walletBalance = parseFloat(balance) || 0;
+        Logger.info('ActiveStreamsRow', 'Checking wallet balance for paid stream:', {
+          costPerMinute: costPerMinute,
+          walletBalance: walletBalance,
+          required: 1
+        });
+
+        if (walletBalance < 1) {
+          Alert.alert(
+            'Insufficient Balance',
+            `You need at least ₹1 in your wallet to join this stream. Your current balance is ₹${walletBalance.toFixed(2)}.`,
+            [
+              {
+                text: 'Cancel',
+                style: 'cancel',
+                onPress: () => {
+                  joiningStreamRef.current = null; // Reset ref
+                }
+              },
+              {
+                text: 'Add Funds',
+                onPress: () => {
+                  joiningStreamRef.current = null; // Reset ref
+                  (navigation as any).navigate('AddFunds');
+                }
+              }
+            ],
+            { cancelable: false }
+          );
+          return;
+        }
       }
 
       Logger.info('ActiveStreamsRow', `Joining stream: ${stream.meeting_id}`);
@@ -148,8 +198,11 @@ const ActiveStreamsRow: React.FC<ActiveStreamsRowProps> = ({
         'Failed to join the live stream. Please try again.',
         [{ text: 'OK' }]
       );
+    } finally {
+      // ✅ Reset ref to allow joining again if needed
+      joiningStreamRef.current = null;
     }
-  }, [user, navigation, onJoinStream]);
+  }, [user, navigation, onJoinStream, balance]);
 
   const renderStreamItem = useCallback(({ item: stream }: { item: ActiveStream }) => (
     <TouchableOpacity

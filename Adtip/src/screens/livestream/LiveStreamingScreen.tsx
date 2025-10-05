@@ -643,6 +643,32 @@ const LiveStreamContainer: React.FC<{
       return;
     }
 
+    // ✅ MIC DIAGNOSTIC: Log comprehensive meeting join details to compare influencer vs free streams
+    const currentMeeting = meetingRef.current;
+    logInfo('LiveStreaming', '🎤 MIC DIAGNOSTIC - Meeting Joined', {
+      // Stream identification
+      streamType: streamType,
+      isHost: isHost,
+      meetingId: meetingId,
+      
+      // Participant state
+      localParticipantId: currentMeeting?.localParticipant?.id,
+      localParticipantDisplayName: currentMeeting?.localParticipant?.displayName,
+      
+      // Initial device states
+      micOn: currentMeeting?.localParticipant?.micOn,
+      webcamOn: currentMeeting?.localParticipant?.webcamOn,
+      
+      // Token info (first 20 chars for debugging)
+      tokenPrefix: token?.substring(0, 20) + '...',
+      
+      // Meeting config
+      meetingConfig: {
+        multistream: currentMeeting?.multistream,
+        mode: currentMeeting?.mode,
+      }
+    });
+
     logInfo('LiveStreaming', `Successfully joined live stream meeting as ${isHost ? 'host' : 'viewer'}`, {
       meetingId: meetingId, // ✅ Use the meetingId prop, not meeting.id
       localParticipantId: meetingRef.current?.localParticipant?.id
@@ -703,25 +729,71 @@ const LiveStreamContainer: React.FC<{
           
           // Verify and ensure mic is enabled
           if (currentMeeting.localParticipant?.micOn === false) {
+            // ✅ MIC DIAGNOSTIC: Log before attempting to enable mic
+            logInfo('LiveStreaming', '🎤 MIC DIAGNOSTIC - Mic is OFF, attempting to enable', {
+              streamType: streamType,
+              participantId: currentMeeting.localParticipant?.id
+            });
+            
             const micResult = await safeCallMeetingMethod(currentMeeting, 'unmuteMic');
             if (micResult.success) {
               logInfo('LiveStreaming', '✅ Host microphone re-enabled successfully');
+              
+              // ✅ MIC DIAGNOSTIC: Verify mic state after enabling
+              logInfo('LiveStreaming', '🎤 MIC DIAGNOSTIC - Post-enable mic state', {
+                streamType: streamType,
+                micOn: currentMeeting.localParticipant?.micOn,
+                micResult: micResult
+              });
             } else {
               logWarn('LiveStreaming', 'Failed to re-enable mic', micResult.error);
+              
+              // ✅ MIC DIAGNOSTIC: Log failure details
+              logWarn('LiveStreaming', '🎤 MIC DIAGNOSTIC - Failed to enable mic', {
+                streamType: streamType,
+                error: micResult.error,
+                participantState: {
+                  micOn: currentMeeting.localParticipant?.micOn,
+                  webcamOn: currentMeeting.localParticipant?.webcamOn
+                }
+              });
             }
           } else {
             logInfo('LiveStreaming', '✅ Host microphone already enabled');
+            
+            // ✅ MIC DIAGNOSTIC: Log initial mic state for comparison
+            logInfo('LiveStreaming', '🎤 MIC DIAGNOSTIC - Mic already enabled', {
+              streamType: streamType,
+              micOn: currentMeeting.localParticipant?.micOn,
+              participantId: currentMeeting.localParticipant?.id
+            });
           }
+          
+          // ✅ MIC DIAGNOSTIC: Final device states summary
+          logInfo('LiveStreaming', '🎤 MIC DIAGNOSTIC - Final device states after initialization', {
+            streamType: streamType,
+            isHost: isHost,
+            deviceStates: {
+              micOn: currentMeeting.localParticipant?.micOn,
+              webcamOn: currentMeeting.localParticipant?.webcamOn,
+            }
+          });
           
           logInfo('LiveStreaming', 'Host devices initialized successfully');
         }
       } catch (error) {
         logError('LiveStreaming', 'Error initializing host devices', error);
+        
+        // ✅ MIC DIAGNOSTIC: Log initialization errors
+        logError('LiveStreaming', '🎤 MIC DIAGNOSTIC - Device initialization error', {
+          streamType: streamType,
+          error: error
+        });
       } finally {
         setIsInitializing(false);
       }
     }
-  }, [isHost, joined, meetingId]); // ✅ Add joined and meetingId to dependencies
+  }, [isHost, joined, meetingId, streamType]); // ✅ Add streamType to dependencies
 
   const handleMeetingLeft = useCallback(async () => {
     logInfo('LiveStreaming', 'Meeting left, cleaning up...');

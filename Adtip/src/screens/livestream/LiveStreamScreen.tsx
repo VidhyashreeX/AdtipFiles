@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -313,7 +313,8 @@ const LiveStreamScreen: React.FC<LiveStreamScreenProps> = ({
     loadStreams();
   }, [loadStreams]);
 
-  const [joiningStream, setJoiningStream] = useState<string | null>(null);
+  // ✅ DUPLICATE JOIN FIX: Use useRef instead of useState for synchronous checking
+  const joiningStreamRef = useRef<string | null>(null);
 
   const handleStreamPress = useCallback(async (stream: LiveStream) => {
     if (!user) {
@@ -321,13 +322,43 @@ const LiveStreamScreen: React.FC<LiveStreamScreenProps> = ({
       return;
     }
 
-    // Prevent duplicate joins
-    if (joiningStream === stream.meeting_id) {
+    // ✅ SYNCHRONOUS duplicate join prevention using ref (not async state)
+    if (joiningStreamRef.current === stream.meeting_id) {
       console.log('[LiveStreamScreen] Already joining this stream, ignoring duplicate press');
       return;
     }
 
-    setJoiningStream(stream.meeting_id);
+    // ✅ CHECK WALLET BALANCE for influencer streams
+    if (stream.streamType === 'influencer') {
+      const walletBalance = parseFloat(balance) || 0;
+      console.log('[LiveStreamScreen] Checking wallet balance for influencer stream:', {
+        streamType: stream.streamType,
+        walletBalance: walletBalance,
+        required: 1
+      });
+
+      if (walletBalance < 1) {
+        Alert.alert(
+          'Insufficient Balance',
+          `You need at least ₹1 in your wallet to join this stream. Your current balance is ₹${walletBalance.toFixed(2)}.`,
+          [
+            {
+              text: 'Cancel',
+              style: 'cancel'
+            },
+            {
+              text: 'Add Funds',
+              onPress: () => {
+                (navigation as any).navigate('AddFunds');
+              }
+            }
+          ]
+        );
+        return;
+      }
+    }
+
+    joiningStreamRef.current = stream.meeting_id;
 
     try {
       console.log('[LiveStreamScreen] Joining live stream:', {
@@ -372,9 +403,9 @@ const LiveStreamScreen: React.FC<LiveStreamScreenProps> = ({
       console.error('[LiveStreamScreen] Error joining stream:', error);
       Alert.alert('Error', 'Failed to join the live stream. Please try again.');
     } finally {
-      setJoiningStream(null);
+      joiningStreamRef.current = null;
     }
-  }, [user, navigation, joiningStream]);
+  }, [user, navigation, balance]);
 
   const handleStartStream = useCallback(() => {
     if (!user) {
