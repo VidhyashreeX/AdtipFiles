@@ -14,6 +14,9 @@ import Onboarding from "./pages/Onboarding";
 import PersonalDetails from "./pages/PersonalDetails";
 import Interests from "./pages/Interests";
 import CreatePost from "./pages/CreatePost";
+import LiveStream from "./pages/LiveStream";
+import StartStream from "./pages/StartStream";
+import LiveStreaming from "./pages/LiveStreaming";
 import TipCall from "./pages/TipCall";
 import Refer from "./pages/Refer";
 import Premium from "./pages/Premium";
@@ -134,6 +137,18 @@ const router = createBrowserRouter([
 			{
 				path: "create-post",
 				element: <CreatePost />,
+			},
+			{
+				path: "livestream",
+				element: <LiveStream />,
+			},
+			{
+				path: "start-stream",
+				element: <StartStream />,
+			},
+			{
+				path: "live-streaming",
+				element: <LiveStreaming />,
 			},
 			{
 				path: "tipcall",

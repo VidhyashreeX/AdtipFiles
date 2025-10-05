@@ -145,6 +145,7 @@ const baseNavItems = [
   { to: "/home", label: "Home", icon: <Home className="h-5 w-5" /> },
   { to: "/watch", label: "TipTube", icon: <Play className="h-5 w-5" /> },
   { to: "/short", label: "TipShorts", icon: <Video className="h-5 w-5" /> },
+  { to: "/livestream", label: "LiveStream", icon: <Video className="h-5 w-5" /> },
   { to: "/tipcall", label: "TipCall", icon: <Phone className="h-5 w-5" /> },
 ];
 
