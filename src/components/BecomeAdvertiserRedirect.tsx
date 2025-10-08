@@ -6,7 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 /**
  * Component that checks if the user has an existing company and redirects accordingly
  * - If user has a company, redirects to seller dashboard
- * - If user doesn't have a company, redirects to seller registration
+ * - If user doesn't have a company, redirects to advertiser landing page
  */
 const BecomeAdvertiserRedirect: React.FC = () => {
   const navigate = useNavigate();
@@ -17,8 +17,8 @@ const BecomeAdvertiserRedirect: React.FC = () => {
     const checkExistingCompany = async () => {
       try {
         if (!user?.id) {
-          // Redirect to login if user is not authenticated
-          navigate('/login', { replace: true });
+          // Redirect to advertiser landing page if user is not authenticated
+          navigate('/become-advertiser-landing', { replace: true });
           return;
         }
 
@@ -35,12 +35,12 @@ const BecomeAdvertiserRedirect: React.FC = () => {
           }
         }
         
-        // If no company found, redirect to the registration page
-        navigate('/become-seller-full', { replace: true });
+        // If no company found, redirect to the advertiser landing page
+        navigate('/become-advertiser-landing', { replace: true });
       } catch (error) {
         console.error('Error checking company:', error);
-        // On error, redirect to registration page as fallback
-        navigate('/become-seller-full', { replace: true });
+        // On error, redirect to advertiser landing page as fallback
+        navigate('/become-advertiser-landing', { replace: true });
       } finally {
         setLoading(false);
       }

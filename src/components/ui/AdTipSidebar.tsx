@@ -342,7 +342,7 @@ const ecommerceItems = [
         }
       ]
     : []),
-  { to: "/become-seller-full", label: "Become Advertiser", icon: <Store className="h-5 w-5" />, external: true },
+  { to: "/become-seller", label: "Become Advertiser", icon: <Store className="h-5 w-5" />, external: true },
   { to: "/post-ads", label: "Post Advertisements", icon: <BadgeDollarSign className="h-5 w-5" /> },
   { 
     to: "/chooseplan", 

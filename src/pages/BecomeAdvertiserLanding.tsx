@@ -1,0 +1,385 @@
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { 
+  Zap, 
+  Users, 
+  Eye, 
+  TrendingUp, 
+  DollarSign, 
+  CheckCircle2, 
+  Sparkles,
+  Video,
+  Gift,
+  ArrowRight,
+  Target,
+  BarChart3,
+  Shield
+} from "lucide-react";
+import { useNavigate } from "react-router-dom";
+
+const BecomeAdvertiserLanding = () => {
+  const navigate = useNavigate();
+
+  const pricingData = [
+    { type: "Skip Ad", description: "5-sec skippable ad", cost: "₹0.20" },
+    { type: "Non-Skip Ad", description: "Full watch required", cost: "₹0.50" },
+    { type: "Bumper Ad", description: "Short impact ad", cost: "₹0.30" },
+    { type: "Non-Skip + Lead Form", description: "Watch + fill lead form", cost: "₹1.00" },
+    { type: "Non-Skip + Question Ad", description: "Watch + answer question", cost: "₹1.00" },
+    { type: "Skip + Question Ad", description: "Skippable + question", cost: "₹0.50" },
+  ];
+
+  const benefits = [
+    { icon: Shield, title: "Real Users Only", description: "No bots, no fake impressions—verified users only" },
+    { icon: Eye, title: "High Attention", description: "Users get paid to watch, ensuring better ad recall" },
+    { icon: BarChart3, title: "Live Tracking", description: "Monitor real visitors to your website or app in real-time" },
+    { icon: DollarSign, title: "Ultra-Low Pricing", description: "Up to 70% cheaper than traditional platforms" },
+    { icon: Gift, title: "Free Credits", description: "Get up to ₹10,000 in free ad credits for new advertisers" },
+    { icon: Target, title: "Real Engagement", description: "Every view counts, every click converts" },
+  ];
+
+  const features = [
+    {
+      icon: Video,
+      title: "Live Product Streaming",
+      description: "Showcase your product live! Customers earn money for watching your stream, so they stay longer and engage more.",
+    },
+    {
+      icon: Gift,
+      title: "Reward Visits",
+      description: "Give rewards when customers visit your website. If they stay 30+ seconds, they get paid—if not, the reward is saved for later.",
+    },
+    {
+      icon: DollarSign,
+      title: "Wallet Integration",
+      description: "Users' ad earnings go into their AdTip wallet, building loyalty and encouraging repeated exposure to your brand.",
+    },
+  ];
+
+  const steps = [
+    { number: "1", title: "Add Your Product", description: "Upload your product details and create your campaign" },
+    { number: "2", title: "Create Your Ad", description: "Choose from multiple engaging ad formats" },
+    { number: "3", title: "Choose Your Model", description: "Select the perfect ad type for your goals" },
+    { number: "4", title: "Promote & Track", description: "Launch your campaign and monitor live results" },
+    { number: "5", title: "Watch Sales Grow", description: "See real engagement turn into real profits" },
+  ];
+
+  // Handler to redirect to seller registration process
+  const handleBookAds = () => {
+    navigate('/become-seller-full');
+  };
+
+  const handleClaimCredits = () => {
+    navigate('/become-seller-full');
+  };
+
+  const handleContactUs = () => {
+    navigate('/contact-us');
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900">
+      {/* Hero Section */}
+      <section className="relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-purple-600/20 via-transparent to-orange-500/20"></div>
+        <div className="container mx-auto px-4 py-20 md:py-32">
+          <div className="grid lg:grid-cols-2 gap-12 items-center">
+            <div className="space-y-8 z-10">
+              <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/50">
+                <Sparkles className="w-4 h-4 mr-1" />
+                The Future of Advertising
+              </Badge>
+              <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold leading-tight text-white">
+                <span className="bg-gradient-to-r from-purple-400 to-purple-600 bg-clip-text text-transparent">AdTip</span>
+                {" "}— The Smartest Way to Advertise
+              </h1>
+              <p className="text-xl md:text-2xl text-gray-300">
+                Reach Real People. Get Real Engagement. Pay Less.
+              </p>
+              <p className="text-lg text-gray-400">
+                Every user gets paid to watch your ad → higher attention & recall. You get live tracking of real visitors at ultra-low prices.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-4">
+                <Button 
+                  onClick={handleBookAds}
+                  size="lg" 
+                  className="text-lg bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white"
+                >
+                  Book Ads Now
+                  <ArrowRight className="ml-2" />
+                </Button>
+                <Button 
+                  onClick={handleContactUs}
+                  variant="outline" 
+                  size="lg" 
+                  className="text-lg border-purple-500/50 hover:bg-purple-500/10 text-white"
+                >
+                  Learn More
+                </Button>
+              </div>
+              <div className="flex items-center gap-6 pt-4">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="text-green-500 w-5 h-5" />
+                  <span className="text-sm text-gray-300">No bots guarantee</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="text-green-500 w-5 h-5" />
+                  <span className="text-sm text-gray-300">70% cheaper</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="text-green-500 w-5 h-5" />
+                  <span className="text-sm text-gray-300">₹10K free credits</span>
+                </div>
+              </div>
+            </div>
+            <div className="relative lg:block hidden">
+              <div className="absolute -inset-4 bg-gradient-to-br from-purple-600/30 to-orange-500/30 blur-3xl rounded-full"></div>
+              <div className="relative rounded-2xl shadow-2xl border border-purple-500/20 bg-gradient-to-br from-purple-900/50 to-gray-800/50 h-96 flex items-center justify-center">
+                <Sparkles className="w-24 h-24 text-purple-400 opacity-50" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Why Choose AdTip */}
+      <section className="py-20 bg-gray-800/30">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-16">
+            <Badge className="mb-4 bg-purple-500/20 text-purple-400 border-purple-500/50">
+              <Zap className="w-4 h-4 mr-1" />
+              Why AdTip?
+            </Badge>
+            <h2 className="text-4xl md:text-5xl font-bold mb-4 text-white">
+              Unlike Traditional Platforms
+            </h2>
+            <p className="text-xl text-gray-400 max-w-2xl mx-auto">
+              Your ad works harder — not just for you, but for your customers too. Every view counts, every click converts.
+            </p>
+          </div>
+          
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {benefits.map((benefit, index) => (
+              <Card key={index} className="bg-gray-800/50 hover:bg-gray-800/70 transition-all duration-300 border-gray-700/50 backdrop-blur-sm">
+                <CardHeader>
+                  <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-purple-600 to-purple-700 flex items-center justify-center mb-4">
+                    <benefit.icon className="w-6 h-6 text-white" />
+                  </div>
+                  <CardTitle className="text-xl text-white">{benefit.title}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <CardDescription className="text-base text-gray-400">{benefit.description}</CardDescription>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Pricing Table */}
+      <section className="py-20">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-16">
+            <Badge className="mb-4 bg-orange-500/20 text-orange-400 border-orange-500/50">
+              <DollarSign className="w-4 h-4 mr-1" />
+              Transparent Pricing
+            </Badge>
+            <h2 className="text-4xl md:text-5xl font-bold mb-4 text-white">
+              Pay Only for Real Engagement
+            </h2>
+            <p className="text-xl text-gray-400">
+              Not empty impressions. Every rupee gives double value.
+            </p>
+          </div>
+
+          <div className="max-w-4xl mx-auto">
+            <div className="grid gap-4">
+              {pricingData.map((item, index) => (
+                <Card key={index} className="bg-gray-800/50 border-gray-700/50 hover:border-purple-500/50 transition-all duration-300 backdrop-blur-sm">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <h3 className="text-xl font-semibold mb-1 text-white">{item.type}</h3>
+                        <p className="text-gray-400">{item.description}</p>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-3xl font-bold bg-gradient-to-r from-orange-400 to-orange-600 bg-clip-text text-transparent">
+                          {item.cost}
+                        </div>
+                        <div className="text-sm text-gray-500">per view</div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Interactive Features */}
+      <section className="py-20 bg-gray-800/30">
+        <div className="container mx-auto px-4">
+          <div className="grid lg:grid-cols-2 gap-12 items-center mb-16">
+            <div>
+              <Badge className="mb-4 bg-green-500/20 text-green-400 border-green-500/50">
+                <Sparkles className="w-4 h-4 mr-1" />
+                Interactive Features
+              </Badge>
+              <h2 className="text-4xl md:text-5xl font-bold mb-6 text-white">
+                AdTip = Ads + Income + Sales
+              </h2>
+              <p className="text-xl text-gray-400 mb-8">
+                You're not just advertising. You're building relationships with customers who want to see your ads.
+              </p>
+            </div>
+            <div className="relative">
+              <div className="absolute -inset-4 bg-gradient-to-br from-orange-500/30 to-orange-600/30 blur-3xl rounded-full"></div>
+              <div className="relative rounded-2xl shadow-2xl border border-orange-500/20 bg-gradient-to-br from-orange-900/50 to-gray-800/50 h-96 flex items-center justify-center">
+                <Gift className="w-24 h-24 text-orange-400 opacity-50" />
+              </div>
+            </div>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-6">
+            {features.map((feature, index) => (
+              <Card key={index} className="bg-gray-800/50 hover:bg-gray-800/70 transition-all duration-300 border-gray-700/50 backdrop-blur-sm">
+                <CardHeader>
+                  <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center mb-4">
+                    <feature.icon className="w-7 h-7 text-white" />
+                  </div>
+                  <CardTitle className="text-xl text-white">{feature.title}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <CardDescription className="text-base leading-relaxed text-gray-400">{feature.description}</CardDescription>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* How It Works */}
+      <section className="py-20">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-16">
+            <Badge className="mb-4 bg-purple-500/20 text-purple-400 border-purple-500/50">
+              <TrendingUp className="w-4 h-4 mr-1" />
+              How It Works
+            </Badge>
+            <h2 className="text-4xl md:text-5xl font-bold mb-4 text-white">
+              Simple. Affordable. Profitable.
+            </h2>
+          </div>
+
+          <div className="max-w-4xl mx-auto">
+            <div className="space-y-6">
+              {steps.map((step, index) => (
+                <Card key={index} className="bg-gray-800/50 border-gray-700/50 hover:border-purple-500/50 transition-all duration-300 backdrop-blur-sm">
+                  <CardContent className="p-6">
+                    <div className="flex items-start gap-6">
+                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-600 to-purple-700 flex items-center justify-center flex-shrink-0">
+                        <span className="text-xl font-bold text-white">{step.number}</span>
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="text-xl font-semibold mb-2 text-white">{step.title}</h3>
+                        <p className="text-gray-400">{step.description}</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Special Offer */}
+      <section className="py-20 bg-gradient-to-r from-orange-600 to-orange-500 relative overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_50%,rgba(255,255,255,0.1),transparent)]"></div>
+        <div className="container mx-auto px-4 relative z-10">
+          <div className="max-w-3xl mx-auto text-center">
+            <Gift className="w-16 h-16 mx-auto mb-6 text-white" />
+            <h2 className="text-4xl md:text-5xl font-bold mb-6 text-white">
+              Special Offer for Early Advertisers
+            </h2>
+            <p className="text-2xl mb-8 text-white/90">
+              Get FREE Ad Credits up to ₹10,000 when you sign up today
+            </p>
+            <Badge className="mb-8 bg-white/20 text-white border-white/30 text-base px-4 py-2">
+              Limited Time Offer
+            </Badge>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <Button 
+                onClick={handleClaimCredits}
+                size="lg" 
+                className="text-lg bg-white text-orange-600 hover:bg-gray-100"
+              >
+                Claim Your Credits
+                <ArrowRight className="ml-2" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Final CTA */}
+      <section className="py-20">
+        <div className="container mx-auto px-4">
+          <div className="max-w-4xl mx-auto text-center">
+            <h2 className="text-4xl md:text-5xl font-bold mb-6 text-white">
+              Where Ads Reward Everyone
+            </h2>
+            <p className="text-2xl text-gray-400 mb-4">
+              Join the future of advertising.
+            </p>
+            <p className="text-xl text-orange-400 mb-12 font-semibold">
+              "When your customer earns, your brand wins."
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center mb-8">
+              <Button 
+                onClick={handleBookAds}
+                size="lg" 
+                className="text-lg bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white"
+              >
+                Book Your Ads Now
+                <ArrowRight className="ml-2" />
+              </Button>
+              <Button 
+                onClick={handleContactUs}
+                variant="outline" 
+                size="lg" 
+                className="text-lg border-purple-500/50 hover:bg-purple-500/10 text-white"
+              >
+                Contact Us
+              </Button>
+            </div>
+            <div className="text-gray-400">
+              <p>support@adtip.in</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="py-12 border-t border-gray-800">
+        <div className="container mx-auto px-4">
+          <div className="text-center">
+            <h3 className="text-2xl font-bold mb-2 bg-gradient-to-r from-purple-400 to-purple-600 bg-clip-text text-transparent">
+              AdTip
+            </h3>
+            <p className="text-gray-400 mb-4">
+              Promote Your Product. Earn Profits. Forever.
+            </p>
+            <p className="text-sm text-gray-500">
+              © 2025 AdTip. All rights reserved.
+            </p>
+          </div>
+        </div>
+      </footer>
+    </div>
+  );
+};
+
+export default BecomeAdvertiserLanding;

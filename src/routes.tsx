@@ -69,6 +69,7 @@ import AdAnalytics from "./pages/AdAnalytics";
 import SellerRegistration from "./components/SellerRegistration";
 import EditSellerInfo from "./components/EditSellerInfo";
 import BecomeAdvertiserRedirect from "./components/BecomeAdvertiserRedirect";
+import BecomeAdvertiserLanding from "./pages/BecomeAdvertiserLanding";
 
 const router = createBrowserRouter([
 	{
@@ -169,6 +170,10 @@ const router = createBrowserRouter([
 			{
 				path: "become-seller",
 				element: <BecomeAdvertiserRedirect />,
+			},
+			{
+				path: "become-advertiser-landing",
+				element: <BecomeAdvertiserLanding />,
 			},
 			{
 				path: "product/:id",
