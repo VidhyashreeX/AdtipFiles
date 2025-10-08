@@ -137,8 +137,39 @@ const BecomeAdvertiserLanding = () => {
             </div>
             <div className="relative lg:block hidden">
               <div className="absolute -inset-4 bg-primary/20 blur-3xl rounded-full"></div>
-              <div className="relative rounded-2xl shadow-xl border border-border bg-card h-96 flex items-center justify-center">
-                <Sparkles className="w-24 h-24 text-primary opacity-50" />
+              <div className="relative rounded-2xl shadow-2xl border border-border bg-gradient-to-br from-card via-card to-primary/5 h-96 p-8 overflow-hidden">
+                {/* Animated Stats Dashboard Mockup */}
+                <div className="space-y-4">
+                  <div className="bg-primary/10 backdrop-blur-sm rounded-lg p-4 border border-primary/20 animate-pulse">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-muted-foreground mb-1">Live Views</p>
+                        <p className="text-2xl font-bold text-foreground">2,847</p>
+                      </div>
+                      <Eye className="w-8 h-8 text-primary" />
+                    </div>
+                  </div>
+                  <div className="bg-green-500/10 backdrop-blur-sm rounded-lg p-4 border border-green-500/20 animate-pulse delay-75">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-muted-foreground mb-1">Engagement Rate</p>
+                        <p className="text-2xl font-bold text-foreground">87.3%</p>
+                      </div>
+                      <TrendingUp className="w-8 h-8 text-green-500" />
+                    </div>
+                  </div>
+                  <div className="bg-blue-500/10 backdrop-blur-sm rounded-lg p-4 border border-blue-500/20 animate-pulse delay-150">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-muted-foreground mb-1">Cost Saved</p>
+                        <p className="text-2xl font-bold text-foreground">₹12,450</p>
+                      </div>
+                      <DollarSign className="w-8 h-8 text-blue-500" />
+                    </div>
+                  </div>
+                  <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-primary/20 rounded-full blur-2xl"></div>
+                  <div className="absolute -top-10 -left-10 w-32 h-32 bg-accent/20 rounded-full blur-2xl"></div>
+                </div>
               </div>
             </div>
           </div>
@@ -238,8 +269,46 @@ const BecomeAdvertiserLanding = () => {
             </div>
             <div className="relative">
               <div className="absolute -inset-4 bg-gradient-to-br from-primary/30 to-primary/20 blur-3xl rounded-full"></div>
-              <div className="relative rounded-2xl shadow-2xl border border-primary/20 bg-gradient-to-br from-card to-card/80 h-96 flex items-center justify-center">
-                <Gift className="w-24 h-24 text-primary opacity-50" />
+              <div className="relative rounded-2xl shadow-2xl border border-primary/20 bg-gradient-to-br from-card to-card/80 h-96 p-8 overflow-hidden">
+                {/* Interactive Features Visualization */}
+                <div className="h-full flex flex-col justify-center space-y-6">
+                  {/* Live Streaming Icon */}
+                  <div className="flex items-center gap-4 bg-primary/10 backdrop-blur-sm rounded-xl p-4 border border-primary/20 transform hover:scale-105 transition-transform">
+                    <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center flex-shrink-0">
+                      <Video className="w-6 h-6 text-primary-foreground" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-foreground">Live Streaming</p>
+                      <p className="text-xs text-muted-foreground">Active campaigns: 127</p>
+                    </div>
+                  </div>
+                  
+                  {/* Rewards Icon */}
+                  <div className="flex items-center gap-4 bg-green-500/10 backdrop-blur-sm rounded-xl p-4 border border-green-500/20 transform hover:scale-105 transition-transform">
+                    <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center flex-shrink-0">
+                      <Gift className="w-6 h-6 text-white" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-foreground">Reward Visits</p>
+                      <p className="text-xs text-muted-foreground">Total rewards: ₹45,230</p>
+                    </div>
+                  </div>
+                  
+                  {/* Wallet Icon */}
+                  <div className="flex items-center gap-4 bg-blue-500/10 backdrop-blur-sm rounded-xl p-4 border border-blue-500/20 transform hover:scale-105 transition-transform">
+                    <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center flex-shrink-0">
+                      <DollarSign className="w-6 h-6 text-white" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-foreground">Wallet Integration</p>
+                      <p className="text-xs text-muted-foreground">Active users: 8,542</p>
+                    </div>
+                  </div>
+
+                  {/* Decorative elements */}
+                  <div className="absolute -bottom-20 -right-20 w-40 h-40 bg-primary/10 rounded-full blur-3xl"></div>
+                  <div className="absolute -top-20 -left-20 w-32 h-32 bg-accent/10 rounded-full blur-3xl"></div>
+                </div>
               </div>
             </div>
           </div>

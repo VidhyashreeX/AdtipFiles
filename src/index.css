@@ -125,4 +125,13 @@
   .content-card {
     @apply bg-white rounded-lg shadow-md overflow-hidden transition-all duration-300 hover:shadow-lg;
   }
+
+  /* Animation delays for staggered effects */
+  .delay-75 {
+    animation-delay: 75ms;
+  }
+  
+  .delay-150 {
+    animation-delay: 150ms;
+  }
 }
