@@ -64,6 +64,10 @@ import {
   SendTipResponse,
   GetActiveStreamsRequest,
   GetActiveStreamsResponse,
+  UpdateWatchTimeRequest,
+  UpdateWatchTimeResponse,
+  LeaveStreamRequest,
+  LeaveStreamResponse,
 } from '../types/api';
 
 // Interfaces moved from inside the class
@@ -3703,6 +3707,45 @@ export default class ApiService {
       return response.data;
     } catch (error) {
       console.error('[ApiService] 🚨 Error sending tip:', error);
+      throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Update viewer watch time (heartbeat)
+   */
+  static async updateWatchTime(data: UpdateWatchTimeRequest): Promise<UpdateWatchTimeResponse> {
+    try {
+      console.log('[ApiService] ⏱️  Updating watch time:', data);
+      
+      const response = await apiClient.post(
+        ApiEndpoints.LIVE_STREAM_ENDPOINTS.UPDATE_WATCH_TIME,
+        data
+      );
+      
+      return response.data;
+    } catch (error) {
+      console.error('[ApiService] 🚨 Error updating watch time:', error);
+      throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Leave live stream and finalize billing
+   */
+  static async leaveStream(data: LeaveStreamRequest): Promise<LeaveStreamResponse> {
+    try {
+      console.log('[ApiService] 🚪 Leaving stream:', data);
+      
+      const response = await apiClient.post(
+        ApiEndpoints.LIVE_STREAM_ENDPOINTS.LEAVE_STREAM,
+        data
+      );
+      
+      console.log('[ApiService] 🚪 Left stream successfully:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('[ApiService] 🚨 Error leaving stream:', error);
       throw this.handleError(error);
     }
   }

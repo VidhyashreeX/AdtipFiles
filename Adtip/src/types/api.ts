@@ -1042,3 +1042,32 @@ export interface GetActiveStreamsResponse {
     };
   };
 }
+
+export interface UpdateWatchTimeRequest {
+  user_id: number;
+  meeting_id: string;
+  seconds_watched: number;
+}
+
+export interface UpdateWatchTimeResponse {
+  success: boolean;
+  message: string;
+  data?: {
+    minutes_watched: number;
+    stream_type: string;
+  };
+}
+
+export interface LeaveStreamRequest {
+  user_id: number;
+  meeting_id: string;
+  seconds_watched: number;
+}
+
+export interface LeaveStreamResponse {
+  success: boolean;
+  message: string;
+  data?: {
+    final_minutes_watched: number;
+  };
+}

@@ -79,6 +79,8 @@ export const LIVE_STREAM_ENDPOINTS = {
   JOIN_STREAM: '/api/live-stream/join',
   SEND_TIP: '/api/live-stream/tip',
   GET_ACTIVE_STREAMS: '/api/live-stream/active',
+  UPDATE_WATCH_TIME: '/api/live-stream/update-watch-time',
+  LEAVE_STREAM: '/api/live-stream/leave',
 };
 
 // Firebase Cloud Functions endpoints

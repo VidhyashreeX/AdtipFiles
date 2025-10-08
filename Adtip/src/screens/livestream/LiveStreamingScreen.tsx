@@ -43,6 +43,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { MainNavigatorParamList } from '../../types/navigation';
 import { logError, logInfo, logWarn } from '../../utils/ProductionLogger';
 import { API_BASE_URL } from '../../constants/api';
+import ApiService from '../../services/ApiService';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -114,16 +115,135 @@ const ChatMessage: React.FC<{
 );
 
 // Viewer Component - Shows host video and viewer count
-const ViewerMode: React.FC<{ colors: any; streamTitle: string; streamType: string }> = ({ 
+const ViewerMode: React.FC<{ 
+  colors: any; 
+  streamTitle: string; 
+  streamType: string;
+  meetingId: string;
+  userId: number;
+}> = ({ 
   colors, 
   streamTitle, 
-  streamType 
+  streamType,
+  meetingId,
+  userId
 }) => {
   const { participants, leave } = useMeeting();
   const [showChat, setShowChat] = useState(false);
   const [chatMessage, setChatMessage] = useState('');
   const [messages, setMessages] = useState<Array<{id: string; user: string; text: string; timestamp: number}>>([]);
   const [isWaitingForHost, setIsWaitingForHost] = useState(true);
+  
+  // ⏱️ WATCH TIME TRACKING
+  const watchStartTime = useRef(Date.now());
+  const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const lastHeartbeatRef = useRef(0);
+
+  // Calculate seconds watched
+  const getSecondsWatched = useCallback(() => {
+    return Math.floor((Date.now() - watchStartTime.current) / 1000);
+  }, []);
+
+  // Send heartbeat to update watch time
+  const sendHeartbeat = useCallback(async () => {
+    const secondsWatched = getSecondsWatched();
+    
+    // Only send if at least 5 seconds have passed since last heartbeat
+    if (secondsWatched - lastHeartbeatRef.current < 5) {
+      return;
+    }
+
+    try {
+      console.log('[ViewerMode] 💓 Sending heartbeat:', {
+        userId,
+        meetingId,
+        secondsWatched
+      });
+
+      await ApiService.updateWatchTime({
+        user_id: userId,
+        meeting_id: meetingId,
+        seconds_watched: secondsWatched
+      });
+
+      lastHeartbeatRef.current = secondsWatched;
+    } catch (error) {
+      console.error('[ViewerMode] ❌ Heartbeat failed:', error);
+      // Don't show error to user, just log it
+    }
+  }, [userId, meetingId, getSecondsWatched]);
+
+  // Start heartbeat interval
+  useEffect(() => {
+    // Send initial heartbeat after 10 seconds
+    const initialTimeout = setTimeout(() => {
+      sendHeartbeat();
+    }, 10000);
+
+    // Then send every 30 seconds
+    heartbeatIntervalRef.current = setInterval(() => {
+      sendHeartbeat();
+    }, 30000);
+
+    return () => {
+      clearTimeout(initialTimeout);
+      if (heartbeatIntervalRef.current) {
+        clearInterval(heartbeatIntervalRef.current);
+        heartbeatIntervalRef.current = null;
+      }
+    };
+  }, [sendHeartbeat]);
+
+  // Cleanup on component unmount - send final billing
+  useEffect(() => {
+    return () => {
+      const secondsWatched = Math.floor((Date.now() - watchStartTime.current) / 1000);
+      
+      // Send final billing asynchronously (fire and forget)
+      console.log('[ViewerMode] 🧹 Component unmounting, sending final billing');
+      ApiService.leaveStream({
+        user_id: userId,
+        meeting_id: meetingId,
+        seconds_watched: secondsWatched
+      }).catch(error => {
+        console.error('[ViewerMode] ❌ Failed to send final billing on unmount:', error);
+      });
+    };
+  }, [userId, meetingId]);
+
+  // Send final update when leaving
+  const handleLeaveStream = useCallback(async () => {
+    const secondsWatched = getSecondsWatched();
+    
+    try {
+      console.log('[ViewerMode] 🚪 Leaving stream, sending final update:', {
+        userId,
+        meetingId,
+        secondsWatched
+      });
+
+      // Send final billing update
+      await ApiService.leaveStream({
+        user_id: userId,
+        meeting_id: meetingId,
+        seconds_watched: secondsWatched
+      });
+
+      console.log('[ViewerMode] ✅ Final billing processed');
+    } catch (error) {
+      console.error('[ViewerMode] ❌ Failed to process final billing:', error);
+      // Still leave even if billing fails
+    } finally {
+      // Clean up heartbeat
+      if (heartbeatIntervalRef.current) {
+        clearInterval(heartbeatIntervalRef.current);
+        heartbeatIntervalRef.current = null;
+      }
+      
+      // Leave the meeting
+      leave();
+    }
+  }, [userId, meetingId, getSecondsWatched, leave]);
 
   // Get host participants - look for non-local participants with webcam enabled
   // Since both host and viewer are in CONFERENCE mode, differentiate by webcam status
@@ -247,7 +367,7 @@ const ViewerMode: React.FC<{ colors: any; streamTitle: string; streamType: strin
               'Are you sure you want to leave the live stream?',
               [
                 { text: 'Cancel', style: 'cancel' },
-                { text: 'Leave', onPress: leave, style: 'destructive' },
+                { text: 'Leave', onPress: handleLeaveStream, style: 'destructive' },
               ]
             );
           }}
@@ -1044,7 +1164,13 @@ const LiveStreamContainer: React.FC<{
       onEndStream={handleHostEndStream}
     />
   ) : (
-    <ViewerMode colors={colors} streamTitle={streamTitle} streamType={streamType} />
+    <ViewerMode 
+      colors={colors} 
+      streamTitle={streamTitle} 
+      streamType={streamType}
+      meetingId={meetingId}
+      userId={user?.id || 0}
+    />
   );
 };
 
