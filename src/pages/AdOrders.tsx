@@ -171,7 +171,7 @@ const AdOrders = () => {
   const averageCTR = adOrders.length > 0 ? (adOrders.reduce((sum, order) => sum + order.ctr, 0) / adOrders.length) : 0;
 
   return (
-    <div className="min-h-screen bg-[#f5f5ff]">
+    <div className="min-h-screen bg-background">
       {/* Header */}
       <div className="bg-gradient-to-r from-[#00dcaa] to-[#00b894] text-white">
         <div className="max-w-7xl mx-auto px-6 py-8">
@@ -211,7 +211,7 @@ const AdOrders = () => {
             <input
               type="text"
               placeholder="Search campaigns..."
-              className="w-full pl-10 pr-4 py-3 border border-border rounded-lg focus:ring-2 focus:ring-[#00dcaa] focus:border-transparent"
+              className="w-full pl-10 pr-4 py-3 bg-card text-foreground border border-border rounded-lg focus:ring-2 focus:ring-[#00dcaa] focus:border-transparent"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -229,7 +229,7 @@ const AdOrders = () => {
             <select 
               value={activeTab} 
               onChange={(e) => setActiveTab(e.target.value)}
-              className="px-4 py-2 border border-border rounded-lg focus:ring-2 focus:ring-[#00dcaa] focus:border-transparent"
+              className="px-4 py-2 bg-card text-foreground border border-border rounded-lg focus:ring-2 focus:ring-[#00dcaa] focus:border-transparent"
               title="Filter by status"
             >
               <option value="all">All Status</option>

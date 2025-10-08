@@ -291,10 +291,10 @@ const EditSellerInfo = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-teal-50 flex items-center justify-center">
-        <div className="text-center bg-white p-8 rounded-2xl shadow-xl">
+        <div className="text-center bg-card p-8 rounded-2xl shadow-xl">
           <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-indigo-600 mx-auto mb-6"></div>
           <h3 className="text-xl font-semibold text-gray-800 mb-2">Loading Company Information</h3>
-          <p className="text-gray-600">Please wait while we fetch your data...</p>
+          <p className="text-muted-foreground">Please wait while we fetch your data...</p>
         </div>
       </div>
     );
@@ -307,7 +307,7 @@ const EditSellerInfo = () => {
         <div className="mb-8">
           <button
             onClick={() => navigate('/seller/dashboard')}
-            className="flex items-center text-gray-600 hover:text-indigo-600 mb-6 transition-colors duration-200 bg-white px-4 py-2 rounded-lg shadow-sm hover:shadow-md"
+            className="flex items-center text-muted-foreground hover:text-indigo-600 mb-6 transition-colors duration-200 bg-card px-4 py-2 rounded-lg shadow-sm hover:shadow-md"
           >
             <ArrowLeft className="w-5 h-5 mr-2" />
             Back to Dashboard
@@ -320,14 +320,14 @@ const EditSellerInfo = () => {
               </div>
             </div>
             <h1 className="text-4xl font-bold text-gray-900 mb-3">Edit Company Profile</h1>
-            <p className="text-gray-600 max-w-2xl mx-auto text-lg">
+            <p className="text-muted-foreground max-w-2xl mx-auto text-lg">
               Update your company information to attract more customers and build credibility
             </p>
           </div>
         </div>
 
         {/* Form Container */}
-        <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
+        <div className="bg-card rounded-2xl shadow-2xl overflow-hidden">
           {/* Form Header */}
           <div className="bg-gradient-to-r from-indigo-600 to-teal-600 px-8 py-8">
             <h2 className="text-2xl font-bold text-white mb-2">Company Information</h2>
@@ -337,14 +337,14 @@ const EditSellerInfo = () => {
           <form onSubmit={handleSubmit} className="p-8 space-y-8">
             <div className="space-y-8">
               {/* Basic Information Section */}
-              <div className="bg-gray-50 rounded-lg p-6">
+              <div className="bg-muted rounded-lg p-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
                   <div className="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
                   Basic Information
                 </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  <label className="block text-sm font-semibold text-foreground mb-2">
                     <Building2 className="w-4 h-4 inline mr-1 text-blue-500" />
                     Company Name *
                   </label>
@@ -359,7 +359,7 @@ const EditSellerInfo = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  <label className="block text-sm font-semibold text-foreground mb-2">
                     <Mail className="w-4 h-4 inline mr-1 text-green-500" />
                     Email Address *
                   </label>
@@ -374,7 +374,7 @@ const EditSellerInfo = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  <label className="block text-sm font-semibold text-foreground mb-2">
                     <Phone className="w-4 h-4 inline mr-1 text-purple-500" />
                     Phone Number *
                   </label>
@@ -389,7 +389,7 @@ const EditSellerInfo = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  <label className="block text-sm font-semibold text-foreground mb-2">
                     <MapPin className="w-4 h-4 inline mr-1 text-orange-500" />
                     Location *
                   </label>
@@ -404,7 +404,7 @@ const EditSellerInfo = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  <label className="block text-sm font-semibold text-foreground mb-2">
                     <Globe className="w-4 h-4 inline mr-1 text-indigo-500" />
                     Website (Optional)
                   </label>
@@ -418,7 +418,7 @@ const EditSellerInfo = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  <label className="block text-sm font-semibold text-foreground mb-2">
                     <Tag className="w-4 h-4 inline mr-1 text-pink-500" />
                     Category *
                   </label>
@@ -439,13 +439,13 @@ const EditSellerInfo = () => {
             </div>
 
             {/* Description Section */}
-            <div className="bg-gray-50 rounded-lg p-6">
+            <div className="bg-muted rounded-lg p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
                 <div className="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
                 Company Description
               </h3>
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                <label className="block text-sm font-semibold text-foreground mb-2">
                   About the Company *
                 </label>
                 <textarea
@@ -459,13 +459,13 @@ const EditSellerInfo = () => {
             </div>
 
             {/* CTA Section */}
-            <div className="bg-gray-50 rounded-lg p-6">
+            <div className="bg-muted rounded-lg p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
                 <div className="w-2 h-2 bg-purple-500 rounded-full mr-3"></div>
                 Customer Action
               </h3>
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                <label className="block text-sm font-semibold text-foreground mb-2">
                   Call to Action Button *
                 </label>
                 <select
@@ -491,7 +491,7 @@ const EditSellerInfo = () => {
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-3">
+                  <label className="block text-sm font-semibold text-foreground mb-3">
                     Company Logo
                   </label>
                   <div 
@@ -516,7 +516,7 @@ const EditSellerInfo = () => {
                         <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
                       </div>
                       <p className="text-sm font-medium text-blue-600">Uploading logo...</p>
-                      <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div className="w-full bg-muted rounded-full h-2">
                         <div 
                           className={`bg-blue-600 h-2 rounded-full transition-all duration-300`}
                           data-progress={uploadProgress.logo}
@@ -542,7 +542,7 @@ const EditSellerInfo = () => {
                   ) : (
                     <div className="space-y-2">
                       <Upload className="w-8 h-8 text-gray-400 mx-auto" />
-                      <p className="text-sm text-gray-600">Click to upload logo</p>
+                      <p className="text-sm text-muted-foreground">Click to upload logo</p>
                       <p className="text-xs text-gray-500">PNG, JPG up to 5MB</p>
                     </div>
                   )}
@@ -550,7 +550,7 @@ const EditSellerInfo = () => {
               </div>
 
               <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-3">
+                  <label className="block text-sm font-semibold text-foreground mb-3">
                     Company Banner
                   </label>
                   <div 
@@ -575,7 +575,7 @@ const EditSellerInfo = () => {
                         <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
                       </div>
                       <p className="text-sm font-medium text-blue-600">Uploading banner...</p>
-                      <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div className="w-full bg-muted rounded-full h-2">
                         <div 
                           className={`bg-blue-600 h-2 rounded-full transition-all duration-300`}
                           data-progress={uploadProgress.banner}
@@ -601,7 +601,7 @@ const EditSellerInfo = () => {
                   ) : (
                     <div className="space-y-2">
                       <Upload className="w-8 h-8 text-gray-400 mx-auto" />
-                      <p className="text-sm text-gray-600">Click to upload banner</p>
+                      <p className="text-sm text-muted-foreground">Click to upload banner</p>
                       <p className="text-xs text-gray-500">PNG, JPG up to 10MB</p>
                     </div>
                   )}
@@ -611,12 +611,12 @@ const EditSellerInfo = () => {
             </div>
 
             {/* Submit Button Section */}
-            <div className="bg-gray-50 rounded-lg p-6 mt-8">
+            <div className="bg-muted rounded-lg p-6 mt-8">
               <div className="flex flex-col sm:flex-row justify-end space-y-3 sm:space-y-0 sm:space-x-4">
                 <button
                   type="button"
                   onClick={() => navigate('/seller/dashboard')}
-                  className="px-8 py-3 border-2 border-gray-300 rounded-xl text-gray-700 hover:bg-gray-100 hover:border-gray-400 transition-all duration-200 font-medium"
+                  className="px-8 py-3 border-2 border-border rounded-xl text-foreground hover:bg-accent hover:border-border transition-all duration-200 font-medium"
                 >
                   Cancel
                 </button>
@@ -625,7 +625,7 @@ const EditSellerInfo = () => {
                   disabled={isSubmitting || isUploading.logo || isUploading.banner}
                   className={`flex items-center justify-center px-8 py-3 rounded-xl text-white font-medium transition-all duration-200 ${
                     isSubmitting || isUploading.logo || isUploading.banner
-                      ? 'bg-gray-400 cursor-not-allowed'
+                      ? 'bg-muted/60 cursor-not-allowed'
                       : 'bg-gradient-to-r from-blue-600 to-green-600 hover:from-blue-700 hover:to-green-700 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5'
                   }`}
                 >

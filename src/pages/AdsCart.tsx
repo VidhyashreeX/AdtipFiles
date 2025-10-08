@@ -97,7 +97,7 @@ const AdsCart = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#f5f5ff]">
+    <div className="min-h-screen bg-background">
       {/* Header */}
       <div className="bg-gradient-to-r from-[#00dcaa] to-[#00b894] text-white">
         <div className="max-w-4xl mx-auto px-6 py-8">

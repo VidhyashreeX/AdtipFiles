@@ -55,8 +55,8 @@ const ChoosePlan = () => {
 
   return (
     <>
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-white to-[#e0ecf7] px-2 py-8">
-        <div className="w-full max-w-5xl bg-card/90 rounded-3xl shadow-2xl p-6 md:p-12 relative border border-border">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-background to-muted px-2 py-8">
+        <div className="w-full max-w-5xl bg-card rounded-3xl shadow-2xl p-6 md:p-12 relative border border-border">
           {/* Category Tabs */}
           <div className="flex justify-center mb-6 gap-4">
             {plans.map((plan, idx) => (
@@ -90,7 +90,7 @@ const ChoosePlan = () => {
             {plans[selectedCategory].options.map((option) => (
               <div
                 key={option.label}
-                className="flex flex-col items-center bg-[#f8fafc] rounded-2xl shadow-md px-8 py-6 min-w-[200px] max-w-[260px] border border-border"
+                className="flex flex-col items-center bg-card rounded-2xl shadow-md px-8 py-6 min-w-[200px] max-w-[260px] border border-border"
               >
                 {/* Plan Title */}
                 <div className="text-lg font-semibold mb-2 text-foreground text-center">

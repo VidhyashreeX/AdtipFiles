@@ -354,9 +354,10 @@ const PhoneLogin: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-background">
-      <div className="bg-card p-8 rounded shadow-md w-full max-w-md border border-border">
-        <h2 className="text-2xl font-bold mb-6 text-center text-foreground">Login with Phone</h2>
+    <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-background to-muted">
+      <div className="bg-card p-8 rounded-lg shadow-xl w-full max-w-md border border-border">
+        <h2 className="text-2xl font-bold mb-6 text-center text-foreground">Welcome to AdTip</h2>
+        <p className="text-center text-muted-foreground mb-6">Choose your preferred login method</p>
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -383,10 +384,10 @@ const PhoneLogin: React.FC = () => {
           </div>
           <button
             onClick={handleSendOTP}
-            className="w-full bg-blue-500 text-white px-4 py-2 rounded mb-4 disabled:bg-blue-300"
+            className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-4 py-2 rounded-lg font-semibold mb-4 disabled:opacity-50 transition-all"
             disabled={getOtpLoading}
           >
-            {getOtpLoading ? "Sending..." : "Send OTP"}
+            {getOtpLoading ? "Sending..." : "Phone Login"}
           </button>
 
           {/* Test API Connection Button */}
@@ -452,17 +453,36 @@ const PhoneLogin: React.FC = () => {
             Test OTP Verification
           </button>
 
+          <div className="mb-4">
+            <label className="block mb-2 font-medium text-foreground text-sm">Phone number</label>
+            <input
+              type="text"
+              placeholder="Phone number"
+              value={phone}
+              className="w-full bg-muted text-foreground border border-border rounded-lg px-4 py-3 focus:ring-2 focus:ring-primary focus:border-primary transition-all"
+              readOnly
+            />
+          </div>
+          
+          <button
+            onClick={handleSendOTP}
+            className="w-full bg-gradient-to-r from-[#00dcaa] to-[#00b894] hover:from-[#00b894] hover:to-[#009977] text-white px-4 py-3 rounded-lg font-semibold mb-6 disabled:opacity-50 transition-all shadow-lg"
+            disabled={getOtpLoading}
+          >
+            {getOtpLoading ? "Sending OTP..." : "Send OTP"}
+          </button>
+
           <input
             type="text"
             placeholder="Enter OTP"
             value={otp}
             onChange={(e) => setOtp(e.target.value)}
-            className="border border-border bg-background text-foreground p-2 w-full mb-4 rounded focus:ring-2 focus:ring-primary"
+            className="border border-border bg-muted text-foreground placeholder:text-muted-foreground/60 px-4 py-3 w-full mb-4 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-all"
           />
           <button
             onClick={verifyOTP}
             disabled={verifyOtpLoading}
-            className="bg-green-500 text-white px-4 py-2 rounded mb-4 disabled:bg-green-300"
+            className="w-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white px-4 py-3 rounded-lg font-semibold mb-4 disabled:opacity-50 transition-all shadow-lg"
           >
             {verifyOtpLoading ? "Verifying..." : "Verify OTP"}
           </button>
@@ -475,25 +495,25 @@ const PhoneLogin: React.FC = () => {
 
           <hr className="my-6 border-border" />
 
-          <h3 className="text-lg mb-2 text-foreground">Username/Password Login</h3>
+          <h3 className="text-lg mb-4 text-foreground font-semibold">Username/Password Login</h3>
           <input
             type="text"
             placeholder="Enter Username"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            className="border border-border bg-background text-foreground p-2 w-full mb-4 rounded focus:ring-2 focus:ring-primary"
+            className="border border-border bg-muted text-foreground placeholder:text-muted-foreground/60 px-4 py-3 w-full mb-4 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-all"
           />
           <input
             type="password"
             placeholder="Enter Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="border border-border bg-background text-foreground p-2 w-full mb-4 rounded focus:ring-2 focus:ring-primary"
+            className="border border-border bg-muted text-foreground placeholder:text-muted-foreground/60 px-4 py-3 w-full mb-4 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-all"
           />
           <button
             onClick={login}
             disabled={loginLoading}
-            className="bg-blue-600 text-white px-4 py-2 rounded mb-4 disabled:bg-blue-400 hover:bg-blue-700"
+            className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-4 py-3 rounded-lg font-semibold mb-4 disabled:opacity-50 transition-all shadow-lg"
           >
             {loginLoading ? "Logging in..." : "Login"}
           </button>
@@ -503,14 +523,14 @@ const PhoneLogin: React.FC = () => {
           <button
             onClick={getLocationData}
             disabled={geoLocationLoading}
-            className="bg-purple-500 text-white px-4 py-2 rounded mb-4 disabled:bg-purple-300"
+            className="w-full bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white px-4 py-3 rounded-lg font-semibold mb-4 disabled:opacity-50 transition-all shadow-lg"
           >
             {geoLocationLoading ? "Fetching Location..." : "Get Location"}
           </button>
 
           <button
             onClick={logout}
-            className="bg-red-500 text-white px-4 py-2 rounded"
+            className="w-full bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-4 py-3 rounded-lg font-semibold transition-all shadow-lg"
           >
             Logout
           </button>
