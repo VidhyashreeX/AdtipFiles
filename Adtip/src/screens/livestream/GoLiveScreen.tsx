@@ -255,13 +255,14 @@ const CreateStreamModal: React.FC<CreateStreamModalProps> = ({
             </View>
           )}
 
-          {streamType === 'free' && (
+          {/* HIDDEN: Free stream info box - commented out to hide from UI */}
+          {/* {streamType === 'free' && (
             <View style={styles.infoBox}>
               <Text style={[styles.infoText, { color: colors.text.secondary }]}>
                 Anyone can join and watch your free live stream at no cost.
               </Text>
             </View>
-          )}
+          )} */}
         </ScrollView>
 
         <View style={[styles.modalFooter, { borderTopColor: colors.border }]}>
@@ -316,14 +317,15 @@ const GoLiveScreen: React.FC = () => {
   }, [route.params?.initialStreamType]);
 
   const streamTypes = [
-    {
-      type: 'free' as const,
-      title: 'Free Live Stream',
-      description: 'Anyone can join and watch for free',
-      icon: <Play size={24} color="#4CAF50" />,
-      gradient: ['#4CAF50', '#45a049'],
-      features: ['No cost for viewers', 'Open to everyone', 'Unlimited duration']
-    },
+    // HIDDEN: Free Live Stream option - commented out to hide from UI
+    // {
+    //   type: 'free' as const,
+    //   title: 'Free Live Stream',
+    //   description: 'Anyone can join and watch for free',
+    //   icon: <Play size={24} color="#4CAF50" />,
+    //   gradient: ['#4CAF50', '#45a049'],
+    //   features: ['No cost for viewers', 'Open to everyone', 'Unlimited duration']
+    // },
     {
       type: 'influencer' as const,
       title: 'Influencer Stream',

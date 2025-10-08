@@ -486,14 +486,15 @@ const LiveStreamScreen: React.FC<LiveStreamScreenProps> = ({
               onPress={() => setActiveFilter('all')}
               colors={colors}
             />
-            <FilterButton
+            {/* HIDDEN: Free Stream Filter - commented out to hide from UI */}
+            {/* <FilterButton
               type="free"
               label="Free"
               count={streamCounts.free}
               isActive={activeFilter === 'free'}
               onPress={() => setActiveFilter('free')}
               colors={colors}
-            />
+            /> */}
             <FilterButton
               type="influencer"
               label="Influencer"
@@ -587,8 +588,8 @@ const LiveStreamScreen: React.FC<LiveStreamScreenProps> = ({
               Select how you want to go live
             </Text>
 
-            {/* Free Stream Option */}
-            <TouchableOpacity
+            {/* HIDDEN: Free Stream Option - commented out to hide from UI */}
+            {/* <TouchableOpacity
               style={[styles.streamTypeOption, { borderColor: colors.border }]}
               onPress={() => handleStreamTypeSelect('free')}
               activeOpacity={0.7}
@@ -607,7 +608,7 @@ const LiveStreamScreen: React.FC<LiveStreamScreenProps> = ({
                   Anyone can join and watch for free
                 </Text>
               </View>
-            </TouchableOpacity>
+            </TouchableOpacity> */}
 
             {/* Influencer Stream Option */}
             <TouchableOpacity
