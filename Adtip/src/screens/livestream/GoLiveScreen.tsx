@@ -18,6 +18,7 @@ import { RouteProp } from '@react-navigation/native';
 import { Picker } from '@react-native-picker/picker';
 import { MainNavigatorParamList } from '../../types/navigation';
 import LinearGradient from 'react-native-linear-gradient';
+import RazorpayCheckout from 'react-native-razorpay';
 import { 
   Play, 
   Users, 
@@ -372,7 +373,8 @@ const GoLiveScreen: React.FC = () => {
           break;
           
         case 'promotional':
-          endpoint = '/api/live-stream/create-promotional';
+          // NEW FLOW: Create payment order first (no stream creation yet)
+          endpoint = '/api/live-stream/create-promotional-order';
           payload = {
             ...payload,
             product_service_name: formData.productServiceName,
@@ -389,29 +391,26 @@ const GoLiveScreen: React.FC = () => {
 
       const response = await ApiService.post(endpoint, payload);
 
-      // Debug logging to understand response structure
       console.log('[GoLiveScreen] ===== RESPONSE DEBUG =====');
       console.log('[GoLiveScreen] response.success:', response.success);
       console.log('[GoLiveScreen] response.message:', response.message);
       console.log('[GoLiveScreen] response.data:', response.data);
-      console.log('[GoLiveScreen] typeof response.data:', typeof response.data);
 
       if (response.success) {
         setShowModal(false);
         
         if (selectedStreamType === 'promotional') {
-          // Handle Razorpay payment, pass the title along
-          handleRazorpayPayment({...response.data, title: formData.title});
+          // Handle Razorpay payment FIRST (before stream creation)
+          // Keep loading state ON during payment
+          handleRazorpayPayment({...response.data, title: formData.title, user_id: user?.id});
         } else {
-          // Backend returns {success, message, data: {meeting_id, token, ...}}
-          // ApiService.post returns response.data, so we get the outer object
-          // Therefore, response.data contains {meeting_id, token, ...}
+          // For free and influencer streams, navigate immediately
+          setLoading(false);
           const streamData = response.data;
           
           console.log('[GoLiveScreen] streamData:', streamData);
           console.log('[GoLiveScreen] streamData.meeting_id:', streamData?.meeting_id);
           console.log('[GoLiveScreen] streamData.token:', streamData?.token ? `${streamData.token.substring(0, 20)}...` : 'undefined');
-          console.log('[GoLiveScreen] ========================');
           
           if (!streamData?.meeting_id || !streamData?.token) {
             console.error('[GoLiveScreen] ERROR: Missing meeting_id or token in response!');
@@ -428,28 +427,26 @@ const GoLiveScreen: React.FC = () => {
           });
         }
       } else {
+        setLoading(false);
         Alert.alert('Error', response.message || 'Failed to create stream');
       }
     } catch (error) {
+      setLoading(false);
       console.error('Error creating stream:', error);
       Alert.alert('Error', 'Failed to create stream. Please try again.');
-    } finally {
-      setLoading(false);
     }
   };
 
   const handleRazorpayPayment = (paymentData: any) => {
-    // Import RazorpayCheckout for React Native
-    const RazorpayCheckout = require('react-native-razorpay');
+    console.log('[GoLiveScreen] Initiating Razorpay payment:', paymentData);
     
     const options = {
-      description: `Promotional Stream: ${paymentData.payment_details.product_service_name}`,
-      image: 'https://your-logo-url.com/logo.png',
-      currency: 'INR',
       key: paymentData.razorpay_key_id,
       amount: paymentData.total_amount * 100, // Convert to paise
-      order_id: paymentData.razorpay_order_id,
+      currency: 'INR',
       name: 'AdTip Live',
+      description: `Promotional Stream: ${paymentData.payment_details?.product_service_name || 'Live Stream'}`,
+      order_id: paymentData.razorpay_order_id,
       prefill: {
         email: user?.emailId || '',
         contact: user?.mobile_number || '',
@@ -458,51 +455,69 @@ const GoLiveScreen: React.FC = () => {
       theme: { color: colors.primary }
     };
 
+    console.log('[GoLiveScreen] Razorpay options:', options);
+
     RazorpayCheckout.open(options)
-      .then(async (data: any) => {
-        // Payment successful, confirm with backend
+      .then(async (response: any) => {
+        // Payment successful, NOW create the stream on backend
+        console.log('[GoLiveScreen] Payment successful, creating stream...', response);
+        
         try {
           const confirmResponse = await ApiService.post('/api/live-stream/confirm-promotional-payment', {
-            razorpay_payment_id: data.razorpay_payment_id,
-            razorpay_order_id: data.razorpay_order_id,
-            razorpay_signature: data.razorpay_signature
+            razorpay_payment_id: response.razorpay_payment_id,
+            razorpay_order_id: response.razorpay_order_id,
+            razorpay_signature: response.razorpay_signature,
+            user_id: paymentData.user_id || user?.id
           });
 
-          console.log('[GoLiveScreen] Payment confirmation response:', confirmResponse);
+          console.log('[GoLiveScreen] Stream creation response:', confirmResponse);
 
-          if (confirmResponse.success) {
-            // Backend returns {success, message, data: {meeting_id, token, ...}}
-            // ApiService.post returns the outer object, so response.data is the stream data
+          if (confirmResponse.success && confirmResponse.data) {
             const streamData = confirmResponse.data;
             
-            console.log('[GoLiveScreen] Payment confirmed streamData:', streamData);
+            console.log('[GoLiveScreen] Stream created successfully:', streamData);
             
             if (!streamData?.meeting_id || !streamData?.token) {
-              console.error('[GoLiveScreen] ERROR: Missing meeting_id or token in payment confirmation!');
-              Alert.alert('Error', 'Invalid response from server. Please contact support.');
+              console.error('[GoLiveScreen] ERROR: Missing meeting_id or token!');
+              Alert.alert('Error', 'Stream created but missing details. Please contact support.');
               return;
             }
             
-            Alert.alert('Success', 'Payment confirmed! Your promotional stream is now active.', [
-              {
-                text: 'Start Streaming',
-                onPress: () => navigation.navigate('LiveStreaming', {
-                  meetingId: streamData.meeting_id,
-                  token: streamData.token,
-                  isHost: true,
-                  streamTitle: paymentData.title || 'Promotional Stream',
-                  streamType: 'promotional'
-                })
-              }
-            ]);
+            // Navigate to livestream immediately
+            Alert.alert(
+              'Success', 
+              'Payment confirmed! Your promotional stream is now active.',
+              [
+                {
+                  text: 'Start Streaming',
+                  onPress: () => {
+                    navigation.navigate('LiveStreaming', {
+                      meetingId: streamData.meeting_id,
+                      token: streamData.token,
+                      isHost: true,
+                      streamTitle: paymentData.title || paymentData.payment_details?.title || 'Promotional Stream',
+                      streamType: 'promotional'
+                    });
+                  }
+                }
+              ]
+            );
+          } else {
+            Alert.alert('Error', confirmResponse.message || 'Failed to create stream after payment.');
           }
-        } catch (error) {
-          Alert.alert('Error', 'Payment successful but failed to confirm. Please contact support.');
+        } catch (error: any) {
+          console.error('[GoLiveScreen] Error confirming payment:', error);
+          Alert.alert(
+            'Error', 
+            'Payment successful but failed to create stream. Please contact support.'
+          );
         }
       })
       .catch((error: any) => {
-        Alert.alert('Payment Failed', error.description || 'Payment was cancelled');
-      });
+        console.error('[GoLiveScreen] Payment failed or cancelled:', error);
+        Alert.alert('Payment Failed', 'Your payment was not completed.');
+      })
+      .finally(() => setLoading(false));
   };
 
   return (
