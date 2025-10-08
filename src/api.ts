@@ -1159,3 +1159,397 @@ export const apiGetCompanyReviews = async (companyId: string) => {
     }, 500);
   });
 };
+
+// ============== ADVERTISEMENT APIs ==============
+
+// Get animations list
+export const apiGetAnimations = async () => {
+  const token = localStorage.getItem('UserLoggedIn');
+  return axios.get(`${BASE_URL}/api/getanimations`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+};
+
+// Get company-specific buttons
+export const apiGetCompanyButtonList = async () => {
+  const token = localStorage.getItem('UserLoggedIn');
+  return axios.get(`${BASE_URL}/api/getCompanyButton`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+};
+
+// Save celebration ads
+export const apiSaveCelebrationAd = async (adData: any, mediaFile?: File) => {
+  const token = localStorage.getItem('UserLoggedIn');
+  const formData = new FormData();
+  
+  Object.entries(adData).forEach(([key, value]) => {
+    if (value !== null && value !== undefined && value !== '') {
+      formData.append(key, value.toString());
+    }
+  });
+
+  if (mediaFile) {
+    formData.append('adFile', mediaFile);
+  }
+
+  return axios.post(`${BASE_URL}/api/savecelebrationadds`, formData, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'multipart/form-data'
+    }
+  });
+};
+
+// Save business ad
+export const apiSaveBusinessAd = async (adData: any, mediaFile?: File) => {
+  const token = localStorage.getItem('UserLoggedIn');
+  const formData = new FormData();
+  
+  Object.entries(adData).forEach(([key, value]) => {
+    if (value !== null && value !== undefined && value !== '') {
+      formData.append(key, value.toString());
+    }
+  });
+
+  if (mediaFile) {
+    formData.append('adFile', mediaFile);
+  }
+
+  return axios.post(`${BASE_URL}/api/savebussinessad`, formData, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'multipart/form-data'
+    }
+  });
+};
+
+// Get filtered ads
+export const apiGetFilteredAds = async (filters: any) => {
+  const token = localStorage.getItem('UserLoggedIn');
+  return axios.post(`${BASE_URL}/api/getallads`, filters, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    }
+  });
+};
+
+// Get master filtered ads
+export const apiGetMasterFilteredAds = async (filters: any) => {
+  const token = localStorage.getItem('UserLoggedIn');
+  return axios.post(`${BASE_URL}/api/getmasterads`, filters, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    }
+  });
+};
+
+// Get paginated master ads
+export const apiGetMasterAdsPagination = async (page: number) => {
+  return axios.post(`${BASE_URL}/api/getmasteradsPagination`, { page }, {
+    headers: {
+      'Content-Type': 'application/json'
+    }
+  });
+};
+
+// Get celebration ads
+export const apiGetCelebrationAds = async (filters: any) => {
+  const token = localStorage.getItem('UserLoggedIn');
+  return axios.post(`${BASE_URL}/api/getcelebrationads`, filters, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    }
+  });
+};
+
+// Get business ads
+export const apiGetBusinessAds = async (filters: any) => {
+  const token = localStorage.getItem('UserLoggedIn');
+  return axios.post(`${BASE_URL}/api/getbussinessads`, filters, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    }
+  });
+};
+
+// Get ad hub ads
+export const apiGetAdHubAds = async (filters: any) => {
+  const token = localStorage.getItem('UserLoggedIn');
+  return axios.post(`${BASE_URL}/api/getadhubads`, filters, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    }
+  });
+};
+
+// Get demo request ads
+export const apiGetDemoRequestAds = async (userId: string) => {
+  return axios.get(`${BASE_URL}/api/getrequestdemoads/${userId}`);
+};
+
+// Get ad details
+export const apiGetAdDetails = async (adId: string, userId: string) => {
+  const token = localStorage.getItem('UserLoggedIn');
+  return axios.get(`${BASE_URL}/api/getaddetails/${adId}/${userId}`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+};
+
+// Get ad details for QR code
+export const apiGetAdDetailsForQr = async (adId: string) => {
+  return axios.get(`${BASE_URL}/api/getAdDetailsForQr/${adId}`);
+};
+
+// Get ad details for video
+export const apiGetAdDetailsForVideo = async (adId: string) => {
+  return axios.get(`${BASE_URL}/api/getaddetailsforViedeo/${adId}`);
+};
+
+// Get order tracking
+export const apiGetOrderTracking = async (adId: string) => {
+  const token = localStorage.getItem('UserLoggedIn');
+  return axios.get(`${BASE_URL}/api/getOrderTracking/${adId}`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+};
+
+// Get ad for short video
+export const apiGetAdForShortVideo = async (userId: string) => {
+  const token = localStorage.getItem('UserLoggedIn');
+  return axios.get(`${BASE_URL}/api/getAdForShortVideo/${userId}`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+};
+
+// Get ad views and likes
+export const apiGetAdViewsAndLikes = async (userId: string, adId: string) => {
+  const token = localStorage.getItem('UserLoggedIn');
+  return axios.get(`${BASE_URL}/api/getadviewsandlikes/${userId}/${adId}`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+};
+
+// Save ad views and likes
+export const apiSaveAdViewsAndLikes = async (data: any) => {
+  const token = localStorage.getItem('UserLoggedIn');
+  return axios.post(`${BASE_URL}/api/saveadviewsandlikes`, data, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    }
+  });
+};
+
+// Save ad like amount
+export const apiSaveAdLikeAmount = async (data: any) => {
+  const token = localStorage.getItem('UserLoggedIn');
+  return axios.post(`${BASE_URL}/api/saveadlikeamount`, data, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    }
+  });
+};
+
+// Save ad view amount
+export const apiSaveAdViewAmount = async (data: any) => {
+  const token = localStorage.getItem('UserLoggedIn');
+  return axios.post(`${BASE_URL}/api/saveadviewamount`, data, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    }
+  });
+};
+
+// Add amount to wallet from ad
+export const apiAddAmountToWallet = async (data: any) => {
+  const token = localStorage.getItem('UserLoggedIn');
+  return axios.post(`${BASE_URL}/api/saveadamount`, data, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    }
+  });
+};
+
+// Get ad view details
+export const apiGetAdView = async (data: any) => {
+  const token = localStorage.getItem('UserLoggedIn');
+  return axios.post(`${BASE_URL}/api/getadview`, data, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    }
+  });
+};
+
+// Get graph data for analytics
+export const apiGetGraphData = async (data: any) => {
+  const token = localStorage.getItem('UserLoggedIn');
+  return axios.post(`${BASE_URL}/api/getgraphdata`, data, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    }
+  });
+};
+
+// Get user's liked ads (paginated)
+export const apiGetMyLikedAds = async (userId: string, page: number) => {
+  const token = localStorage.getItem('UserLoggedIn');
+  return axios.get(`${BASE_URL}/api/getmylikead/${userId}/${page}`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+};
+
+// Get ads liked by user
+export const apiGetUserLikedAds = async (userId: string) => {
+  const token = localStorage.getItem('UserLoggedIn');
+  return axios.get(`${BASE_URL}/api/getuserlikeads/${userId}`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+};
+
+// Get likes for company ads
+export const apiGetLikeAdsByCompany = async (companyUserId: string) => {
+  const token = localStorage.getItem('UserLoggedIn');
+  return axios.get(`${BASE_URL}/api/getlikeadsbycompany/${companyUserId}`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+};
+
+// Get loss view amount
+export const apiGetLossViewAmount = async (adId: string) => {
+  const token = localStorage.getItem('UserLoggedIn');
+  return axios.get(`${BASE_URL}/api/getlossviewamount/${adId}`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+};
+
+// Save ad pause/continue status
+export const apiSaveAdPauseContinueStatus = async (data: any) => {
+  const token = localStorage.getItem('UserLoggedIn');
+  return axios.post(`${BASE_URL}/api/saveadpausecountinuestatus`, data, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    }
+  });
+};
+
+// Block an ad
+export const apiBlockAd = async (data: any) => {
+  const token = localStorage.getItem('UserLoggedIn');
+  return axios.post(`${BASE_URL}/api/adblock`, data, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    }
+  });
+};
+
+// Get blocked ads by company
+export const apiGetBlockedAdsByCompany = async (userId: string) => {
+  const token = localStorage.getItem('UserLoggedIn');
+  return axios.get(`${BASE_URL}/api/getblockadbycompany/${userId}`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+};
+
+// Get companies blocked by user
+export const apiGetBlockedCompaniesByUser = async (userId: string) => {
+  const token = localStorage.getItem('UserLoggedIn');
+  return axios.get(`${BASE_URL}/api/getblockadcompanybyuser/${userId}`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+};
+
+// Follow a company
+export const apiFollowCompany = async (data: { companyId: string | number, userId: string | number }) => {
+  const token = localStorage.getItem('UserLoggedIn');
+  return axios.post(`${BASE_URL}/api/savefallowcompany`, data, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    }
+  });
+};
+
+// Get followed companies
+export const apiGetFollowedCompanies = async (userId: string) => {
+  const token = localStorage.getItem('UserLoggedIn');
+  return axios.get(`${BASE_URL}/api/getfallowcompany/${userId}`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+};
+
+// Validate coupon
+export const apiValidateCoupon = async (data: any) => {
+  const token = localStorage.getItem('UserLoggedIn');
+  return axios.post(`${BASE_URL}/api/validatecoupon`, data, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    }
+  });
+};
+
+// Get available coupons
+export const apiGetCoupons = async () => {
+  return axios.get(`${BASE_URL}/api/getcoupon`);
+};
+
+// Request demo
+export const apiRequestDemo = async (data: any) => {
+  const token = localStorage.getItem('UserLoggedIn');
+  return axios.post(`${BASE_URL}/api/requestdemo`, data, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    }
+  });
+};
+
+// Save celebration ad view
+export const apiSaveCelebrationAdView = async (data: { adId: string | number, userId: string | number }) => {
+  const token = localStorage.getItem('UserLoggedIn');
+  return axios.post(`${BASE_URL}/api/savecelebrationadview`, data, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    }
+  });
+};

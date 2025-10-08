@@ -1,6 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Search, Filter, Download, MoreVertical, Eye, BarChart3, Pause, Play, Target, TrendingUp, Calendar, Clock, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Search, Filter, Download, MoreVertical, Eye, BarChart3, Pause, Play, Target, TrendingUp, Calendar, Clock, CheckCircle, XCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { 
+  apiGetUserAds, 
+  apiGetFilteredAds, 
+  apiGetMasterAdsPagination,
+  apiSaveAdPauseContinueStatus 
+} from '@/api';
+import { toast } from '@/hooks/use-toast';
 
 const AdOrders = () => {
   const navigate = useNavigate();
@@ -8,9 +15,86 @@ const AdOrders = () => {
   const [activeTab, setActiveTab] = useState('all');
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
   const [showFilters, setShowFilters] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [adOrders, setAdOrders] = useState<any[]>([]);
 
-  // Mock data for ad orders
-  const [adOrders] = useState([
+  // Fetch user's ads on component mount
+  useEffect(() => {
+    fetchUserAds();
+  }, [currentPage]);
+
+  const fetchUserAds = async () => {
+    try {
+      setIsLoading(true);
+      const userData = JSON.parse(localStorage.getItem('UserData') || '{}');
+      const userId = userData.id;
+
+      if (!userId) {
+        toast({
+          title: "Authentication Required",
+          description: "Please log in to view your ad campaigns.",
+          variant: "destructive",
+        });
+        navigate('/login');
+        return;
+      }
+
+      // Fetch user's ads
+      const response = await apiGetUserAds(userId.toString());
+      
+      if (response.data && response.data.status === 200) {
+        const ads = response.data.data || [];
+        setAdOrders(ads);
+      } else {
+        setAdOrders([]);
+      }
+    } catch (error: any) {
+      console.error('Error fetching ads:', error);
+      toast({
+        title: "Error",
+        description: error.response?.data?.message || "Failed to load your ad campaigns.",
+        variant: "destructive",
+      });
+      // Set mock data as fallback for development
+      setAdOrders(mockAdOrders);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleToggleAdStatus = async (adId: string, currentStatus: string) => {
+    try {
+      const userData = JSON.parse(localStorage.getItem('UserData') || '{}');
+      const userId = userData.id;
+
+      const newStatus = currentStatus === 'Running' || currentStatus === 'Active' ? 'Paused' : 'Running';
+      
+      await apiSaveAdPauseContinueStatus({
+        id: adId,
+        userId: userId,
+        status: newStatus
+      });
+
+      toast({
+        title: "Success",
+        description: `Campaign ${newStatus.toLowerCase()} successfully.`,
+      });
+
+      // Refresh ads list
+      fetchUserAds();
+    } catch (error: any) {
+      console.error('Error updating ad status:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update campaign status.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Mock data for development/fallback
+  const mockAdOrders = [
     {
       id: 'CAM001',
       campaignName: 'Tech Innovation Campaign',
@@ -113,7 +197,7 @@ const AdOrders = () => {
       platform: ['Google', 'Facebook', 'Instagram'],
       thumbnail: 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=400&h=300&fit=crop'
     }
-  ]);
+  ];
 
   const getStatusColor = (status: string) => {
     switch (status) {
