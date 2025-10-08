@@ -514,8 +514,8 @@ const fetchShorts = useCallback(
   }, [isGlobalPlaying]);
 
   // --- Render Logic ---
-  if (loading && shorts.length === 0) return <div className="flex items-center justify-center h-screen bg-white text-gray-800">Loading...</div>;
-  if (error) return <div className="flex items-center justify-center h-screen bg-white text-red-500">{error}</div>;
+  if (loading && shorts.length === 0) return <div className="flex items-center justify-center h-screen bg-card text-foreground">Loading...</div>;
+  if (error) return <div className="flex items-center justify-center h-screen bg-card text-red-500">{error}</div>;
 
   return (
     <>
@@ -531,7 +531,7 @@ const fetchShorts = useCallback(
       <div
         ref={containerRef}
         className={cn(
-          "relative flex flex-col items-center bg-white overflow-hidden",
+          "relative flex flex-col items-center bg-card overflow-hidden",
           isFullscreen ? "fixed inset-0 z-50 bg-black" : "",
           "w-full h-full"
         )}
@@ -561,7 +561,7 @@ const fetchShorts = useCallback(
           ref={shortsListRef}
           className={cn(
             "w-full h-full flex flex-col items-center overflow-y-scroll snap-y snap-mandatory scrollbar-hide",
-            !isMobile && "bg-white"
+            !isMobile && "bg-card"
           )}
           style={{
             overflowX: 'hidden',
@@ -729,7 +729,7 @@ onClick={() => {
           ))}
           {/* Loader at the end for infinite scroll */}
           {hasMore && (
-            <div ref={loaderRef} className="flex items-center justify-center w-full h-32 text-gray-500 text-lg animate-pulse">
+            <div ref={loaderRef} className="flex items-center justify-center w-full h-32 text-muted-foreground text-lg animate-pulse">
               Loading more shorts...
             </div>
           )}
@@ -750,10 +750,10 @@ onClick={() => {
 )}
 {showRewardPopup && (
   <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
-    <div className="bg-white rounded-lg p-6 max-w-sm w-full text-center">
+    <div className="bg-card rounded-lg p-6 max-w-sm w-full text-center">
       <h2 className="text-xl font-bold mb-3">🎉 Congratulations!</h2>
       <p className="mb-2">You earned ₹1 for watching this video</p>
-      <p className="mb-4 text-gray-600">Credit added to your wallet</p>
+      <p className="mb-4 text-muted-foreground">Credit added to your wallet</p>
       <button
         onClick={() => window.location.href = "/login"}
         className="bg-blue-500 text-white px-4 py-2 rounded mb-2 w-full"

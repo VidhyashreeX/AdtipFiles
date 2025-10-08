@@ -119,9 +119,9 @@ const StreamCard: React.FC<{
       
       <CardContent className="p-4">
         <h3 className="font-semibold text-lg mb-1 line-clamp-2">{stream.title}</h3>
-        <p className="text-sm text-gray-600 mb-3">{stream.streamerName}</p>
+        <p className="text-sm text-muted-foreground mb-3">{stream.streamerName}</p>
         
-        <div className="flex items-center justify-between text-sm text-gray-500">
+        <div className="flex items-center justify-between text-sm text-muted-foreground">
           <div className="flex items-center gap-1">
             <Users className="h-4 w-4" />
             <span>{stream.viewerCount.toLocaleString()}</span>
@@ -213,16 +213,16 @@ const LiveStream: React.FC = () => {
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
           <RefreshCw className="h-12 w-12 animate-spin mx-auto mb-4 text-primary" />
-          <p className="text-gray-600">Loading live streams...</p>
+          <p className="text-muted-foreground">Loading live streams...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-muted">
       {/* Header */}
-      <div className="bg-white border-b sticky top-0 z-10">
+      <div className="bg-card border-b sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -259,9 +259,9 @@ const LiveStream: React.FC = () => {
 
         {streams.length === 0 && !loading && (
           <div className="text-center py-12">
-            <Video className="h-16 w-16 mx-auto mb-4 text-gray-400" />
+            <Video className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
             <h2 className="text-xl font-semibold mb-2">No Live Streams</h2>
-            <p className="text-gray-600 mb-6">Be the first to go live!</p>
+            <p className="text-muted-foreground mb-6">Be the first to go live!</p>
             <Button onClick={handleStartStream}>
               <Plus className="h-4 w-4 mr-2" />
               Start Streaming

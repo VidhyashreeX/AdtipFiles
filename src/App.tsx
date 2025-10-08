@@ -9,6 +9,7 @@ import { UserProvider } from "./UserContext";
 import { ShoppingProvider } from "./contexts/ShoppingContext";
 import AppLayout from "./AppLayout";
 import { SidebarProvider } from './contexts/SidebarContext';
+import { ThemeProvider } from './contexts/ThemeContext';
 
 const queryClient = new QueryClient();
 
@@ -29,23 +30,25 @@ const App = () => {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <UserProvider>
-          <ShoppingProvider>
-            <SidebarProvider>
-              <TooltipProvider>
-                {isAuthPage ? (
-                  <Outlet />
-                ) : (
-                  <AppLayout />
-                )}
-                <Toaster />
-                <Sonner />
-              </TooltipProvider>
-            </SidebarProvider>
-          </ShoppingProvider>
-        </UserProvider>
-      </AuthProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <UserProvider>
+            <ShoppingProvider>
+              <SidebarProvider>
+                <TooltipProvider>
+                  {isAuthPage ? (
+                    <Outlet />
+                  ) : (
+                    <AppLayout />
+                  )}
+                  <Toaster />
+                  <Sonner />
+                </TooltipProvider>
+              </SidebarProvider>
+            </ShoppingProvider>
+          </UserProvider>
+        </AuthProvider>
+      </ThemeProvider>
     </QueryClientProvider>
   );
 };

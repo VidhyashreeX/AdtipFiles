@@ -354,9 +354,9 @@ const PhoneLogin: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
-      <div className="bg-white p-8 rounded shadow-md w-full max-w-md">
-        <h2 className="text-2xl font-bold mb-6 text-center">Login with Phone</h2>
+    <div className="flex flex-col items-center justify-center min-h-screen bg-background">
+      <div className="bg-card p-8 rounded shadow-md w-full max-w-md border border-border">
+        <h2 className="text-2xl font-bold mb-6 text-center text-foreground">Login with Phone</h2>
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -364,7 +364,7 @@ const PhoneLogin: React.FC = () => {
           }}
         >
           <div className="mb-4">
-            <label className="block mb-1 font-medium">Country</label>
+            <label className="block mb-1 font-medium text-foreground">Country</label>
             <CountrySelect value={countryCode} onChange={setCountryCode} />
           </div>
           <div className="mb-4 flex items-center">
@@ -374,7 +374,7 @@ const PhoneLogin: React.FC = () => {
             <span className="mr-2 font-semibold">{countryCode}</span>
             <input
               type="tel"
-              className="flex-1 border rounded px-3 py-2"
+              className="flex-1 border border-border bg-background text-foreground rounded px-3 py-2 focus:ring-2 focus:ring-primary"
               placeholder="Enter phone number"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
@@ -402,7 +402,7 @@ const PhoneLogin: React.FC = () => {
                 toast.error('API connection failed');
               }
             }}
-            className="w-full bg-gray-500 text-white px-4 py-2 rounded mb-4"
+            className="w-full bg-muted text-foreground hover:bg-accent px-4 py-2 rounded mb-4"
           >
             Test API Connection
           </button>
@@ -457,7 +457,7 @@ const PhoneLogin: React.FC = () => {
             placeholder="Enter OTP"
             value={otp}
             onChange={(e) => setOtp(e.target.value)}
-            className="border p-2 w-full mb-4 rounded"
+            className="border border-border bg-background text-foreground p-2 w-full mb-4 rounded focus:ring-2 focus:ring-primary"
           />
           <button
             onClick={verifyOTP}
@@ -468,37 +468,37 @@ const PhoneLogin: React.FC = () => {
           </button>
 
           {timer > 0 && (
-            <p className="mt-2 text-gray-500 mb-4">
+            <p className="mt-2 text-muted-foreground mb-4">
               Resend OTP in {timer}s
             </p>
           )}
 
-          <hr className="my-6" />
+          <hr className="my-6 border-border" />
 
-          <h3 className="text-lg mb-2">Username/Password Login</h3>
+          <h3 className="text-lg mb-2 text-foreground">Username/Password Login</h3>
           <input
             type="text"
             placeholder="Enter Username"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            className="border p-2 w-full mb-4 rounded"
+            className="border border-border bg-background text-foreground p-2 w-full mb-4 rounded focus:ring-2 focus:ring-primary"
           />
           <input
             type="password"
             placeholder="Enter Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="border p-2 w-full mb-4 rounded"
+            className="border border-border bg-background text-foreground p-2 w-full mb-4 rounded focus:ring-2 focus:ring-primary"
           />
           <button
             onClick={login}
             disabled={loginLoading}
-            className="bg-blue-600 text-white px-4 py-2 rounded mb-4 disabled:bg-blue-400"
+            className="bg-blue-600 text-white px-4 py-2 rounded mb-4 disabled:bg-blue-400 hover:bg-blue-700"
           >
             {loginLoading ? "Logging in..." : "Login"}
           </button>
 
-          <hr className="my-6" />
+          <hr className="my-6 border-border" />
 
           <button
             onClick={getLocationData}

@@ -348,7 +348,7 @@ const handleAdTubeShare = (apiVideo: any) => {
 
   // --- UI ---
   return (
-    <div ref={feedRef} className="h-screen overflow-y-auto px-4 py-6 bg-gray-100">
+    <div ref={feedRef} className="h-screen overflow-y-auto px-4 py-6 bg-muted">
       {/* If a video is selected, show YouTube-style layout */}
       {currentVideo ? (
         <div className="flex flex-col lg:flex-row gap-6 w-full max-w-screen-2xl mx-auto">
@@ -367,13 +367,13 @@ const handleAdTubeShare = (apiVideo: any) => {
               />
             </div>
             <div className="mt-4">
-              <h2 className="text-xl font-bold text-gray-900 mb-2 line-clamp-2">{currentVideo.title}</h2>
+              <h2 className="text-xl font-bold text-foreground mb-2 line-clamp-2">{currentVideo.title}</h2>
               <div className="flex items-center gap-3 mb-2">
                 <img src={currentVideo.avatar || "/placeholder.svg"} alt={currentVideo.creatorName} className="w-10 h-10 rounded-full" />
                 <div className="flex flex-col">
                   <a
                     href={`/channel/${currentVideo.channelId}`}
-                    className="font-semibold text-gray-900 hover:underline text-base line-clamp-1"
+                    className="font-semibold text-foreground hover:underline text-base line-clamp-1"
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={() => {
@@ -386,22 +386,22 @@ const handleAdTubeShare = (apiVideo: any) => {
                   >
                     {currentVideo.creatorName}
                   </a>
-                  <span className="text-xs text-gray-500">{currentVideo.views.toLocaleString()} views • {currentVideo.posted}</span>
+                  <span className="text-xs text-muted-foreground">{currentVideo.views.toLocaleString()} views • {currentVideo.posted}</span>
                 </div>
                 <button className="ml-auto px-4 py-1.5 rounded-full bg-adtip-teal text-white font-medium text-sm">Subscribe</button>
               </div>
               <div className="flex gap-3 mt-2">
-                <button className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-gray-100 text-gray-700 font-medium hover:bg-gray-200">
+                <button className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-muted text-foreground font-medium hover:bg-muted">
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M14 9l-3 3m0 0l-3-3m3 3V4m0 16v-7" /></svg>
                   Like
                 </button>
-                <button className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-gray-100 text-gray-700 font-medium hover:bg-gray-200">
+                <button className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-muted text-foreground font-medium hover:bg-muted">
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M10 14l2-2m0 0l2-2m-2 2V4m0 16v-7" /></svg>
                   Dislike
                 </button>
           <button
   onClick={() => handleAdTubeShare(currentVideo)}
-  className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-gray-100 text-gray-700 font-medium hover:bg-gray-200"
+  className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-muted text-foreground font-medium hover:bg-muted"
 >
   <svg
     className="w-5 h-5"
@@ -421,7 +421,7 @@ const handleAdTubeShare = (apiVideo: any) => {
 
 
               </div>
-              <button onClick={() => setCurrentVideo(null)} className="mt-4 px-4 py-2 rounded-full bg-gray-200 text-gray-700 font-medium hover:bg-gray-300">Back to Feed</button>
+              <button onClick={() => setCurrentVideo(null)} className="mt-4 px-4 py-2 rounded-full bg-muted text-foreground font-medium hover:bg-gray-300">Back to Feed</button>
             </div>
           </div>
           {/* Relevant Videos Sidebar */}
@@ -430,7 +430,7 @@ const handleAdTubeShare = (apiVideo: any) => {
               {videos.filter(v => v.id !== currentVideo.id).map((video, idx) => (
                 <div
   key={video.id}
-  className="flex gap-3 bg-white rounded-lg shadow hover:shadow-md cursor-pointer overflow-hidden"
+  className="flex gap-3 bg-card rounded-lg shadow hover:shadow-md cursor-pointer overflow-hidden"
   onClick={() => {
     setCurrentVideo(video);
 feedRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
@@ -443,7 +443,7 @@ feedRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
     className="w-36 h-20 object-cover flex-shrink-0"
   />
   <div className="flex flex-col justify-between py-2 pr-2 min-w-0 flex-1">
-    <div className="font-semibold text-gray-900 text-sm line-clamp-2">
+    <div className="font-semibold text-foreground text-sm line-clamp-2">
       {video.title}
     </div>
     <div className="flex items-center gap-2 mt-1">
@@ -452,11 +452,11 @@ feedRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
         alt={video.creatorName}
         className="w-6 h-6 rounded-full"
       />
-      <span className="text-xs text-gray-600 truncate">
+      <span className="text-xs text-muted-foreground truncate">
         {video.creatorName}
       </span>
     </div>
-    <span className="text-xs text-gray-500 mt-1">
+    <span className="text-xs text-muted-foreground mt-1">
       {video.views.toLocaleString()} views • {video.posted}
     </span>
   </div>
@@ -475,7 +475,7 @@ feedRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
           {videos.map(video => (
             <div
               key={video.id}
-              className="bg-white rounded-xl shadow hover:shadow-lg transition-all cursor-pointer flex flex-col"
+              className="bg-card rounded-xl shadow hover:shadow-lg transition-all cursor-pointer flex flex-col"
               onClick={() => setCurrentVideo(video)}
               onMouseEnter={() => {
                 setHoveredVideoId(video.id);
@@ -494,7 +494,7 @@ feedRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
                 }
               }}
             >
-              <div className="relative aspect-video bg-gray-200 rounded-t-xl overflow-hidden">
+              <div className="relative aspect-video bg-muted rounded-t-xl overflow-hidden">
                 {/* Price badge if paid */}
                 {video.price && video.price > 0 && (
                   <span className="absolute top-2 right-2 bg-adtip-teal text-white text-xs px-3 py-1 rounded-full z-10 shadow">
@@ -548,10 +548,10 @@ feedRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
                     >
                       {video.creatorName}
                     </a>
-                    <span className="text-xs text-gray-500">{video.views.toLocaleString()} views • {video.posted}</span>
+                    <span className="text-xs text-muted-foreground">{video.views.toLocaleString()} views • {video.posted}</span>
                   </div>
                 </div>
-                <div className="font-medium text-gray-900 text-base line-clamp-2 mb-1">{video.title}</div>
+                <div className="font-medium text-foreground text-base line-clamp-2 mb-1">{video.title}</div>
               </div>
             </div>
           ))}
@@ -563,7 +563,7 @@ feedRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
         </div>
       )}
       {!loading && !hasMore && videos.length === 0 && (
-        <div className="text-center text-gray-500 py-12">No videos found.</div>
+        <div className="text-center text-muted-foreground py-12">No videos found.</div>
       )}
       {/* Copied Toast */}
 {selectedVideo && (
@@ -577,10 +577,10 @@ feedRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
 
       {showRewardPopup && (
   <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
-    <div className="bg-white rounded-lg p-6 max-w-sm w-full text-center">
+    <div className="bg-card rounded-lg p-6 max-w-sm w-full text-center">
       <h2 className="text-xl font-bold mb-3">🎉 Congratulations!</h2>
       <p className="mb-2">You earned ₹1 for watching this video</p>
-      <p className="mb-4 text-gray-600">Credit added to your wallet</p>
+      <p className="mb-4 text-muted-foreground">Credit added to your wallet</p>
       <button
         onClick={() => window.location.href = "/login"}
         className="bg-blue-500 text-white px-4 py-2 rounded mb-2 w-full"

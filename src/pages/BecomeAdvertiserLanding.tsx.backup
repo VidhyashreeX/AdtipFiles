@@ -146,32 +146,32 @@ const BecomeAdvertiserLanding = () => {
       </section>
 
       {/* Why Choose AdTip */}
-      <section className="py-20 bg-muted/30">
+      <section className="py-20 bg-gray-800/30">
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
-            <Badge className="mb-4 bg-primary/20 text-primary border-primary/50">
+            <Badge className="mb-4 bg-purple-500/20 text-purple-400 border-purple-500/50">
               <Zap className="w-4 h-4 mr-1" />
               Why AdTip?
             </Badge>
-            <h2 className="text-4xl md:text-5xl font-bold mb-4 text-foreground">
+            <h2 className="text-4xl md:text-5xl font-bold mb-4 text-white">
               Unlike Traditional Platforms
             </h2>
-            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+            <p className="text-xl text-gray-400 max-w-2xl mx-auto">
               Your ad works harder — not just for you, but for your customers too. Every view counts, every click converts.
             </p>
           </div>
           
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {benefits.map((benefit, index) => (
-              <Card key={index} className="bg-card hover:bg-accent transition-all duration-300 border-border backdrop-blur-sm">
+              <Card key={index} className="bg-gray-800/50 hover:bg-gray-800/70 transition-all duration-300 border-gray-700/50 backdrop-blur-sm">
                 <CardHeader>
-                  <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center mb-4">
-                    <benefit.icon className="w-6 h-6 text-primary-foreground" />
+                  <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-purple-600 to-purple-700 flex items-center justify-center mb-4">
+                    <benefit.icon className="w-6 h-6 text-white" />
                   </div>
-                  <CardTitle className="text-xl text-foreground">{benefit.title}</CardTitle>
+                  <CardTitle className="text-xl text-white">{benefit.title}</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <CardDescription className="text-base text-muted-foreground">{benefit.description}</CardDescription>
+                  <CardDescription className="text-base text-gray-400">{benefit.description}</CardDescription>
                 </CardContent>
               </Card>
             ))}
@@ -183,14 +183,14 @@ const BecomeAdvertiserLanding = () => {
       <section className="py-20">
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
-            <Badge className="mb-4 bg-primary/20 text-primary border-primary/50">
+            <Badge className="mb-4 bg-orange-500/20 text-orange-400 border-orange-500/50">
               <DollarSign className="w-4 h-4 mr-1" />
               Transparent Pricing
             </Badge>
-            <h2 className="text-4xl md:text-5xl font-bold mb-4 text-foreground">
+            <h2 className="text-4xl md:text-5xl font-bold mb-4 text-white">
               Pay Only for Real Engagement
             </h2>
-            <p className="text-xl text-muted-foreground">
+            <p className="text-xl text-gray-400">
               Not empty impressions. Every rupee gives double value.
             </p>
           </div>
@@ -198,18 +198,18 @@ const BecomeAdvertiserLanding = () => {
           <div className="max-w-4xl mx-auto">
             <div className="grid gap-4">
               {pricingData.map((item, index) => (
-                <Card key={index} className="bg-card border-border hover:border-primary/50 transition-all duration-300 backdrop-blur-sm">
+                <Card key={index} className="bg-gray-800/50 border-gray-700/50 hover:border-purple-500/50 transition-all duration-300 backdrop-blur-sm">
                   <CardContent className="p-6">
                     <div className="flex items-center justify-between">
                       <div className="flex-1">
-                        <h3 className="text-xl font-semibold mb-1 text-foreground">{item.type}</h3>
-                        <p className="text-muted-foreground">{item.description}</p>
+                        <h3 className="text-xl font-semibold mb-1 text-white">{item.type}</h3>
+                        <p className="text-gray-400">{item.description}</p>
                       </div>
                       <div className="text-right">
-                        <div className="text-3xl font-bold bg-gradient-to-r from-primary to-primary/80 bg-clip-text text-transparent">
+                        <div className="text-3xl font-bold bg-gradient-to-r from-orange-400 to-orange-600 bg-clip-text text-transparent">
                           {item.cost}
                         </div>
-                        <div className="text-sm text-muted-foreground">per view</div>
+                        <div className="text-sm text-gray-500">per view</div>
                       </div>
                     </div>
                   </CardContent>
@@ -221,40 +221,40 @@ const BecomeAdvertiserLanding = () => {
       </section>
 
       {/* Interactive Features */}
-      <section className="py-20 bg-muted/30">
+      <section className="py-20 bg-gray-800/30">
         <div className="container mx-auto px-4">
           <div className="grid lg:grid-cols-2 gap-12 items-center mb-16">
             <div>
-              <Badge className="mb-4 bg-primary/20 text-primary border-primary/50">
+              <Badge className="mb-4 bg-green-500/20 text-green-400 border-green-500/50">
                 <Sparkles className="w-4 h-4 mr-1" />
                 Interactive Features
               </Badge>
-              <h2 className="text-4xl md:text-5xl font-bold mb-6 text-foreground">
+              <h2 className="text-4xl md:text-5xl font-bold mb-6 text-white">
                 AdTip = Ads + Income + Sales
               </h2>
-              <p className="text-xl text-muted-foreground mb-8">
+              <p className="text-xl text-gray-400 mb-8">
                 You're not just advertising. You're building relationships with customers who want to see your ads.
               </p>
             </div>
             <div className="relative">
-              <div className="absolute -inset-4 bg-gradient-to-br from-primary/30 to-primary/20 blur-3xl rounded-full"></div>
-              <div className="relative rounded-2xl shadow-2xl border border-primary/20 bg-gradient-to-br from-card to-card/80 h-96 flex items-center justify-center">
-                <Gift className="w-24 h-24 text-primary opacity-50" />
+              <div className="absolute -inset-4 bg-gradient-to-br from-orange-500/30 to-orange-600/30 blur-3xl rounded-full"></div>
+              <div className="relative rounded-2xl shadow-2xl border border-orange-500/20 bg-gradient-to-br from-orange-900/50 to-gray-800/50 h-96 flex items-center justify-center">
+                <Gift className="w-24 h-24 text-orange-400 opacity-50" />
               </div>
             </div>
           </div>
 
           <div className="grid md:grid-cols-3 gap-6">
             {features.map((feature, index) => (
-              <Card key={index} className="bg-card hover:bg-accent transition-all duration-300 border-border backdrop-blur-sm">
+              <Card key={index} className="bg-gray-800/50 hover:bg-gray-800/70 transition-all duration-300 border-gray-700/50 backdrop-blur-sm">
                 <CardHeader>
-                  <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center mb-4">
-                    <feature.icon className="w-7 h-7 text-primary-foreground" />
+                  <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center mb-4">
+                    <feature.icon className="w-7 h-7 text-white" />
                   </div>
-                  <CardTitle className="text-xl text-foreground">{feature.title}</CardTitle>
+                  <CardTitle className="text-xl text-white">{feature.title}</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <CardDescription className="text-base leading-relaxed text-muted-foreground">{feature.description}</CardDescription>
+                  <CardDescription className="text-base leading-relaxed text-gray-400">{feature.description}</CardDescription>
                 </CardContent>
               </Card>
             ))}
@@ -266,11 +266,11 @@ const BecomeAdvertiserLanding = () => {
       <section className="py-20">
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
-            <Badge className="mb-4 bg-primary/20 text-primary border-primary/50">
+            <Badge className="mb-4 bg-purple-500/20 text-purple-400 border-purple-500/50">
               <TrendingUp className="w-4 h-4 mr-1" />
               How It Works
             </Badge>
-            <h2 className="text-4xl md:text-5xl font-bold mb-4 text-foreground">
+            <h2 className="text-4xl md:text-5xl font-bold mb-4 text-white">
               Simple. Affordable. Profitable.
             </h2>
           </div>
@@ -278,15 +278,15 @@ const BecomeAdvertiserLanding = () => {
           <div className="max-w-4xl mx-auto">
             <div className="space-y-6">
               {steps.map((step, index) => (
-                <Card key={index} className="bg-card border-border hover:border-primary/50 transition-all duration-300 backdrop-blur-sm">
+                <Card key={index} className="bg-gray-800/50 border-gray-700/50 hover:border-purple-500/50 transition-all duration-300 backdrop-blur-sm">
                   <CardContent className="p-6">
                     <div className="flex items-start gap-6">
-                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center flex-shrink-0">
-                        <span className="text-xl font-bold text-primary-foreground">{step.number}</span>
+                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-600 to-purple-700 flex items-center justify-center flex-shrink-0">
+                        <span className="text-xl font-bold text-white">{step.number}</span>
                       </div>
                       <div className="flex-1">
-                        <h3 className="text-xl font-semibold mb-2 text-foreground">{step.title}</h3>
-                        <p className="text-muted-foreground">{step.description}</p>
+                        <h3 className="text-xl font-semibold mb-2 text-white">{step.title}</h3>
+                        <p className="text-gray-400">{step.description}</p>
                       </div>
                     </div>
                   </CardContent>
@@ -330,20 +330,20 @@ const BecomeAdvertiserLanding = () => {
       <section className="py-20">
         <div className="container mx-auto px-4">
           <div className="max-w-4xl mx-auto text-center">
-            <h2 className="text-4xl md:text-5xl font-bold mb-6 text-foreground">
+            <h2 className="text-4xl md:text-5xl font-bold mb-6 text-white">
               Where Ads Reward Everyone
             </h2>
-            <p className="text-2xl text-muted-foreground mb-4">
+            <p className="text-2xl text-gray-400 mb-4">
               Join the future of advertising.
             </p>
-            <p className="text-xl text-primary mb-12 font-semibold">
+            <p className="text-xl text-orange-400 mb-12 font-semibold">
               "When your customer earns, your brand wins."
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center mb-8">
               <Button 
                 onClick={handleBookAds}
                 size="lg" 
-                className="text-lg"
+                className="text-lg bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white"
               >
                 Book Your Ads Now
                 <ArrowRight className="ml-2" />
@@ -352,12 +352,12 @@ const BecomeAdvertiserLanding = () => {
                 onClick={handleContactUs}
                 variant="outline" 
                 size="lg" 
-                className="text-lg"
+                className="text-lg border-purple-500/50 hover:bg-purple-500/10 text-white"
               >
                 Contact Us
               </Button>
             </div>
-            <div className="text-muted-foreground">
+            <div className="text-gray-400">
               <p>support@adtip.in</p>
             </div>
           </div>
@@ -365,16 +365,16 @@ const BecomeAdvertiserLanding = () => {
       </section>
 
       {/* Footer */}
-      <footer className="py-12 border-t border-border">
+      <footer className="py-12 border-t border-gray-800">
         <div className="container mx-auto px-4">
           <div className="text-center">
-            <h3 className="text-2xl font-bold mb-2 bg-gradient-to-r from-primary to-primary/80 bg-clip-text text-transparent">
+            <h3 className="text-2xl font-bold mb-2 bg-gradient-to-r from-purple-400 to-purple-600 bg-clip-text text-transparent">
               AdTip
             </h3>
-            <p className="text-muted-foreground mb-4">
+            <p className="text-gray-400 mb-4">
               Promote Your Product. Earn Profits. Forever.
             </p>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-gray-500">
               © 2025 AdTip. All rights reserved.
             </p>
           </div>

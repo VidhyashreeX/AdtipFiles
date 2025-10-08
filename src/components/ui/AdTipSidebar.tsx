@@ -477,7 +477,7 @@ const [showLogoutDialog, setShowLogoutDialog] = React.useState(false);
       >
         <div className="flex flex-col items-start">
           <span className="font-semibold">Create Post</span>
-          <span className="text-sm text-gray-500">Share thoughts and media</span>
+          <span className="text-sm text-muted-foreground">Share thoughts and media</span>
         </div>
       </Button>
       
@@ -492,7 +492,7 @@ const [showLogoutDialog, setShowLogoutDialog] = React.useState(false);
       >
         <div className="flex flex-col items-start">
           <span className="font-semibold">Upload Content (TipTube)</span>
-          <span className="text-sm text-gray-500">Upload and monetize videos</span>
+          <span className="text-sm text-muted-foreground">Upload and monetize videos</span>
         </div>
       </Button>
       
@@ -507,7 +507,7 @@ const [showLogoutDialog, setShowLogoutDialog] = React.useState(false);
       >
         <div className="flex flex-col items-start">
           <span className="font-semibold">Create Short (TipShot)</span>
-          <span className="text-sm text-gray-500">Create engaging short videos</span>
+          <span className="text-sm text-muted-foreground">Create engaging short videos</span>
         </div>
       </Button>
     </div>
@@ -546,9 +546,9 @@ const [showLogoutDialog, setShowLogoutDialog] = React.useState(false);
           to={item.to}
           onClick={() => isMobile && setOpenMobile(false)}
           className={cn(
-            "flex items-center gap-3 rounded-lg px-0 py-3 text-gray-500 transition-all hover:text-gray-900",
+            "flex items-center gap-3 rounded-lg px-0 py-3 text-muted-foreground transition-all hover:text-foreground hover:bg-accent",
             isCollapsed && !isMobile && "justify-center px-0",
-            isActive(item.to) && "bg-gray-100 text-gray-900"
+            isActive(item.to) && "bg-accent text-foreground font-medium"
           )}
         >
           {React.cloneElement(item.icon, { className: "h-6 w-6" })}
@@ -575,7 +575,7 @@ const [showLogoutDialog, setShowLogoutDialog] = React.useState(false);
                       if (isMobile) setOpenMobile(false);
                     }}
                     className={cn(
-                      "flex items-center gap-3 rounded-lg px-0 py-3 text-gray-500 transition-all hover:text-gray-900 w-full text-left",
+                      "flex items-center gap-3 rounded-lg px-0 py-3 text-muted-foreground transition-all hover:text-foreground hover:bg-accent w-full text-left",
                       isCollapsed && !isMobile && "justify-center px-0"
                     )}
                   >
@@ -597,9 +597,9 @@ const [showLogoutDialog, setShowLogoutDialog] = React.useState(false);
                       if (isMobile) setOpenMobile(false);
                     }}
                     className={cn(
-                      "flex items-center gap-3 rounded-lg px-0 py-3 text-gray-500 transition-all hover:text-gray-900 w-full text-left",
+                      "flex items-center gap-3 rounded-lg px-0 py-3 text-muted-foreground transition-all hover:text-foreground hover:bg-accent w-full text-left",
                       isCollapsed && !isMobile && "justify-center px-0",
-                      isActive(item.to) && "bg-gray-100 text-gray-900"
+                      isActive(item.to) && "bg-accent text-foreground font-medium"
                     )}
                   >
                     {React.cloneElement(item.icon, { className: "h-6 w-6" })}
@@ -617,9 +617,9 @@ const [showLogoutDialog, setShowLogoutDialog] = React.useState(false);
                   to={item.to}
                   onClick={() => isMobile && setOpenMobile(false)}
                   className={cn(
-                    "flex items-center gap-3 rounded-lg px-0 py-3 text-gray-500 transition-all hover:text-gray-900",
+                    "flex items-center gap-3 rounded-lg px-0 py-3 text-muted-foreground transition-all hover:text-foreground hover:bg-accent",
                     isCollapsed && !isMobile && "justify-center px-0",
-                    isActive(item.to) && "bg-gray-100 text-gray-900"
+                    isActive(item.to) && "bg-accent text-foreground font-medium"
                   )}
                 >
                   {React.cloneElement(item.icon, { className: "h-6 w-6" })}
@@ -645,9 +645,9 @@ const [showLogoutDialog, setShowLogoutDialog] = React.useState(false);
           to={item.to}
           onClick={() => isMobile && setOpenMobile(false)}
           className={cn(
-            "flex items-center gap-3 rounded-lg px-0 py-3 text-gray-500 transition-all hover:text-gray-900",
+            "flex items-center gap-3 rounded-lg px-0 py-3 text-muted-foreground transition-all hover:text-foreground hover:bg-accent",
             isCollapsed && !isMobile && "justify-center px-0",
-            isActive(item.to) && "bg-gray-100 text-gray-900"
+            isActive(item.to) && "bg-accent text-foreground font-medium"
           )}
         >
           {React.cloneElement(item.icon, { className: "h-6 w-6" })}
@@ -661,7 +661,7 @@ const [showLogoutDialog, setShowLogoutDialog] = React.useState(false);
       <button
         onClick={() => setShowLogoutDialog(true)}
         className={cn(
-          "flex items-center gap-3 rounded-lg px-0 py-3 w-full text-gray-500 transition-all hover:text-gray-900",
+          "flex items-center gap-3 rounded-lg px-0 py-3 w-full text-muted-foreground transition-all hover:text-foreground hover:bg-accent",
           isCollapsed && !isMobile && "justify-center px-0"
         )}
       >
@@ -722,8 +722,8 @@ const [showLogoutDialog, setShowLogoutDialog] = React.useState(false);
                   <Store className="h-8 w-8 text-orange-600" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-gray-900 mb-2">No Companies Registered</h3>
-                  <p className="text-sm text-gray-600 mb-4">
+                  <h3 className="font-semibold text-foreground mb-2">No Companies Registered</h3>
+                  <p className="text-sm text-muted-foreground mb-4">
                     You need to register at least one company to access the seller dashboard and start advertising your business.
                   </p>
                 </div>
@@ -765,12 +765,12 @@ const [showLogoutDialog, setShowLogoutDialog] = React.useState(false);
     <>
       {/* Mobile backdrop - do not render aside in overlay, just sidebarContent */}
       {isMobile && openMobile ? (
-        <div className="h-full overflow-y-auto">{sidebarContent}</div>
+        <div className="h-full overflow-y-auto bg-background dark:bg-gray-900">{sidebarContent}</div>
       ) : (
         <aside
           ref={sidebarRef}
           className={cn(
-            "fixed left-0 top-14 h-[calc(100vh-3.5rem)] flex-col overflow-y-auto border-r bg-white py-4 transition-all duration-300 z-50",
+            "fixed left-0 top-16 h-[calc(100vh-4rem)] flex-col overflow-y-auto border-r border-border bg-background dark:bg-gray-900 py-4 transition-all duration-300 z-50",
             isMobile ? (
               openMobile ? "translate-x-0 w-64 px-0" : "-translate-x-full w-64 px-0"
             ) : (

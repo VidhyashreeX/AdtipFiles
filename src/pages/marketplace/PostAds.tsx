@@ -189,7 +189,7 @@ const PostAds: React.FC = () => {
   return (
     <div className="container mx-auto px-4 py-6">
       <h1 className="text-2xl font-bold mb-2">Create Ad Campaign</h1>
-      <p className="text-gray-500 mb-8">Reach potential customers and promote your products or services.</p>
+      <p className="text-muted-foreground mb-8">Reach potential customers and promote your products or services.</p>
 
       <Tabs defaultValue="create" className="w-full">
         <TabsList className="grid w-full grid-cols-3 mb-6">
@@ -284,7 +284,7 @@ const PostAds: React.FC = () => {
                               <FormLabel>Budget*</FormLabel>
                               <FormControl>
                                 <div className="relative">
-                                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+                                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
                                   <Input className="pl-8" placeholder="Enter your budget" {...field} />
                                 </div>
                               </FormControl>
@@ -479,7 +479,7 @@ const PostAds: React.FC = () => {
                       
                       <div>
                         <FormLabel>Upload Ad Creative*</FormLabel>
-                        <div className="mt-2 flex justify-center rounded-lg border border-dashed border-gray-300 px-6 py-10">
+                        <div className="mt-2 flex justify-center rounded-lg border border-dashed border-border px-6 py-10">
                           <div className="text-center">
                             {adImagePreview ? (
                               <div className="mb-4">
@@ -500,10 +500,10 @@ const PostAds: React.FC = () => {
                               </div>
                             ) : (
                               <>
-                                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">
-                                  <Upload className="h-6 w-6 text-gray-500" />
+                                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+                                  <Upload className="h-6 w-6 text-muted-foreground" />
                                 </div>
-                                <div className="mt-4 flex text-sm leading-6 text-gray-600">
+                                <div className="mt-4 flex text-sm leading-6 text-muted-foreground">
                                   <label
                                     htmlFor="file-upload"
                                     className="relative cursor-pointer rounded-md font-semibold text-adtip-teal focus-within:outline-none focus-within:ring-2 focus-within:ring-adtip-teal"
@@ -520,7 +520,7 @@ const PostAds: React.FC = () => {
                                   </label>
                                   <p className="pl-1">or drag and drop</p>
                                 </div>
-                                <p className="text-xs leading-5 text-gray-600">
+                                <p className="text-xs leading-5 text-muted-foreground">
                                   PNG, JPG, GIF up to 5MB
                                 </p>
                               </>
@@ -575,8 +575,8 @@ const PostAds: React.FC = () => {
                         className="mx-auto mb-2 max-w-full h-auto max-h-64 object-contain"
                       />
                     ) : (
-                      <div className="w-full h-40 bg-gray-100 flex items-center justify-center rounded-md">
-                        <p className="text-gray-400">Ad preview will appear here</p>
+                      <div className="w-full h-40 bg-muted flex items-center justify-center rounded-md">
+                        <p className="text-muted-foreground">Ad preview will appear here</p>
                       </div>
                     )}
                     
@@ -584,11 +584,11 @@ const PostAds: React.FC = () => {
                       <h3 className="font-bold text-lg">
                         {form.watch("title") || "Your Ad Title"}
                       </h3>
-                      <p className="text-sm text-gray-600 mt-1">
+                      <p className="text-sm text-muted-foreground mt-1">
                         {form.watch("description") || "Your ad description will appear here. Make it compelling!"}
                       </p>
                       <div className="flex justify-between mt-2">
-                        <span className="text-xs text-gray-500">
+                        <span className="text-xs text-muted-foreground">
                           Sponsored
                         </span>
                         <span className="text-xs font-medium text-adtip-teal">
@@ -680,7 +680,7 @@ const PostAds: React.FC = () => {
                 <div className="text-center">
                   <Users className="h-12 w-12 mx-auto text-gray-300 mb-4" />
                   <h3 className="text-lg font-medium mb-2">No active campaigns</h3>
-                  <p className="text-gray-500 mb-4">Create your first ad campaign to see analytics</p>
+                  <p className="text-muted-foreground mb-4">Create your first ad campaign to see analytics</p>
                   <Button variant="outline" onClick={() => form.setValue("title", "")}>Create Campaign</Button>
                 </div>
               </div>
@@ -701,7 +701,7 @@ const PostAds: React.FC = () => {
                 <div className="text-center">
                   <CalendarIcon className="h-12 w-12 mx-auto text-gray-300 mb-4" />
                   <h3 className="text-lg font-medium mb-2">No campaign history</h3>
-                  <p className="text-gray-500 mb-4">Your previous campaigns will appear here</p>
+                  <p className="text-muted-foreground mb-4">Your previous campaigns will appear here</p>
                   <Button variant="outline" onClick={() => form.setValue("title", "")}>Create Campaign</Button>
                 </div>
               </div>

@@ -127,7 +127,7 @@ const AdOrders = () => {
       case 'Under Review':
         return 'bg-orange-100 text-orange-800 border-orange-200';
       default:
-        return 'bg-gray-100 text-gray-800 border-gray-200';
+        return 'bg-muted text-foreground border-border';
     }
   };
 
@@ -179,7 +179,7 @@ const AdOrders = () => {
             <div className="flex items-center space-x-4">
               <button
                 onClick={handleBack}
-                className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+                className="p-2 hover:bg-card/20 rounded-lg transition-colors"
                 title="Go back to dashboard"
                 aria-label="Go back to dashboard"
               >
@@ -191,7 +191,7 @@ const AdOrders = () => {
               </div>
             </div>
             <div className="flex items-center space-x-3">
-              <button className="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg transition-colors flex items-center space-x-2">
+              <button className="bg-card/20 hover:bg-card/30 px-4 py-2 rounded-lg transition-colors flex items-center space-x-2">
                 <Download className="w-4 h-4" />
                 <span className="text-sm font-medium">Export Report</span>
               </button>
@@ -207,11 +207,11 @@ const AdOrders = () => {
         <div className="flex items-center justify-between mb-6">
           {/* Search */}
           <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-muted-foreground" />
             <input
               type="text"
               placeholder="Search campaigns..."
-              className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00dcaa] focus:border-transparent"
+              className="w-full pl-10 pr-4 py-3 border border-border rounded-lg focus:ring-2 focus:ring-[#00dcaa] focus:border-transparent"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -229,7 +229,7 @@ const AdOrders = () => {
             <select 
               value={activeTab} 
               onChange={(e) => setActiveTab(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00dcaa] focus:border-transparent"
+              className="px-4 py-2 border border-border rounded-lg focus:ring-2 focus:ring-[#00dcaa] focus:border-transparent"
               title="Filter by status"
             >
               <option value="all">All Status</option>
@@ -245,7 +245,7 @@ const AdOrders = () => {
           {filteredOrders.map((order) => (
             <div 
               key={order.id} 
-              className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-lg transition-all group"
+              className="bg-card rounded-xl shadow-sm border border-border overflow-hidden hover:shadow-lg transition-all group"
             >
               {/* Campaign Image */}
               <div className="relative h-48 bg-gradient-to-br from-[#00dcaa]/10 to-[#00b894]/10">
@@ -268,10 +268,10 @@ const AdOrders = () => {
               {/* Campaign Details */}
               <div className="p-6">
                 <div className="mb-4">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2 group-hover:text-[#00dcaa] transition-colors">
+                  <h3 className="text-lg font-semibold text-foreground mb-2 group-hover:text-[#00dcaa] transition-colors">
                     {order.campaignName}
                   </h3>
-                  <div className="flex items-center justify-between text-sm text-gray-500">
+                  <div className="flex items-center justify-between text-sm text-muted-foreground">
                     <span>ID: {order.id}</span>
                     <span>{order.createdDate}</span>
                   </div>
@@ -282,34 +282,34 @@ const AdOrders = () => {
                   <div className="flex justify-between items-center mb-2">
                     <span className="text-2xl font-bold text-[#00dcaa]">₹{order.budget.toLocaleString()}</span>
                     <div className="text-right">
-                      <div className="text-sm text-gray-500">Budget Used</div>
-                      <div className="text-xs text-gray-400">₹{order.spent.toLocaleString()}</div>
+                      <div className="text-sm text-muted-foreground">Budget Used</div>
+                      <div className="text-xs text-muted-foreground">₹{order.spent.toLocaleString()}</div>
                     </div>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2 mb-1">
+                  <div className="w-full bg-muted rounded-full h-2 mb-1">
                     <div 
                       className="bg-gradient-to-r from-[#00dcaa] to-[#00b894] h-2 rounded-full transition-all duration-500"
                       style={{ width: `${Math.min((order.spent / order.budget) * 100, 100)}%` }}
                     ></div>
                   </div>
-                  <div className="text-xs text-gray-500 text-right">
+                  <div className="text-xs text-muted-foreground text-right">
                     {Math.round((order.spent / order.budget) * 100)}% utilized
                   </div>
                 </div>
 
                 {/* Performance Metrics */}
                 <div className="grid grid-cols-3 gap-3 mb-4">
-                  <div className="text-center p-3 bg-gray-50 rounded-lg">
-                    <div className="text-sm font-bold text-gray-900">{(order.impressions / 1000).toFixed(1)}K</div>
-                    <div className="text-xs text-gray-500">Impressions</div>
+                  <div className="text-center p-3 bg-muted rounded-lg">
+                    <div className="text-sm font-bold text-foreground">{(order.impressions / 1000).toFixed(1)}K</div>
+                    <div className="text-xs text-muted-foreground">Impressions</div>
                   </div>
-                  <div className="text-center p-3 bg-gray-50 rounded-lg">
-                    <div className="text-sm font-bold text-gray-900">{(order.clicks / 1000).toFixed(1)}K</div>
-                    <div className="text-xs text-gray-500">Clicks</div>
+                  <div className="text-center p-3 bg-muted rounded-lg">
+                    <div className="text-sm font-bold text-foreground">{(order.clicks / 1000).toFixed(1)}K</div>
+                    <div className="text-xs text-muted-foreground">Clicks</div>
                   </div>
-                  <div className="text-center p-3 bg-gray-50 rounded-lg">
-                    <div className="text-sm font-bold text-gray-900">{order.ctr}%</div>
-                    <div className="text-xs text-gray-500">CTR</div>
+                  <div className="text-center p-3 bg-muted rounded-lg">
+                    <div className="text-sm font-bold text-foreground">{order.ctr}%</div>
+                    <div className="text-xs text-muted-foreground">CTR</div>
                   </div>
                 </div>
 
@@ -334,14 +334,14 @@ const AdOrders = () => {
                 <div className="flex space-x-2 mt-2">
                   <button 
                     onClick={() => alert('Download functionality coming soon')}
-                    className="flex-1 bg-gray-100 text-gray-600 py-2 px-3 rounded-lg text-sm font-medium hover:bg-gray-600 hover:text-white transition-all flex items-center justify-center space-x-1"
+                    className="flex-1 bg-muted text-muted-foreground py-2 px-3 rounded-lg text-sm font-medium hover:bg-gray-600 hover:text-white transition-all flex items-center justify-center space-x-1"
                   >
                     <Download className="w-4 h-4" />
                     <span>Download</span>
                   </button>
                   <button 
                     onClick={() => alert('Share functionality coming soon')}
-                    className="flex-1 bg-gray-100 text-gray-600 py-2 px-3 rounded-lg text-sm font-medium hover:bg-gray-600 hover:text-white transition-all flex items-center justify-center space-x-1"
+                    className="flex-1 bg-muted text-muted-foreground py-2 px-3 rounded-lg text-sm font-medium hover:bg-gray-600 hover:text-white transition-all flex items-center justify-center space-x-1"
                   >
                     <TrendingUp className="w-4 h-4" />
                     <span>Share</span>
@@ -355,8 +355,8 @@ const AdOrders = () => {
         {filteredOrders.length === 0 && (
           <div className="text-center py-12">
             <Target className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">No ad orders found</h3>
-            <p className="text-gray-600 mb-6">
+            <h3 className="text-lg font-semibold text-foreground mb-2">No ad orders found</h3>
+            <p className="text-muted-foreground mb-6">
               {searchTerm ? 'Try adjusting your search criteria' : 'Create your first advertising campaign to see orders here'}
             </p>
             <button
@@ -371,19 +371,19 @@ const AdOrders = () => {
         {/* Pagination */}
         {filteredOrders.length > 0 && (
           <div className="mt-6 flex items-center justify-between">
-            <div className="text-sm text-gray-600">
+            <div className="text-sm text-muted-foreground">
               Showing {filteredOrders.length} of {adOrders.length} orders
             </div>
             <div className="flex items-center space-x-2">
-              <button className="px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50">
+              <button className="px-3 py-2 border border-border rounded-lg text-sm font-medium text-foreground hover:bg-muted">
                 Previous
               </button>
               <div className="flex items-center space-x-1">
                 <button className="px-3 py-2 bg-[#00dcaa] text-white rounded-lg text-sm font-medium">1</button>
-                <button className="px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50">2</button>
-                <button className="px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50">3</button>
+                <button className="px-3 py-2 border border-border rounded-lg text-sm font-medium text-foreground hover:bg-muted">2</button>
+                <button className="px-3 py-2 border border-border rounded-lg text-sm font-medium text-foreground hover:bg-muted">3</button>
               </div>
-              <button className="px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50">
+              <button className="px-3 py-2 border border-border rounded-lg text-sm font-medium text-foreground hover:bg-muted">
                 Next
               </button>
             </div>

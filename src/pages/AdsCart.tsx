@@ -105,14 +105,14 @@ const AdsCart = () => {
             <div className="flex items-center space-x-4">
               <button
                 onClick={handleBack}
-                className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+                className="p-2 hover:bg-card/20 rounded-lg transition-colors"
                 title="Go back"
                 aria-label="Go back"
               >
                 <ArrowLeft className="w-6 h-6" />
               </button>
               <div className="flex items-center space-x-4">
-                <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center">
+                <div className="w-12 h-12 bg-card/20 rounded-lg flex items-center justify-center">
                   <ShoppingCart className="w-6 h-6 text-white" />
                 </div>
                 <div>
@@ -127,15 +127,15 @@ const AdsCart = () => {
 
       <div className="max-w-4xl mx-auto px-6 py-8">
         {/* Cart Summary */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
+        <div className="bg-card rounded-xl shadow-sm border border-border p-6 mb-8">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-xl font-semibold text-gray-900">Cart Summary</h2>
-              <p className="text-gray-600">{pendingAds.length} campaigns ready for payment</p>
+              <h2 className="text-xl font-semibold text-foreground">Cart Summary</h2>
+              <p className="text-muted-foreground">{pendingAds.length} campaigns ready for payment</p>
             </div>
             <div className="text-right">
               <div className="text-3xl font-bold text-[#00dcaa]">₹{totalAmount.toLocaleString()}</div>
-              <div className="text-sm text-gray-500">Total Amount</div>
+              <div className="text-sm text-muted-foreground">Total Amount</div>
             </div>
           </div>
         </div>
@@ -143,17 +143,17 @@ const AdsCart = () => {
         {/* Pending Ads */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-bold text-gray-900">Ready to Launch</h2>
+            <h2 className="text-2xl font-bold text-foreground">Ready to Launch</h2>
             <span className="bg-[#00dcaa]/10 text-[#00dcaa] px-3 py-1 rounded-full text-sm font-medium">
               {pendingAds.length} campaigns
             </span>
           </div>
 
           {pendingAds.length === 0 ? (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
+            <div className="bg-card rounded-xl shadow-sm border border-border p-8 text-center">
               <ShoppingCart className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">Your cart is empty</h3>
-              <p className="text-gray-600 mb-6">Add some campaigns to get started with your advertising</p>
+              <h3 className="text-lg font-semibold text-foreground mb-2">Your cart is empty</h3>
+              <p className="text-muted-foreground mb-6">Add some campaigns to get started with your advertising</p>
               <button
                 onClick={() => navigate('/seller/ad-models')}
                 className="bg-[#00dcaa] text-white px-6 py-3 rounded-lg font-semibold hover:bg-[#00b894] transition-colors"
@@ -164,7 +164,7 @@ const AdsCart = () => {
           ) : (
             <div className="space-y-4">
               {pendingAds.map((ad) => (
-                <div key={ad.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
+                <div key={ad.id} className="bg-card rounded-xl shadow-sm border border-border overflow-hidden hover:shadow-md transition-shadow">
                   <div className="p-6">
                     <div className="flex items-center space-x-4">
                       {/* Campaign Image */}
@@ -180,8 +180,8 @@ const AdsCart = () => {
                       <div className="flex-1">
                         <div className="flex items-start justify-between">
                           <div>
-                            <h3 className="text-lg font-semibold text-gray-900 mb-1">{ad.name}</h3>
-                            <p className="text-sm text-gray-500 mb-2">{ad.type}</p>
+                            <h3 className="text-lg font-semibold text-foreground mb-1">{ad.name}</h3>
+                            <p className="text-sm text-muted-foreground mb-2">{ad.type}</p>
                             <div className="text-2xl font-bold text-[#00dcaa]">₹{ad.price.toLocaleString()}</div>
                           </div>
 
@@ -189,21 +189,21 @@ const AdsCart = () => {
                           <div className="flex items-center space-x-2">
                             <button
                               onClick={() => handleEdit(ad.id)}
-                              className="p-2 text-gray-400 hover:text-[#00dcaa] hover:bg-[#00dcaa]/10 rounded-lg transition-colors"
+                              className="p-2 text-muted-foreground hover:text-[#00dcaa] hover:bg-[#00dcaa]/10 rounded-lg transition-colors"
                               title="Edit campaign"
                             >
                               <Edit className="w-5 h-5" />
                             </button>
                             <button
                               onClick={() => handleSaveForLater(ad.id)}
-                              className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                              className="p-2 text-muted-foreground hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                               title="Save for later"
                             >
                               <Bookmark className="w-5 h-5" />
                             </button>
                             <button
                               onClick={() => handleRemove(ad.id, 'pending')}
-                              className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              className="p-2 text-muted-foreground hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                               title="Remove from cart"
                             >
                               <Trash2 className="w-5 h-5" />
@@ -218,11 +218,11 @@ const AdsCart = () => {
 
               {/* Proceed to Payment Button */}
               {pendingAds.length > 0 && (
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <div className="bg-card rounded-xl shadow-sm border border-border p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <div className="text-lg font-semibold text-gray-900">Total: ₹{totalAmount.toLocaleString()}</div>
-                      <div className="text-sm text-gray-500">{pendingAds.length} campaigns selected</div>
+                      <div className="text-lg font-semibold text-foreground">Total: ₹{totalAmount.toLocaleString()}</div>
+                      <div className="text-sm text-muted-foreground">{pendingAds.length} campaigns selected</div>
                     </div>
                     <button
                       onClick={handleProceedToPayment}
@@ -242,7 +242,7 @@ const AdsCart = () => {
         {savedAds.length > 0 && (
           <div>
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-gray-900">Saved for Later</h2>
+              <h2 className="text-2xl font-bold text-foreground">Saved for Later</h2>
               <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
                 {savedAds.length} campaigns
               </span>
@@ -250,7 +250,7 @@ const AdsCart = () => {
 
             <div className="space-y-4">
               {savedAds.map((ad) => (
-                <div key={ad.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
+                <div key={ad.id} className="bg-card rounded-xl shadow-sm border border-border overflow-hidden hover:shadow-md transition-shadow">
                   <div className="p-6">
                     <div className="flex items-center space-x-4">
                       {/* Campaign Image */}
@@ -266,8 +266,8 @@ const AdsCart = () => {
                       <div className="flex-1">
                         <div className="flex items-start justify-between">
                           <div>
-                            <h3 className="text-lg font-semibold text-gray-900 mb-1">{ad.name}</h3>
-                            <p className="text-sm text-gray-500 mb-2">{ad.type}</p>
+                            <h3 className="text-lg font-semibold text-foreground mb-1">{ad.name}</h3>
+                            <p className="text-sm text-muted-foreground mb-2">{ad.type}</p>
                             <div className="text-2xl font-bold text-blue-600">₹{ad.price.toLocaleString()}</div>
                           </div>
 
@@ -282,7 +282,7 @@ const AdsCart = () => {
                             </button>
                             <button
                               onClick={() => handleRemove(ad.id, 'saved')}
-                              className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              className="p-2 text-muted-foreground hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                               title="Remove"
                             >
                               <Trash2 className="w-5 h-5" />

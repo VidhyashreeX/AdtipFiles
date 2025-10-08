@@ -258,14 +258,14 @@ const SellerRegistration = () => {
         return (
           <div className="space-y-6">
             <div>
-              <label className="block text-sm font-semibold text-gray-800 mb-3">
+              <label className="block text-sm font-semibold text-foreground mb-3">
                 Name of the company *
               </label>
               <input
                 type="text"
                 value={formData.companyName}
                 onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
-                className="w-full p-4 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-[#00dcaa] focus:border-[#00dcaa] transition-all duration-200 bg-gray-50 focus:bg-white"
+                className="w-full p-4 border-2 border-border rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all duration-200 bg-muted focus:bg-background text-foreground"
                 placeholder="Enter your company name"
                 required
               />
@@ -273,14 +273,14 @@ const SellerRegistration = () => {
             </div>
             
             <div>
-              <label className="block text-sm font-semibold text-gray-800 mb-3">
+              <label className="block text-sm font-semibold text-foreground mb-3">
                 Company Contact Email *
               </label>
               <input
                 type="email"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                className="w-full p-4 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-[#00dcaa] focus:border-[#00dcaa] transition-all duration-200 bg-gray-50 focus:bg-white"
+                className="w-full p-4 border-2 border-border rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all duration-200 bg-muted focus:bg-background"
                 placeholder="Enter your company email"
                 required
               />
@@ -288,14 +288,14 @@ const SellerRegistration = () => {
             </div>
             
             <div>
-              <label className="block text-sm font-semibold text-gray-800 mb-3">
+              <label className="block text-sm font-semibold text-foreground mb-3">
                 Company Phone Number *
               </label>
               <input
                 type="tel"
                 value={formData.phone}
                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                className="w-full p-4 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-[#00dcaa] focus:border-[#00dcaa] transition-all duration-200 bg-gray-50 focus:bg-white"
+                className="w-full p-4 border-2 border-border rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all duration-200 bg-muted focus:bg-background"
                 placeholder="Enter your phone number"
                 required
               />
@@ -303,14 +303,14 @@ const SellerRegistration = () => {
             </div>
             
             <div>
-              <label className="block text-sm font-semibold text-gray-800 mb-3">
+              <label className="block text-sm font-semibold text-foreground mb-3">
                 Location *
               </label>
               <input
                 type="text"
                 value={formData.location}
                 onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                className="w-full p-4 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-[#00dcaa] focus:border-[#00dcaa] transition-all duration-200 bg-gray-50 focus:bg-white"
+                className="w-full p-4 border-2 border-border rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all duration-200 bg-muted focus:bg-background"
                 placeholder="City, State/Country"
                 required
               />
@@ -323,13 +323,13 @@ const SellerRegistration = () => {
         return (
           <div className="space-y-6">
             <div>
-              <label className="block text-sm font-semibold text-gray-800 mb-3">
+              <label className="block text-sm font-semibold text-foreground mb-3">
                 About the company *
               </label>
               <textarea
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                className="w-full p-4 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-[#00dcaa] focus:border-[#00dcaa] h-32 resize-none transition-all duration-200 bg-gray-50 focus:bg-white"
+                className="w-full p-4 border-2 border-border rounded-xl focus:ring-2 focus:ring-primary focus:border-primary h-32 resize-none transition-all duration-200 bg-muted focus:bg-background text-foreground"
                 placeholder="Tell us about your company"
                 required
               />
@@ -337,26 +337,26 @@ const SellerRegistration = () => {
             </div>
             
             <div>
-              <label className="block text-sm font-semibold text-gray-800 mb-3">
+              <label className="block text-sm font-semibold text-foreground mb-3">
                 Website URL (Optional)
               </label>
               <input
                 type="url"
                 value={formData.website}
                 onChange={(e) => setFormData({ ...formData, website: e.target.value })}
-                className="w-full p-4 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-[#00dcaa] focus:border-[#00dcaa] transition-all duration-200 bg-gray-50 focus:bg-white"
+                className="w-full p-4 border-2 border-border rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all duration-200 bg-muted focus:bg-background"
                 placeholder="https://your-website.com"
               />
             </div>
             
             <div>
-              <label className="block text-sm font-semibold text-gray-800 mb-3">
+              <label className="block text-sm font-semibold text-foreground mb-3">
                 Category *
               </label>
               <select
                 value={formData.companyType}
                 onChange={(e) => setFormData({ ...formData, companyType: e.target.value })}
-                className="w-full p-4 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-[#00dcaa] focus:border-[#00dcaa] transition-all duration-200 bg-gray-50 focus:bg-white"
+                className="w-full p-4 border-2 border-border rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all duration-200 bg-muted focus:bg-background"
                 required
               >
                 <option value="">Select Category</option>
@@ -368,13 +368,13 @@ const SellerRegistration = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-gray-800 mb-3">
+              <label className="block text-sm font-semibold text-foreground mb-3">
                 Select Call to Action Button *
               </label>
               <select
                 value={formData.ctaButton || ''}
                 onChange={(e) => setFormData({ ...formData, ctaButton: e.target.value })}
-                className="w-full p-4 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-[#00dcaa] focus:border-[#00dcaa] transition-all duration-200 bg-gray-50 focus:bg-white"
+                className="w-full p-4 border-2 border-border rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all duration-200 bg-muted focus:bg-background"
                 required
               >
                 <option value="">Select Button Text</option>
@@ -391,7 +391,7 @@ const SellerRegistration = () => {
         return (
           <div className="space-y-6">
             <div>
-              <label className="block text-sm font-semibold text-gray-800 mb-4">
+              <label className="block text-sm font-semibold text-foreground mb-4">
                 Company Logo *
               </label>
               <div 
@@ -439,7 +439,7 @@ const SellerRegistration = () => {
                         style={{ width: `${uploadProgress.logo}%` }}
                       ></div>
                     </div>
-                    <p className="text-xs text-gray-500">{uploadProgress.logo}% complete</p>
+                    <p className="text-xs text-muted-foreground">{uploadProgress.logo}% complete</p>
                   </div>
                 ) : formData.logoUrl ? (
                   <div className="space-y-3">
@@ -447,7 +447,7 @@ const SellerRegistration = () => {
                       <CheckCircle className="w-8 h-8 text-green-600" />
                     </div>
                     <p className="text-sm font-medium text-green-600">Logo uploaded successfully</p>
-                    <p className="text-xs text-gray-500">✅ Available at cloud storage</p>
+                    <p className="text-xs text-muted-foreground">✅ Available at cloud storage</p>
                     <p className="text-xs text-blue-500 hover:text-blue-700 cursor-pointer">Click to change</p>
                   </div>
                 ) : (
@@ -456,8 +456,8 @@ const SellerRegistration = () => {
                       <Upload className="w-8 h-8 text-blue-500" />
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-gray-700">Click to upload or drag and drop</p>
-                      <p className="text-xs text-gray-500 mt-1">PNG, JPG up to 5MB</p>
+                      <p className="text-sm font-medium text-foreground">Click to upload or drag and drop</p>
+                      <p className="text-xs text-muted-foreground mt-1">PNG, JPG up to 5MB</p>
                     </div>
                   </div>
                 )}
@@ -466,7 +466,7 @@ const SellerRegistration = () => {
             </div>
             
             <div>
-              <label className="block text-sm font-semibold text-gray-800 mb-4">
+              <label className="block text-sm font-semibold text-foreground mb-4">
                 Company Banner *
               </label>
               <div 
@@ -514,7 +514,7 @@ const SellerRegistration = () => {
                         style={{ width: `${uploadProgress.banner}%` }}
                       ></div>
                     </div>
-                    <p className="text-xs text-gray-500">{uploadProgress.banner}% complete</p>
+                    <p className="text-xs text-muted-foreground">{uploadProgress.banner}% complete</p>
                   </div>
                 ) : formData.bannerUrl ? (
                   <div className="space-y-3">
@@ -522,7 +522,7 @@ const SellerRegistration = () => {
                       <CheckCircle className="w-8 h-8 text-green-600" />
                     </div>
                     <p className="text-sm font-medium text-green-600">Banner uploaded successfully</p>
-                    <p className="text-xs text-gray-500">✅ Available at cloud storage</p>
+                    <p className="text-xs text-muted-foreground">✅ Available at cloud storage</p>
                     <p className="text-xs text-blue-500 hover:text-blue-700 cursor-pointer">Click to change</p>
                   </div>
                 ) : (
@@ -531,8 +531,8 @@ const SellerRegistration = () => {
                       <Upload className="w-8 h-8 text-blue-500" />
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-gray-700">Click to upload or drag and drop</p>
-                      <p className="text-xs text-gray-500 mt-1">PNG, JPG up to 10MB</p>
+                      <p className="text-sm font-medium text-foreground">Click to upload or drag and drop</p>
+                      <p className="text-xs text-muted-foreground mt-1">PNG, JPG up to 10MB</p>
                     </div>
                   </div>
                 )}
@@ -558,7 +558,7 @@ const SellerRegistration = () => {
             </div>
             <h1 className="text-3xl font-bold text-gray-900">Seller Registration</h1>
           </div>
-          <p className="text-gray-500 text-lg">{STEPS[currentStep - 1].subtitle}</p>
+          <p className="text-muted-foreground text-lg">{STEPS[currentStep - 1].subtitle}</p>
         </div>
 
         {/* Progress Bar */}
@@ -571,26 +571,26 @@ const SellerRegistration = () => {
                     ? 'bg-green-500 text-white shadow-lg' 
                     : currentStep === step.id 
                     ? 'bg-blue-600 text-white shadow-lg ring-4 ring-blue-200' 
-                    : 'bg-gray-200 text-gray-500'
+                    : 'bg-muted text-muted-foreground'
                 }`}>
                   {currentStep > step.id ? <CheckCircle className="w-5 h-5" /> : step.id}
                 </div>
                 {index < STEPS.length - 1 && (
                   <div className={`w-20 h-1 mx-3 rounded-full transition-all duration-300 ${
-                    currentStep > step.id ? 'bg-green-500' : 'bg-gray-200'
+                    currentStep > step.id ? 'bg-green-500' : 'bg-muted'
                   }`} />
                 )}
               </div>
             ))}
           </div>
           <div className="text-center">
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">{STEPS[currentStep - 1].title}</h2>
-            <p className="text-gray-500">Step {currentStep} of {STEPS.length}</p>
+            <h2 className="text-2xl font-bold text-foreground mb-2">{STEPS[currentStep - 1].title}</h2>
+            <p className="text-muted-foreground">Step {currentStep} of {STEPS.length}</p>
           </div>
         </div>
 
         {/* Form Content */}
-        <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8 mb-8">
+        <div className="bg-card rounded-2xl shadow-xl border border-border p-8 mb-8">
           {renderStepContent()}
         </div>
 
@@ -601,8 +601,8 @@ const SellerRegistration = () => {
             disabled={currentStep === 1}
             className={`flex items-center px-6 py-3 rounded-xl font-medium transition-all duration-200 ${
               currentStep === 1
-                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                : 'bg-white text-gray-700 hover:bg-gray-50 border-2 border-gray-200 hover:border-gray-300 shadow-sm'
+                ? 'bg-muted text-muted-foreground cursor-not-allowed'
+                : 'bg-card text-foreground hover:bg-muted border-2 border-border hover:border-accent shadow-sm'
             }`}
           >
             <ArrowLeft className="w-4 h-4 mr-2" />

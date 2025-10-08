@@ -68,7 +68,7 @@ const ParticipantView: React.FC<{ participantId: string; isLocal?: boolean }> = 
       ) : (
         <div className="w-full h-full flex items-center justify-center">
           <div className="text-center">
-            <CameraOff className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+            <CameraOff className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
             <p className="text-white text-sm">{displayName || 'User'}</p>
           </div>
         </div>
@@ -213,7 +213,7 @@ const ChatPanel: React.FC<{ messages: ChatMessage[]; onSendMessage: (text: strin
   if (!isOpen) return null;
 
   return (
-    <div className="absolute right-4 top-4 bottom-20 w-80 bg-white rounded-lg shadow-xl flex flex-col">
+    <div className="absolute right-4 top-4 bottom-20 w-80 bg-card rounded-lg shadow-xl flex flex-col">
       <div className="flex items-center justify-between p-4 border-b">
         <h3 className="font-semibold flex items-center gap-2">
           <MessageCircle className="h-5 w-5" />
@@ -226,7 +226,7 @@ const ChatPanel: React.FC<{ messages: ChatMessage[]; onSendMessage: (text: strin
 
       <div className="flex-1 overflow-y-auto p-4 space-y-2">
         {messages.map((msg) => (
-          <div key={msg.id} className="bg-gray-100 rounded-lg p-2">
+          <div key={msg.id} className="bg-muted rounded-lg p-2">
             <p className="text-xs font-semibold text-blue-600">{msg.user}</p>
             <p className="text-sm">{msg.text}</p>
           </div>
@@ -341,7 +341,7 @@ const MeetingContainer: React.FC<LocationState> = ({ meetingId, isHost, streamTi
       {/* Chat Toggle Button */}
       <div className="absolute bottom-20 right-4">
         <Button
-          className="rounded-full w-14 h-14 bg-white/20 backdrop-blur-sm hover:bg-white/30"
+          className="rounded-full w-14 h-14 bg-card/20 backdrop-blur-sm hover:bg-card/30"
           onClick={() => setShowChat(!showChat)}
         >
           <MessageCircle className="h-6 w-6 text-white" />
@@ -393,7 +393,7 @@ const LiveStreaming: React.FC = () => {
 
   if (error || !meetingConfig) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+      <div className="flex items-center justify-center min-h-screen bg-muted">
         <Card className="max-w-md w-full p-6">
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />

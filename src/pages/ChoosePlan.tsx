@@ -56,7 +56,7 @@ const ChoosePlan = () => {
   return (
     <>
       <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-white to-[#e0ecf7] px-2 py-8">
-        <div className="w-full max-w-5xl bg-white/90 rounded-3xl shadow-2xl p-6 md:p-12 relative border border-gray-200">
+        <div className="w-full max-w-5xl bg-card/90 rounded-3xl shadow-2xl p-6 md:p-12 relative border border-border">
           {/* Category Tabs */}
           <div className="flex justify-center mb-6 gap-4">
             {plans.map((plan, idx) => (
@@ -65,7 +65,7 @@ const ChoosePlan = () => {
                 className={`px-4 py-2 rounded-full font-semibold text-base transition-all border-2 ${
                   selectedCategory === idx
                     ? "bg-adtip-teal text-white border-adtip-teal shadow"
-                    : "bg-white text-adtip-teal border-adtip-teal/30 hover:bg-adtip-teal/10"
+                    : "bg-card text-adtip-teal border-adtip-teal/30 hover:bg-adtip-teal/10"
                 }`}
                 onClick={() => setSelectedCategory(idx)}
               >
@@ -90,22 +90,22 @@ const ChoosePlan = () => {
             {plans[selectedCategory].options.map((option) => (
               <div
                 key={option.label}
-                className="flex flex-col items-center bg-[#f8fafc] rounded-2xl shadow-md px-8 py-6 min-w-[200px] max-w-[260px] border border-gray-200"
+                className="flex flex-col items-center bg-[#f8fafc] rounded-2xl shadow-md px-8 py-6 min-w-[200px] max-w-[260px] border border-border"
               >
                 {/* Plan Title */}
-                <div className="text-lg font-semibold mb-2 text-gray-800 text-center">
+                <div className="text-lg font-semibold mb-2 text-foreground text-center">
                   {option.label}
                 </div>
 
                 {/* Notes */}
                 {plans[selectedCategory].note && (
-                  <div className="text-xs text-gray-500 text-center mb-1 whitespace-pre-line">
+                  <div className="text-xs text-muted-foreground text-center mb-1 whitespace-pre-line">
                     {plans[selectedCategory].note}
                   </div>
                 )}
 
                 {/* Price */}
-                <div className="text-2xl font-bold mb-4 text-gray-900 text-center">
+                <div className="text-2xl font-bold mb-4 text-foreground text-center">
                   ₹{option.price}
                 </div>
 

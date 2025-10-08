@@ -2,6 +2,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useState, useEffect } from "react";
 import UserAvatar from "../components/ui/UserAvatar"; // Adjust path as needed
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 import {
   User,
@@ -296,13 +297,13 @@ const Navbar = () => {
   };
 
   return (
-    <nav className="fixed top-0 z-50 w-full bg-white shadow-sm border-b border-gray-200">
+    <nav className="fixed top-0 z-50 w-full h-16 bg-background shadow-sm border-b border-border">
       {/* Mobile Sidebar Overlay */}
       <div className="md:hidden">
         {openMobile && (
           <div className="fixed inset-0 z-50">
             <div className="fixed inset-0 bg-black/40" onClick={() => setOpenMobile(false)} />
-            <div className="fixed inset-y-0 left-0 w-64 bg-white shadow-lg z-50">
+            <div className="fixed inset-y-0 left-0 w-64 bg-background shadow-lg z-50">
               <div className="h-full overflow-y-auto">
                 <AdTipSidebar />
               </div>
@@ -311,15 +312,15 @@ const Navbar = () => {
         )}
       </div>
 
-      <div className="max-w-screen-2xl mx-auto flex items-center justify-between px-3 sm:px-4 md:px-6 py-2 md:py-3">
+      <div className="max-w-screen-2xl mx-auto h-full flex items-center justify-between px-3 sm:px-4 md:px-6">
         {/* Left: Hamburger and Logo */}
         <div className="flex items-center gap-2 sm:gap-4">
           <button
             onClick={toggleSidebar}
-            className="p-1 sm:p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-1 sm:p-1.5 hover:bg-muted rounded-lg transition-colors"
             aria-label="Toggle sidebar"
           >
-            <Menu className="h-5 w-5 sm:h-6 sm:w-6 text-gray-600" />
+            <Menu className="h-5 w-5 sm:h-6 sm:w-6 text-muted-foreground" />
           </button>
           <Link to="/home" className="flex items-center">
             <img src="/logo.png" alt="AdTip Logo" className="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8" />
@@ -333,29 +334,29 @@ const Navbar = () => {
             <input
               type="text"
               placeholder="Search users or content..."
-              className="w-full px-3 sm:px-4 md:px-5 py-2 sm:py-2.5 pr-8 text-sm md:text-base rounded-full border border-gray-300 focus:outline-none focus:border-adtip-teal focus:ring-2 focus:ring-adtip-teal/20"
+              className="w-full px-3 sm:px-4 md:px-5 py-2 sm:py-2.5 pr-8 text-sm md:text-base rounded-full bg-background border border-border focus:outline-none focus:border-adtip-teal focus:ring-2 focus:ring-adtip-teal/20"
               value={searchQuery}
               onChange={handleSearchInputChange}
               onBlur={handleSearchInputBlur}
               onFocus={() => setShowSearchSuggestions(searchQuery.length > 0)}
             />
-            <button type="submit" className="absolute right-3 sm:right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-adtip-teal transition-colors">
+            <button type="submit" className="absolute right-3 sm:right-4 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-adtip-teal transition-colors">
               <Search className="h-4 w-4 sm:h-5 sm:w-5" />
             </button>
             
             {/* Search Suggestions */}
             {showSearchSuggestions && searchQuery && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto">
+              <div className="absolute top-full left-0 right-0 mt-1 bg-card border border-border rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto">
                 <div className="p-2">
                   <div 
-                    className="px-3 py-2 hover:bg-gray-100 rounded cursor-pointer flex items-center gap-2"
+                    className="px-3 py-2 hover:bg-muted rounded cursor-pointer flex items-center gap-2"
                     onClick={() => {
                       navigate(`/search?q=${encodeURIComponent(searchQuery)}`);
                       setShowSearchSuggestions(false);
                     }}
                   >
-                    <Search className="w-4 h-4 text-gray-400" />
-                    <span className="text-sm">Search for "{searchQuery}"</span>
+                    <Search className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-sm text-foreground">Search for "{searchQuery}"</span>
                   </div>
           </div>
               </div>
@@ -382,19 +383,19 @@ const Navbar = () => {
         setIsToggleOn(false);
       }
     }}
-    className="flex items-center bg-gray-50 border border-gray-200 rounded-full p-1 sm:p-1.5 transition-colors hover:bg-gray-100"
+    className="flex items-center bg-muted border border-border rounded-full p-1 sm:p-1.5 transition-colors hover:bg-accent"
             aria-label="Toggle premium status"
   >
     {(user && hasContentPremium) ? (
       <ToggleRight className="h-8 w-8 sm:h-9 sm:w-9 md:h-10 md:w-10 text-adtip-teal" />
     ) : (
-      <ToggleLeft className="h-8 w-8 sm:h-9 sm:w-9 md:h-10 md:w-10 text-gray-400" />
+      <ToggleLeft className="h-8 w-8 sm:h-9 sm:w-9 md:h-10 md:w-10 text-muted-foreground" />
     )}
   </button>
 
   <Link
     to={user ? "/wallet" : "/login"}
-    className="flex items-center text-gray-700 hover:text-adtip-teal transition-colors bg-gray-50 border border-gray-200 rounded-full px-3 py-1 mr-1"
+    className="flex items-center text-foreground hover:text-adtip-teal transition-colors bg-muted border border-border rounded-full px-3 py-1 mr-1"
     style={{ minWidth: 70 }}
   >
     <Wallet className="h-5 w-5 sm:h-6 sm:w-6 mr-1" />
@@ -407,6 +408,8 @@ const Navbar = () => {
     </span>
   </Link>
 
+  <ThemeToggle />
+
   <Link to="/profile" className="hidden md:flex items-center ml-1 sm:ml-2">
     <UserAvatar user={user} />
   </Link>
@@ -414,18 +417,18 @@ const Navbar = () => {
       </div>
 
       {/* Mobile Bottom Navigation */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white shadow-md border-t border-gray-200 z-20">
+      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-background shadow-md border-t border-border z-20">
         <div className="flex justify-around items-center px-2 py-2 sm:py-3">
           <Link
             to="/home"
-            className={`flex flex-col items-center ${isActive("/home") ? "text-adtip-teal" : "text-gray-500"}`}
+            className={`flex flex-col items-center ${isActive("/home") ? "text-adtip-teal" : "text-muted-foreground"}`}
           >
             <Home className="h-5 w-5 sm:h-6 sm:w-6" />
             <span className="text-[10px] sm:text-xs mt-1">Home</span>
           </Link>
           <Link
            to="/watch"
-            className={`flex flex-col items-center ${isActive("/tiptube") ? "text-adtip-teal" : "text-gray-500"}`}
+            className={`flex flex-col items-center ${isActive("/tiptube") ? "text-adtip-teal" : "text-muted-foreground"}`}
           >
             <Video className="h-5 w-5 sm:h-6 sm:w-6" />
             <span className="text-[10px] sm:text-xs mt-1">TipTube</span>
@@ -440,14 +443,14 @@ const Navbar = () => {
           </Link>
           <Link
             to="/short"
-            className={`flex flex-col items-center ${isActive("/tipshort") ? "text-adtip-teal" : "text-gray-500"}`}
+            className={`flex flex-col items-center ${isActive("/tipshort") ? "text-adtip-teal" : "text-muted-foreground"}`}
           >
             <CirclePlay className="h-5 w-5 sm:h-6 sm:w-6" />
             <span className="text-[10px] sm:text-xs mt-1">TipShort</span>
           </Link>
           <Link
             to="/tipcall"
-            className={`flex flex-col items-center ${isActive("/tipcall") ? "text-adtip-teal" : "text-gray-500"}`}
+            className={`flex flex-col items-center ${isActive("/tipcall") ? "text-adtip-teal" : "text-muted-foreground"}`}
           >
             <PhoneIcon className="h-5 w-5 sm:h-6 sm:w-6" />
             <span className="text-[10px] sm:text-xs mt-1">TipCall</span>
@@ -458,29 +461,29 @@ const Navbar = () => {
       {/* Cancel Premium Dialog */}
       {showCancelPremiumDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+          <div className="bg-card rounded-lg shadow-xl max-w-md w-full mx-4">
             <div className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-red-100 rounded-full">
                     <AlertTriangle className="h-6 w-6 text-red-600" />
                   </div>
-                  <h3 className="text-lg font-semibold text-gray-900">Cancel Premium</h3>
+                  <h3 className="text-lg font-semibold text-foreground">Cancel Premium</h3>
                 </div>
                 <button
                   onClick={() => setShowCancelPremiumDialog(false)}
-                  className="p-1 hover:bg-gray-100 rounded-full"
+                  className="p-1 hover:bg-muted rounded-full"
                 >
-                  <X className="h-5 w-5 text-gray-500" />
+                  <X className="h-5 w-5 text-muted-foreground" />
                 </button>
               </div>
               
               <div className="mb-6">
-                <p className="text-gray-600 mb-4">
+                <p className="text-muted-foreground mb-4">
                   Are you sure you want to cancel your premium subscription? You'll lose access to premium features and content.
                 </p>
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                  <p className="text-sm text-yellow-800">
+                <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
+                  <p className="text-sm text-yellow-800 dark:text-yellow-200">
                     <strong>Note:</strong> After cancelling, you can choose from our content creator plans to continue creating and monetizing content.
                   </p>
                 </div>
@@ -492,7 +495,7 @@ const Navbar = () => {
                     setShowCancelPremiumDialog(false);
                     navigate("/chooseplan", { state: { openCreatorPacks: true } });
                   }}
-                  className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                  className="flex-1 px-4 py-2 text-foreground bg-muted hover:bg-accent rounded-lg transition-colors"
                   disabled={isCancelling}
                 >
                   Choose Premium Plans
@@ -513,7 +516,7 @@ const Navbar = () => {
       {/* Cancel Premium Message */}
       {showCancelMessage && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+          <div className="bg-card rounded-lg shadow-xl max-w-md w-full mx-4">
             <div className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
@@ -546,14 +549,14 @@ const Navbar = () => {
                 </div>
                 <button
                   onClick={() => setShowCancelMessage(false)}
-                  className="p-1 hover:bg-gray-100 rounded-full"
+                  className="p-1 hover:bg-muted rounded-full"
                 >
-                  <X className="h-5 w-5 text-gray-500" />
+                  <X className="h-5 w-5 text-muted-foreground" />
                 </button>
               </div>
               
               <div className="mb-6">
-                <p className={`text-gray-600 ${
+                <p className={`text-muted-foreground ${
                   messageType === "success" ? "text-green-800" : 
                   messageType === "error" ? "text-red-800" : 
                   "text-blue-800"
@@ -582,7 +585,7 @@ const Navbar = () => {
       {/* Premium Required Dialog */}
       {showPremiumRequiredDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+          <div className="bg-card rounded-lg shadow-xl max-w-md w-full mx-4">
             <div className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
@@ -591,13 +594,13 @@ const Navbar = () => {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                   </div>
-                  <h3 className="text-lg font-semibold text-blue-900">Premium Required</h3>
+                  <h3 className="text-lg font-semibold text-foreground">Premium Required</h3>
                 </div>
                 <button
                   onClick={() => setShowPremiumRequiredDialog(false)}
-                  className="p-1 hover:bg-gray-100 rounded-full"
+                  className="p-1 hover:bg-muted rounded-full"
                 >
-                  <X className="h-5 w-5 text-gray-500" />
+                  <X className="h-5 w-5 text-muted-foreground" />
                 </button>
               </div>
               
@@ -615,7 +618,7 @@ const Navbar = () => {
               <div className="flex gap-3">
                 <button
                   onClick={() => setShowPremiumRequiredDialog(false)}
-                  className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                  className="flex-1 px-4 py-2 text-foreground bg-muted hover:bg-accent rounded-lg transition-colors"
                 >
                   Maybe Later
                 </button>

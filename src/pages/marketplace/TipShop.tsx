@@ -96,16 +96,16 @@ const TipShop: React.FC = () => {
           <input
             type="text"
             placeholder="Search products..."
-            className="w-full px-4 py-2 pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-adtip-teal focus:outline-none"
+            className="w-full px-4 py-2 pl-10 border border-border rounded-lg focus:ring-2 focus:ring-adtip-teal focus:outline-none"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
-          <Search className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
+          <Search className="absolute left-3 top-2.5 h-5 w-5 text-muted-foreground" />
         </div>
         
         <div className="relative w-full md:w-64">
           <select
-            className="w-full appearance-none px-4 py-2 pl-10 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-adtip-teal focus:outline-none"
+            className="w-full appearance-none px-4 py-2 pl-10 border border-border rounded-lg bg-card focus:ring-2 focus:ring-adtip-teal focus:outline-none"
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
           >
@@ -115,7 +115,7 @@ const TipShop: React.FC = () => {
               </option>
             ))}
           </select>
-          <Filter className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
+          <Filter className="absolute left-3 top-2.5 h-5 w-5 text-muted-foreground" />
         </div>
       </div>
       
@@ -133,10 +133,10 @@ const TipShop: React.FC = () => {
               </div>
               <CardContent className="p-4">
                 <h3 className="font-bold text-lg mb-1 line-clamp-1">{product.name}</h3>
-                <p className="text-gray-500 text-sm mb-1">Seller: {product.seller}</p>
+                <p className="text-muted-foreground text-sm mb-1">Seller: {product.seller}</p>
                 <div className="flex justify-between items-center mt-2">
                   <span className="font-bold text-lg text-adtip-teal">${product.price}</span>
-                  <span className="text-xs bg-gray-100 px-2 py-1 rounded-full">
+                  <span className="text-xs bg-muted px-2 py-1 rounded-full">
                     {product.category}
                   </span>
                 </div>
@@ -159,7 +159,7 @@ const TipShop: React.FC = () => {
       
       {filteredProducts.length === 0 && (
         <div className="text-center py-8">
-          <p className="text-gray-500">No products found matching your search.</p>
+          <p className="text-muted-foreground">No products found matching your search.</p>
         </div>
       )}
     </div>

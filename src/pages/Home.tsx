@@ -459,9 +459,9 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
   };
 
   return (
-    <div className="pb-20 md:pb-0 bg-gray-50">
+    <div className="pb-20 md:pb-0 bg-background">
       {/* Categories Bar - fixed below navbar, not scrollable, always visible */}
-      <div className="bg-white fixed left-0 right-0 z-30 py-3 px-4 overflow-x-auto flex justify-center whitespace-nowrap gap-3 no-scrollbar shadow-sm border-b border-gray-100"
+      <div className="bg-card fixed left-0 right-0 z-30 py-3 px-4 overflow-x-auto flex justify-center whitespace-nowrap gap-3 no-scrollbar shadow-sm border-b border-border"
         style={{ top: 'calc(var(--navbar-height, 56px) + 20px)' }}
       >
         <div className="flex gap-3">
@@ -477,7 +477,7 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
               className={`px-4 py-1.5 rounded-full text-sm transition-all ${
                 selectedCategory === category.name
                   ? "bg-adtip-teal text-white"
-                  : "bg-gray-100 text-gray-800 hover:bg-gray-200"
+                  : "bg-muted text-foreground hover:bg-accent"
               }`}
             >
               {category.name}
@@ -547,7 +547,7 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
                 {feedData.map((post) => (
                   <div
                     key={post.id}
-                    className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden cursor-pointer max-w-[420px] mx-auto"
+                    className="bg-card rounded-xl border border-border shadow-sm overflow-hidden cursor-pointer max-w-[420px] mx-auto"
                     style={{ marginBottom: 24 }}
                     onClick={() => handlePostClick(post.id)}
                   >
@@ -557,7 +557,7 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
                         <img
                           src={getSafeImageUrl(post.user_profile_image)}
                           alt={post.user_name || "User"}
-                          className="w-8 h-8 rounded-full object-cover border border-gray-300"
+                          className="w-8 h-8 rounded-full object-cover border border-border"
                           onError={(e) => {
                             handleImageError(e);
                           }}
@@ -566,24 +566,24 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
                         <RandomAvatar
                           seed={post.user_id || post.user_name || post.id}
                           alt={post.user_name || "User"}
-                          className="w-8 h-8 rounded-full object-cover border border-gray-300"
+                          className="w-8 h-8 rounded-full object-cover border border-border"
                         />
                       )}
                       <div className="ml-3 flex-1">
                         <div className="flex items-center gap-1">
-                          <span className="font-semibold text-sm text-gray-900">{post.user_name}</span>
+                          <span className="font-semibold text-sm text-foreground">{post.user_name}</span>
                           {post.is_promoted ? (
                             <span className="ml-1 text-xs text-adtip-teal font-medium">• Sponsored</span>
                           ) : null}
                         </div>
-                        <span className="text-xs text-gray-400">{post.address}</span>
+                        <span className="text-xs text-muted-foreground">{post.address}</span>
                       </div>
-                      <button className="ml-auto text-gray-400 hover:text-gray-600 text-xl px-2">•••</button>
+                      <button className="ml-auto text-muted-foreground hover:text-foreground text-xl px-2">•••</button>
                     </div>
                     {/* Media */}
                     <div className="relative bg-black">
                       {post.media_type === "video" && post.media_url ? (
-                        <div className="aspect-[4/5] bg-gray-200">
+                        <div className="aspect-[4/5] bg-muted">
                           <video
                             className="w-full h-full object-cover"
                             controls
@@ -599,7 +599,7 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
                           </div>
                         </div>
                       ) : post.media_type === "image" && post.media_url ? (
-                        <div className="aspect-square bg-gray-200">
+                        <div className="aspect-square bg-muted">
                           <img
                             src={post.media_url}
                             alt={post.title}
@@ -608,17 +608,17 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
                           />
                         </div>
                       ) : (
-                        <div className="aspect-square bg-gray-200 flex items-center justify-center text-gray-500">
+                        <div className="aspect-square bg-muted flex items-center justify-center text-muted-foreground">
                           No media available
                         </div>
                       )}
                     </div>
                     {/* Content */}
                     <div className="px-3 pt-2 pb-3">
-                      <h4 className="font-medium text-sm mb-1 text-gray-900 line-clamp-2">{post.title}</h4>
-                      <p className="text-xs text-gray-700 mb-2 line-clamp-3">{post.content}</p>
+                      <h4 className="font-medium text-sm mb-1 text-foreground line-clamp-2">{post.title}</h4>
+                      <p className="text-xs text-muted-foreground mb-2 line-clamp-3">{post.content}</p>
           {/* Action bar */}
-<div className="flex items-center gap-6 text-gray-600 text-sm mt-2">
+<div className="flex items-center gap-6 text-muted-foreground text-sm mt-2">
   {/* Likes */}
   <div className="flex items-center gap-1">
     <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -706,13 +706,13 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
           style={{ textDecoration: 'none' }}
         >
           <div
-            className="rounded-l-2xl pl-5 pr-4 py-3 flex items-center bg-gradient-to-r from-[#e0e7ef] via-[#d1f1e6] to-[#f7e7fa] shadow-lg border border-gray-200 hover:from-[#d1e7f7] hover:to-[#e7f7e7] transition-colors duration-300"
+            className="rounded-l-2xl pl-5 pr-4 py-3 flex items-center bg-gradient-to-r from-[#e0e7ef] via-[#d1f1e6] to-[#f7e7fa] shadow-lg border border-border hover:from-[#d1e7f7] hover:to-[#e7f7e7] transition-colors duration-300"
             style={{ minWidth: 120 }}
           >
-            <span className="font-semibold text-gray-700 text-base tracking-wide drop-shadow-sm mr-2">Install now</span>
+            <span className="font-semibold text-foreground text-base tracking-wide drop-shadow-sm mr-2">Install now</span>
           </div>
           <div
-            className="rounded-r-2xl bg-white p-2 pl-1 pr-3 flex items-center shadow-lg border-t border-b border-r border-gray-200 hover:bg-gray-50 transition-colors duration-300"
+            className="rounded-r-2xl bg-card p-2 pl-1 pr-3 flex items-center shadow-lg border-t border-b border-r border-border hover:bg-muted transition-colors duration-300"
           >
             <img
               src="/playstore.png"
@@ -735,7 +735,7 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
         <img
           src="/playstore.png"
           alt="Google Play Store"
-          className="w-14 h-14 object-contain drop-shadow-lg rounded-2xl border border-gray-200 bg-white p-2"
+          className="w-14 h-14 object-contain drop-shadow-lg rounded-2xl border border-border bg-card p-2"
         />
       </a>
 {selectedPost && (

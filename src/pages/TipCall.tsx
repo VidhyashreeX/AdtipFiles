@@ -280,15 +280,15 @@ export default function TipCall() {
   ]);
 
   return (
-    <div className="pb-20 md:pb-0 bg-gray-50">
+    <div className="pb-20 md:pb-0 bg-muted">
       {/* Search bar */}
-      <div className="bg-white sticky top-[60px] md:top-[57px] z-10 py-4 px-4 shadow-sm">
+      <div className="bg-card sticky top-[60px] md:top-[57px] z-10 py-4 px-4 shadow-sm">
         <div className="relative max-w-md mx-auto">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
           <input
             type="text"
             placeholder="Search for experts..."
-            className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-full focus:outline-none focus:ring-2 focus:ring-adtip-teal focus:border-transparent"
+            className="w-full pl-10 pr-4 py-2 border border-border rounded-full focus:outline-none focus:ring-2 focus:ring-adtip-teal focus:border-transparent"
             value={searchQuery}
             onChange={handleSearch}
           />
@@ -297,12 +297,12 @@ export default function TipCall() {
 
       <div className="max-w-screen-md mx-auto px-4 pt-4">
         {/* Talk to Earn Banner */}
-        <div className="bg-white rounded-lg overflow-hidden shadow-sm mb-6">
+        <div className="bg-card rounded-lg overflow-hidden shadow-sm mb-6">
           <div className="p-6">
             <div className="flex flex-col md:flex-row items-center">
               <div className="w-full md:w-1/2 mb-4 md:mb-0">
                 <h2 className="text-xl font-bold mb-2">Talk to Earn</h2>
-                <p className="text-gray-600 mb-4">
+                <p className="text-muted-foreground mb-4">
                   Share your expertise through one-on-one calls and get paid directly for your knowledge and time.
                 </p>
                 <Button className="teal-button" onClick={() => {
@@ -340,7 +340,7 @@ export default function TipCall() {
                   <Badge
                     key={index}
                     variant={selectedCategory === category ? "default" : "outline"}
-                    className={`px-3 py-1 cursor-pointer ${selectedCategory === category ? "bg-adtip-teal hover:bg-adtip-teal/90" : "hover:bg-gray-100"}`}
+                    className={`px-3 py-1 cursor-pointer ${selectedCategory === category ? "bg-adtip-teal hover:bg-adtip-teal/90" : "hover:bg-muted"}`}
                     onClick={() => handleCategorySelect(category)}
                   >
                     {category}
@@ -353,9 +353,9 @@ export default function TipCall() {
             {error ? (
               <p className="text-center text-red-500 font-semibold my-8">{error}</p>
             ) : loading ? (
-              <p className="text-center text-gray-500">Loading experts...</p>
+              <p className="text-center text-muted-foreground">Loading experts...</p>
             ) : filteredExperts.length === 0 ? (
-              <p className="text-center text-gray-500">No experts found.</p>
+              <p className="text-center text-muted-foreground">No experts found.</p>
             ) : (
               <>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -366,12 +366,12 @@ export default function TipCall() {
                           <img src={expert.avatar} alt={expert.name} className="w-12 h-12 rounded-full" />
                           <div>
                             <CardTitle className="text-lg font-bold">{expert.name}</CardTitle>
-                            <CardDescription className="text-sm text-gray-500">{expert.specialty}</CardDescription>
+                            <CardDescription className="text-sm text-muted-foreground">{expert.specialty}</CardDescription>
                           </div>
                         </div>
                       </CardHeader>
                       <CardContent>
-                        <p className="text-sm text-gray-700">{expert.description}</p>
+                        <p className="text-sm text-foreground">{expert.description}</p>
                         <div className="flex items-center mt-4">
                           <Star className="h-4 w-4 text-yellow-400" />
                           <span className="text-sm ml-1">{expert.rating} ({expert.ratingCount} reviews)</span>
