@@ -136,7 +136,7 @@ const UploadCreative = () => {
     
     try {
       // Get user data
-      const userData = JSON.parse(localStorage.getItem('UserData') || '{}');
+      const userData = JSON.parse(localStorage.getItem('user') || '{}');
       
       // Prepare data for second page API call
       const secondPageData = {

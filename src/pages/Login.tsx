@@ -62,11 +62,11 @@ const Login = () => {
   };
 
   return (
-    <div className="flex flex-col min-h-screen p-6 bg-white">
+    <div className="flex flex-col min-h-screen p-6 bg-white dark:bg-gray-900">
       <div className="mb-8">
         <button
           onClick={() => navigate("/onboarding")}
-          className="text-gray-500 flex items-center hover:text-gray-700 transition-colors"
+          className="text-gray-500 dark:text-gray-400 flex items-center hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
         >
           <ArrowLeft size={20} className="mr-1" />
           <span>Back</span>

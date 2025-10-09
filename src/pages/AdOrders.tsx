@@ -27,7 +27,7 @@ const AdOrders = () => {
   const fetchUserAds = async () => {
     try {
       setIsLoading(true);
-      const userData = JSON.parse(localStorage.getItem('UserData') || '{}');
+      const userData = JSON.parse(localStorage.getItem('user') || '{}');
       const userId = userData.id;
 
       if (!userId) {
@@ -65,7 +65,7 @@ const AdOrders = () => {
 
   const handleToggleAdStatus = async (adId: string, currentStatus: string) => {
     try {
-      const userData = JSON.parse(localStorage.getItem('UserData') || '{}');
+      const userData = JSON.parse(localStorage.getItem('user') || '{}');
       const userId = userData.id;
 
       const newStatus = currentStatus === 'Running' || currentStatus === 'Active' ? 'Paused' : 'Running';

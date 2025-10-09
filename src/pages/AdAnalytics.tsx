@@ -34,9 +34,9 @@ const AdAnalytics = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#f5f5ff]">
+    <div className="min-h-screen bg-[#f5f5ff] dark:bg-gray-900">
       {/* Header */}
-      <div className="bg-gradient-to-r from-[#00dcaa] to-[#00b894] text-white">
+      <div className="bg-gradient-to-r from-[#00dcaa] to-[#00b894] dark:from-teal-700 dark:to-teal-800 text-white">
         <div className="max-w-7xl mx-auto px-6 py-8">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">

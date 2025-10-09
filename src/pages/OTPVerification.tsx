@@ -157,17 +157,17 @@ const OTPVerification = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-white to-gray-50">
+    <div className="min-h-screen bg-gradient-to-b from-white to-gray-50 dark:from-gray-900 dark:to-gray-800">
       <div className="container max-w-md mx-auto px-4 py-8">
         <button
           onClick={() => navigate("/login")}
-          className="mb-8 text-gray-600 hover:text-gray-800 transition-colors inline-flex items-center"
+          className="mb-8 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors inline-flex items-center"
         >
           <ArrowLeft size={20} className="mr-2" />
           Back to Login
         </button>
 
-        <div className="bg-white rounded-2xl shadow-lg p-8">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-8">
           <div className="flex justify-center mb-6">
             <img src="/logo.png" alt="AdTip Logo" className="h-16 w-16" />
           </div>

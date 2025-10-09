@@ -66,6 +66,8 @@ import AdsCart from "./pages/AdsCart";
 import PaymentGateway from "./pages/PaymentGateway";
 import AdOrders from "./pages/AdOrders";
 import AdAnalytics from "./pages/AdAnalytics";
+import AdDashboard from "./pages/AdDashboard";
+import AdOrderDetail from "./pages/AdOrderDetail";
 import SellerRegistration from "./components/SellerRegistration";
 import EditSellerInfo from "./components/EditSellerInfo";
 import BecomeAdvertiserRedirect from "./components/BecomeAdvertiserRedirect";
@@ -347,6 +349,14 @@ const router = createBrowserRouter([
 			{
 				path: "seller/ad-analytics/:id",
 				element: <AdAnalytics />,
+			},
+			{
+				path: "seller/ad-dashboard",
+				element: <AdDashboard />,
+			},
+			{
+				path: "seller/ad-order/:orderId",
+				element: <AdOrderDetail />,
 			},
 			{
 				path: "seller/register",

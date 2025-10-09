@@ -162,6 +162,9 @@ export const apiGetAdModels = async () => {
   return axios.get(`${BASE_URL}/api/getadmodels`);
 };
 
+// ============== AD CAMPAIGN CREATION APIs ==============
+
+// Get target areas for campaign targeting
 export const apiGetTargetAreas = async () => {
   const token = localStorage.getItem('UserLoggedIn');
   return axios.get(`${BASE_URL}/api/gettargetareas`, {
@@ -171,15 +174,17 @@ export const apiGetTargetAreas = async () => {
   });
 };
 
+// Get target professions for campaign targeting
 export const apiGetTargetProfessions = async () => {
   const token = localStorage.getItem('UserLoggedIn');
-  return axios.get(`${BASE_URL}/api/gettargetprofession`, {
+  return axios.get(`${BASE_URL}/api/gettargetprofessions`, {
     headers: {
       'Authorization': `Bearer ${token}`
     }
   });
 };
 
+// Get available button types for ads
 export const apiGetButtons = async () => {
   const token = localStorage.getItem('UserLoggedIn');
   return axios.get(`${BASE_URL}/api/getbuttons`, {
@@ -189,7 +194,7 @@ export const apiGetButtons = async () => {
   });
 };
 
-// Ad Campaign Creation APIs - First Page
+// Ad Campaign Creation APIs - First Page (Basic Setup)
 export const apiSaveFirstPageAdModel = async (adData: any) => {
   const token = localStorage.getItem('UserLoggedIn');
   return axios.post(`${BASE_URL}/api/savefirstpageadmodel`, adData, {
@@ -225,7 +230,7 @@ export const apiSaveSecondPageAdModel = async (adData: any, mediaFile?: File) =>
   });
 };
 
-// Ad Campaign Creation APIs - Third Page
+// Ad Campaign Creation APIs - Third Page (Final Configuration)
 export const apiSaveThirdPageAdModel = async (adData: any) => {
   const token = localStorage.getItem('UserLoggedIn');
   return axios.post(`${BASE_URL}/api/savethirdpageadmodel`, adData, {
@@ -236,10 +241,22 @@ export const apiSaveThirdPageAdModel = async (adData: any) => {
   });
 };
 
-// Get user's ads
+// ============== AD CAMPAIGN MANAGEMENT APIs ==============
+
+// Get user's ad campaigns
 export const apiGetUserAds = async (userId: string) => {
   const token = localStorage.getItem('UserLoggedIn');
   return axios.get(`${BASE_URL}/api/getalladds/${userId}`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+};
+
+// Get specific ad campaign by ID
+export const apiGetAdvModel = async (userId: string) => {
+  const token = localStorage.getItem('UserLoggedIn');
+  return axios.get(`${BASE_URL}/api/getAdvModel/${userId}`, {
     headers: {
       'Authorization': `Bearer ${token}`
     }

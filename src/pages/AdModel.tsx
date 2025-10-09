@@ -54,13 +54,13 @@ const AdModel: React.FC = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-[#f5f5ff] p-8">
+    <div className="min-h-screen bg-[#f5f5ff] dark:bg-gray-900 p-8">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="flex items-center mb-8">
           <button
             onClick={() => navigate('/seller/dashboard')}
-            className="flex items-center text-gray-600 hover:text-gray-800 mr-4"
+            className="flex items-center text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 mr-4"
           >
             <ArrowLeft className="w-5 h-5 mr-2" />
             Back to Dashboard
@@ -68,22 +68,22 @@ const AdModel: React.FC = () => {
         </div>
 
         <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold text-gray-900 mb-4">Select Ad Model</h1>
-          <p className="text-xl text-gray-600">Choose the perfect ad format for your campaign with transparent pricing</p>
+          <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-4">Select Ad Model</h1>
+          <p className="text-xl text-gray-600 dark:text-gray-400">Choose the perfect ad format for your campaign with transparent pricing</p>
         </div>
 
         {/* Ad Model Cards - First Row */}
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 mb-8">
           {adModels.slice(0, 3).map((model) => (
-            <div key={model.id} className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300 relative max-w-sm mx-auto">
+            <div key={model.id} className="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300 relative max-w-sm mx-auto">
               {model.recommended && (
                 <div className="absolute top-4 right-4 bg-[#00dcaa] text-white px-3 py-1 rounded-full text-sm font-medium z-10">
                   Recommended
                 </div>
               )}
               
-              <div className="relative h-48 bg-gray-100 overflow-hidden">
-                <div className="absolute top-4 left-4 bg-gray-800 text-white px-2 py-1 rounded text-sm font-medium">
+              <div className="relative h-48 bg-gray-100 dark:bg-gray-700 overflow-hidden">
+                <div className="absolute top-4 left-4 bg-gray-800 dark:bg-gray-900 text-white px-2 py-1 rounded text-sm font-medium">
                   {model.price}
                 </div>
                 <div className="w-full h-full bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center">
@@ -92,9 +92,9 @@ const AdModel: React.FC = () => {
               </div>
               
               <div className="p-6">
-                <h3 className="text-xl font-bold text-gray-900 mb-2">{model.title}</h3>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">{model.title}</h3>
                 <div className="text-2xl font-bold text-[#00dcaa] mb-4">{model.price}</div>
-                <p className="text-gray-600 mb-6">{model.description}</p>
+                <p className="text-gray-600 dark:text-gray-400 mb-6">{model.description}</p>
                 
                 <button 
                   className="w-full bg-[#00dcaa] text-white py-3 rounded-lg font-semibold hover:bg-[#00c59a] transition-colors duration-200"
@@ -110,14 +110,14 @@ const AdModel: React.FC = () => {
         {/* Ad Model Cards - Second Row */}
         <div className="grid md:grid-cols-2 gap-8 justify-center max-w-4xl mx-auto">
           {adModels.slice(3).map((model) => (
-            <div key={model.id} className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300 relative max-w-sm mx-auto">
+            <div key={model.id} className="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300 relative max-w-sm mx-auto">
               {model.recommended && (
                 <div className="absolute top-4 right-4 bg-[#00dcaa] text-white px-3 py-1 rounded-full text-sm font-medium z-10">
                   Recommended
                 </div>
               )}
               
-              <div className="relative h-48 bg-gray-100 overflow-hidden">
+              <div className="relative h-48 bg-gray-100 dark:bg-gray-700 overflow-hidden">
                 <div className="absolute top-4 left-4 bg-gray-800 text-white px-2 py-1 rounded text-sm font-medium">
                   {model.price}
                 </div>

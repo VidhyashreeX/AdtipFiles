@@ -117,9 +117,9 @@ const Wallet = () => {
   if (!userId || !token) return null;
 
   return (
-    <div className="pb-20 md:pb̔-0 bg-gray-50 min-h-screen">
+    <div className="pb-20 md:pb̔-0 bg-gray-50 dark:bg-gray-900 min-h-screen">
       {/* Header */}
-      <div className="bg-gradient-to-r from-adtip-teal to-[#13b799] text-white">
+      <div className="bg-gradient-to-r from-adtip-teal to-[#13b799] text-white dark:from-teal-700 dark:to-teal-800">
         <div className="max-w-screen-md mx-auto p-6">
           <div className="flex items-center mb-8">
             <button onClick={() => navigate(-1)}>

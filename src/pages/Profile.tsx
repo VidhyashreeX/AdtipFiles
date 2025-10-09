@@ -346,9 +346,9 @@ const Profile = () => {
   const isNewUser = !user?.name;
 
   return (
-    <div className="pb-20 md:pb-0">
+    <div className="pb-20 md:pb-0 bg-white dark:bg-gray-900 min-h-screen">
       {/* Header */}
-      <div className="bg-white p-4 flex items-center justify-between border-b">
+      <div className="bg-white dark:bg-gray-800 p-4 flex items-center justify-between border-b dark:border-gray-700">
         <div className="flex items-center">
           <button onClick={() => navigate(-1)}>
             <ArrowLeft className="h-6 w-6" />
