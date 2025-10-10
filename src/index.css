@@ -216,4 +216,28 @@
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
     background: rgba(0, 220, 170, 0.8);
   }
+
+  /* Mobile Bottom Navigation Fixes */
+  @media (max-width: 768px) {
+    /* Ensure mobile bottom nav is always at bottom */
+    .mobile-bottom-nav {
+      position: fixed !important;
+      bottom: 0 !important;
+      left: 0 !important;
+      right: 0 !important;
+      z-index: 999 !important;
+      transform: none !important;
+      top: auto !important;
+    }
+    
+    /* Prevent any content from covering the bottom nav */
+    body {
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+    
+    /* Ensure main content doesn't overlap with bottom nav */
+    .main-content {
+      padding-bottom: calc(4rem + env(safe-area-inset-bottom)) !important;
+    }
+  }
 }

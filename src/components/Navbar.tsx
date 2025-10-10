@@ -296,6 +296,7 @@ const Navbar = () => {
   };
 
   return (
+    <>
     <nav className="fixed top-0 z-50 w-full h-16 backdrop-blur-xl shadow-lg border-b border-gray-200/50 dark:border-gray-800/50">
       {/* Enhanced glassmorphism background */}
       <div className="absolute inset-0 bg-white/80 dark:bg-gray-900/90" style={{
@@ -430,47 +431,7 @@ const Navbar = () => {
 </div>
       </div>
 
-      {/* Mobile Bottom Navigation */}
-      <div className="md:hidden fixed inset-x-0 bottom-0 top-auto bg-background/80 dark:bg-gray-900/80 backdrop-blur-xl shadow-lg border-t border-border/60 z-40">
-        <div className="flex justify-around items-center px-2 py-2 sm:py-3 pb-[calc(env(safe-area-inset-bottom)+0.25rem)]">
-          <Link
-            to="/home"
-            className={`flex flex-col items-center ${isActive("/home") ? "text-adtip-teal" : "text-muted-foreground"}`}
-          >
-            <Home className="h-5 w-5 sm:h-6 sm:w-6" />
-            <span className="text-[10px] sm:text-xs mt-1">Home</span>
-          </Link>
-          <Link
-           to="/watch"
-            className={`flex flex-col items-center ${isActive("/watch") ? "text-adtip-teal" : "text-muted-foreground"}`}
-          >
-            <Video className="h-5 w-5 sm:h-6 sm:w-6" />
-            <span className="text-[10px] sm:text-xs mt-1">TipTube</span>
-          </Link>
-          <Link
-            to="/create-post"
-            className="flex flex-col items-center justify-center"
-          >
-            <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-full teal-gradient flex items-center justify-center">
-              <Plus className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
-            </div>
-          </Link>
-          <Link
-            to="/short"
-            className={`flex flex-col items-center ${isActive("/short") ? "text-adtip-teal" : "text-muted-foreground"}`}
-          >
-            <CirclePlay className="h-5 w-5 sm:h-6 sm:w-6" />
-            <span className="text-[10px] sm:text-xs mt-1">TipShort</span>
-          </Link>
-          <Link
-            to="/livestream"
-            className={`flex flex-col items-center ${isActive("/livestream") ? "text-adtip-teal" : "text-muted-foreground"}`}
-          >
-            <Radio className="h-5 w-5 sm:h-6 sm:w-6" />
-            <span className="text-[10px] sm:text-xs mt-1">LiveStream</span>
-          </Link>
-        </div>
-      </div>
+
 
       {/* Cancel Premium Dialog */}
       {showCancelPremiumDialog && (
@@ -651,6 +612,49 @@ const Navbar = () => {
         </div>
       )}
     </nav>
+
+    {/* Mobile Bottom Navigation - Separate from main nav */}
+    <div className="md:hidden fixed inset-x-0 bottom-0 bg-background/95 dark:bg-gray-900/95 backdrop-blur-xl shadow-lg border-t border-border/60 z-50 mobile-bottom-nav">
+      <div className="flex justify-around items-center px-2 py-2 sm:py-3 pb-[calc(env(safe-area-inset-bottom)+0.25rem)]">
+        <Link
+          to="/home"
+          className={`flex flex-col items-center ${isActive("/home") ? "text-adtip-teal" : "text-muted-foreground"}`}
+        >
+          <Home className="h-5 w-5 sm:h-6 sm:w-6" />
+          <span className="text-[10px] sm:text-xs mt-1">Home</span>
+        </Link>
+        <Link
+         to="/watch"
+          className={`flex flex-col items-center ${isActive("/watch") ? "text-adtip-teal" : "text-muted-foreground"}`}
+        >
+          <Video className="h-5 w-5 sm:h-6 sm:w-6" />
+          <span className="text-[10px] sm:text-xs mt-1">TipTube</span>
+        </Link>
+        <Link
+          to="/create-post"
+          className="flex flex-col items-center justify-center"
+        >
+          <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-full teal-gradient flex items-center justify-center">
+            <Plus className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+          </div>
+        </Link>
+        <Link
+          to="/short"
+          className={`flex flex-col items-center ${isActive("/short") ? "text-adtip-teal" : "text-muted-foreground"}`}
+        >
+          <CirclePlay className="h-5 w-5 sm:h-6 sm:w-6" />
+          <span className="text-[10px] sm:text-xs mt-1">TipShort</span>
+        </Link>
+        <Link
+          to="/livestream"
+          className={`flex flex-col items-center ${isActive("/livestream") ? "text-adtip-teal" : "text-muted-foreground"}`}
+        >
+          <Radio className="h-5 w-5 sm:h-6 sm:w-6" />
+          <span className="text-[10px] sm:text-xs mt-1">LiveStream</span>
+        </Link>
+      </div>
+    </div>
+    </>
   );
 };
 
