@@ -15,14 +15,14 @@ const NotFound = () => {
   }, [location.pathname]);
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-6 text-center">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-background p-6 text-center">
       <div className="w-20 h-20 rounded-full teal-gradient flex items-center justify-center mb-6">
         <Search className="h-10 w-10 text-white" />
       </div>
       
-      <h1 className="text-3xl font-bold mb-2">Page not found</h1>
+      <h1 className="text-3xl font-bold mb-2 text-foreground">Page not found</h1>
       
-      <p className="text-gray-600 mb-8 max-w-md">
+      <p className="text-muted-foreground mb-8 max-w-md">
         Oops! It looks like the page you're looking for doesn't exist or has been moved.
       </p>
       
@@ -33,9 +33,9 @@ const NotFound = () => {
           </Button>
         </Link>
         
-        <div className="text-sm text-gray-500">
+        <div className="text-sm text-muted-foreground">
           <p>
-            or <Link to="/tiptube" className="text-adtip-teal">explore TipTube</Link>
+            or <Link to="/watch" className="text-adtip-teal hover:text-adtip-teal/80">explore TipTube</Link>
           </p>
         </div>
       </div>

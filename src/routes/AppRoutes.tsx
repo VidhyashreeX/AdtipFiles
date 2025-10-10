@@ -9,6 +9,9 @@ import HowToEarnUser from "../pages/HowToEarnUser";
 import Refer from "../pages/Refer";
 import AdsTracker from "../pages/AdsTracker";
 import Settings from "../pages/Settings";
+import Follow from "../pages/Follow";
+import ContactUs from "../pages/ContactUs";
+import TermsAndConditions from "../pages/TermsAndConditions";
 import Profile from "../pages/Profile";
 import EditProfile from "../pages/EditProfile";
 import Login from "../pages/Login";
@@ -22,6 +25,7 @@ import CompleteProfile from "../pages/CompleteProfile";
 import TipShorts from "../pages/TipShorts";
 import TipTube from "@/pages/TipTube";
 import ChannelPage from "@/pages/ChannelPage";
+import TipCall from "../pages/TipCall";
 
 const ProtectedRoute = () => {
   const { isAuthenticated, authLoading } = useAuth();
@@ -54,6 +58,7 @@ const AppRoutes = () => {
         {/* Optional: redirect old /tipshorts to new /short route */}
 <Route path="/tipshorts" element={<Navigate to="/short" replace />} />
  <Route path="/channel/:channelName" element={<ChannelPage />} />
+        <Route path="/tipcall" element={<TipCall />} />
         <Route path="/home" element={<Home />} />
         <Route path="/wallet" element={<Wallet />} />
         <Route path="/tipshorts" element={<TipShorts />} />
@@ -64,6 +69,9 @@ const AppRoutes = () => {
         <Route path="/how-to-earn-user" element={<HowToEarnUser />} />
         <Route path="/refer" element={<Refer />} />
         <Route path="/ads-tracker" element={<AdsTracker />} />
+        <Route path="/follow" element={<Follow />} />
+        <Route path="/contact-us" element={<ContactUs />} />
+        <Route path="/terms" element={<TermsAndConditions />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/edit-profile" element={<EditProfile />} />
