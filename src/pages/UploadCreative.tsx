@@ -3,6 +3,7 @@ import { ArrowLeft, Upload, Wand2, Video, FileImage, Camera, Zap, Loader2 } from
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from '@/hooks/use-toast';
 import { apiSaveSecondPageAdModel } from '@/api';
+import AIAdGenerator from '@/components/AIAdGenerator';
 
 const UploadCreative = () => {
   const navigate = useNavigate();
@@ -14,6 +15,7 @@ const UploadCreative = () => {
   const [showContentDetails, setShowContentDetails] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [showAIGenerator, setShowAIGenerator] = useState(false);
   const [contentData, setContentData] = useState({
     adTitle: '',
     adDescription: '',
@@ -36,19 +38,30 @@ const UploadCreative = () => {
       });
       
       if (!response.ok) {
-        throw new Error(`Upload failed: ${response.statusText}`);
+        const errorText = await response.text();
+        throw new Error(`Upload failed: ${response.statusText}. ${errorText}`);
       }
       
       const result = await response.json();
       
+      // Properly check for success - result.status should be 200 and url should exist
       if (result.status === 200 && result.url) {
+        console.log('Upload successful! URL:', result.url);
         return result.url;
+      } else if (result.data && result.data.url) {
+        // Alternative response structure
+        console.log('Upload successful! URL:', result.data.url);
+        return result.data.url;
       } else {
-        throw new Error(result.message || 'Upload failed');
+        throw new Error(result.message || 'Upload failed - no URL returned from server');
       }
-    } catch (error) {
-      console.error('Cloudflare upload error:', error);
-      throw error;
+    } catch (error: any) {
+      console.error('Upload error details:', {
+        message: error.message,
+        error: error
+      });
+      // Throw with clear error message
+      throw new Error(error.message || 'Failed to upload file. Please check your connection and try again.');
     }
   };
 
@@ -191,18 +204,35 @@ const UploadCreative = () => {
 
   const handleAIGeneration = (type: string) => {
     console.log('AI Generation for:', type);
-    // This would integrate with AI service
-    // For demo, we'll show a success state
-    setShowContentDetails(true);
+    setShowAIGenerator(true);
+  };
+
+  const handleAIGeneratedContent = (result: { imageUrl: string; title: string; description: string; cta: string }) => {
+    setUploadedFileUrl(result.imageUrl);
     setContentData({
-      adTitle: 'AI Generated Campaign Title',
-      adDescription: 'AI generated compelling description for your campaign...',
-      callToAction: 'Shop Now'
+      adTitle: result.title,
+      adDescription: result.description,
+      callToAction: result.cta
+    });
+    setShowContentDetails(true);
+    setShowAIGenerator(false);
+    
+    toast({
+      title: "AI Content Ready!",
+      description: "Your AI-generated ad creative is ready to use!",
     });
   };
 
   return (
-    <div className="min-h-screen bg-[#f5f5ff]">
+    <div className="min-h-screen bg-[#f5f5ff] dark:bg-gray-950">
+      {/* AI Generator Modal */}
+      {showAIGenerator && (
+        <AIAdGenerator
+          onGenerated={handleAIGeneratedContent}
+          onClose={() => setShowAIGenerator(false)}
+        />
+      )}
+      
       {/* Main Content */}
       <div className="max-w-4xl mx-auto px-6 py-8">
         <div className="bg-white rounded-xl shadow-lg overflow-hidden">

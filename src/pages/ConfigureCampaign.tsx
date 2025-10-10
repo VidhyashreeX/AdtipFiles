@@ -263,10 +263,10 @@ const ConfigureCampaign = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#f5f5ff]">
+    <div className="min-h-screen bg-[#f5f5ff] dark:bg-gray-950">
       {/* Main Content */}
       <div className="max-w-5xl mx-auto px-6 py-8">
-        <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+        <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg overflow-hidden border dark:border-gray-800">
           
           {/* Header */}
           <div className="bg-gradient-to-r from-[#00dcaa] to-[#00b894] p-6">
@@ -295,10 +295,10 @@ const ConfigureCampaign = () => {
             
             {/* Basic Information */}
             <div className="mb-8">
-              <h2 className="text-lg font-bold text-gray-900 mb-4">Basic Information</h2>
+              <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">Basic Information</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Campaign Name
                   </label>
                   <input
@@ -307,7 +307,7 @@ const ConfigureCampaign = () => {
                     value={formData.campaignName}
                     onChange={handleInputChange}
                     placeholder="Enter campaign name"
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00dcaa] focus:border-transparent"
+                    className="w-full p-3 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-[#00dcaa] focus:border-transparent dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-400"
                     required
                   />
                 </div>
@@ -399,6 +399,7 @@ const ConfigureCampaign = () => {
                     className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00dcaa] focus:border-transparent"
                   >
                     <option value="">Select age range</option>
+                    <option value="all">All Ages</option>
                     <option value="18-25">18-25</option>
                     <option value="26-35">26-35</option>
                     <option value="36-45">36-45</option>
@@ -634,7 +635,7 @@ const ConfigureCampaign = () => {
                   />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Select Button to Display
@@ -686,27 +687,6 @@ const ConfigureCampaign = () => {
                       <option value="banner">Banner</option>
                       <option value="video-ads">Video Ads</option>
                       <option value="search-results">Search Results</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Select Platform
-                    </label>
-                    <select
-                      name="selectedPlatform"
-                      value={formData.selectedPlatform}
-                      onChange={handleInputChange}
-                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00dcaa] focus:border-transparent"
-                    >
-                      <option value="">Choose platform</option>
-                      <option value="youtube">YouTube</option>
-                      <option value="instagram">Instagram</option>
-                      <option value="facebook">Facebook</option>
-                      <option value="twitter">Twitter</option>
-                      <option value="tiktok">TikTok</option>
-                      <option value="linkedin">LinkedIn</option>
-                      <option value="google">Google Ads</option>
                     </select>
                   </div>
                 </div>
