@@ -251,6 +251,29 @@ const AdTipSidebar = () => {
     checkUserCompanies();
   }, [user?.id]);
 
+  // Close mobile sidebar on route change
+  React.useEffect(() => {
+    if (isMobile && openMobile) {
+      setOpenMobile(false);
+    }
+  }, [location.pathname, isMobile, openMobile, setOpenMobile]);
+
+  // Prevent body scroll when mobile sidebar is open
+  React.useEffect(() => {
+    if (isMobile && openMobile) {
+      document.body.classList.add('mobile-sidebar-open');
+      // Store current scroll position
+      const scrollY = window.scrollY;
+      document.body.style.top = `-${scrollY}px`;
+      
+      return () => {
+        document.body.classList.remove('mobile-sidebar-open');
+        document.body.style.top = '';
+        window.scrollTo(0, scrollY);
+      };
+    }
+  }, [isMobile, openMobile]);
+
   const ecommerceItems = [
     { to: "/tip-shop", label: "Tip Shop", icon: <ShoppingCart className="h-5 w-5" /> },
     ...(channelData?.channelId
@@ -626,24 +649,64 @@ const AdTipSidebar = () => {
 
   return (
     <>
-      {isMobile && openMobile ? (
-        <div className="h-full overflow-y-auto">{sidebarContent}</div>
-      ) : !isMobile && !isCollapsed ? (
+      {/* Mobile Sidebar with Backdrop Overlay */}
+      {isMobile && openMobile && (
+        <>
+          {/* Backdrop Overlay - Higher z-index than filters */}
+          <div 
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] transition-opacity duration-300"
+            onClick={() => setOpenMobile(false)}
+          />
+          
+          {/* Mobile Sidebar Panel */}
+          <aside
+            ref={sidebarRef}
+            className="fixed left-0 top-20 h-[calc(100vh-5rem)] w-80 z-[101] shadow-2xl transition-all duration-300 ease-out transform"
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+          >
+            {/* Background with blur effect */}
+            <div
+              className="absolute inset-0 bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl border-r border-gray-200/50 dark:border-gray-800/50"
+              style={{
+                backdropFilter: 'blur(24px) saturate(180%)',
+                WebkitBackdropFilter: 'blur(24px) saturate(180%)',
+              }}
+            />
+            <div className="absolute inset-y-0 right-0 w-[1px] bg-gradient-to-b from-transparent via-gray-200 dark:via-gray-700 to-transparent opacity-60" />
+
+            {/* Scrollable Content Container */}
+            <div
+              ref={scrollContainerRef}
+              className="absolute inset-0 overflow-y-auto px-5 scrollbar-hide"
+              style={{
+                scrollbarWidth: 'none',
+                msOverflowStyle: 'none'
+              }}
+            >
+              <div className="adtip-sidebar h-full py-6">
+                {sidebarContent}
+              </div>
+            </div>
+          </aside>
+        </>
+      )}
+
+      {/* Desktop Sidebar */}
+      {!isMobile && !isCollapsed && (
         <>
           <div
             className="fixed inset-0 top-20 bg-black/10 backdrop-blur-[2px] z-40 transition-opacity duration-300"
             onClick={toggleSidebar}
           />
           
-          {/* --- FIX 3: JSX STRUCTURAL CHANGES START HERE --- */}
           <aside
             ref={sidebarRef}
-            // This className is simplified to be a non-scrolling positioning container
             className="fixed left-0 top-20 h-[calc(100vh-5rem)] w-72 flex-col z-50 shadow-2xl transition-all duration-300 ease-out transform"
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
           >
-            {/* This div provides the static, non-scrolling blur effect */}
+            {/* Background with blur effect */}
             <div
               className="absolute inset-0 bg-white/70 dark:bg-gray-900/80 backdrop-blur-xl border-r border-gray-200/50 dark:border-gray-800/50"
               style={{
@@ -653,19 +716,22 @@ const AdTipSidebar = () => {
             />
             <div className="absolute inset-y-0 right-0 w-[1px] bg-gradient-to-b from-transparent via-gray-200 dark:via-gray-700 to-transparent opacity-60" />
 
-            {/* This div is now positioned absolutely and handles all scrolling */}
+            {/* Scrollable Content Container */}
             <div
               ref={scrollContainerRef}
               className="absolute inset-0 overflow-y-auto px-5 scrollbar-hide"
+              style={{
+                scrollbarWidth: 'none',
+                msOverflowStyle: 'none'
+              }}
             >
-              {/* The old <style> tag can be removed as we use the 'scrollbar-hide' class now */}
               <div className="adtip-sidebar h-full py-6">
                 {sidebarContent}
               </div>
             </div>
           </aside>
         </>
-      ) : null}
+      )}
     </>
   );
 };
