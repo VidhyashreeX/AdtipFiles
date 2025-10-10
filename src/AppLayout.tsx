@@ -33,7 +33,7 @@ const AppLayoutContent = () => {
       <AdTipSidebar />
       
       {/* Main content - full width always, no margin */}
-      <main className="flex-1 min-h-[calc(100vh-4rem)] bg-gray-50 dark:bg-gray-950 pt-16 pb-16 md:pb-0">
+      <main className="flex-1 min-h-[calc(100vh-5rem)] bg-gray-50 dark:bg-gray-950 pt-20 pb-16 md:pb-0">
         <Outlet />
       </main>
     </div>

@@ -631,7 +631,7 @@ const AdTipSidebar = () => {
       ) : !isMobile && !isCollapsed ? (
         <>
           <div
-            className="fixed inset-0 top-16 bg-black/10 backdrop-blur-[2px] z-40 transition-opacity duration-300"
+            className="fixed inset-0 top-20 bg-black/10 backdrop-blur-[2px] z-40 transition-opacity duration-300"
             onClick={toggleSidebar}
           />
           
@@ -639,13 +639,13 @@ const AdTipSidebar = () => {
           <aside
             ref={sidebarRef}
             // This className is simplified to be a non-scrolling positioning container
-            className="fixed left-0 top-16 h-[calc(100vh-4rem)] w-72 flex-col z-50 shadow-2xl transition-all duration-300 ease-out transform"
+            className="fixed left-0 top-20 h-[calc(100vh-5rem)] w-72 flex-col z-50 shadow-2xl transition-all duration-300 ease-out transform"
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
           >
             {/* This div provides the static, non-scrolling blur effect */}
             <div
-              className="absolute inset-0 bg-white/80 dark:bg-gray-900/90 backdrop-blur-xl"
+              className="absolute inset-0 bg-white/70 dark:bg-gray-900/80 backdrop-blur-xl border-r border-gray-200/50 dark:border-gray-800/50"
               style={{
                 backdropFilter: 'blur(24px) saturate(180%)',
                 WebkitBackdropFilter: 'blur(24px) saturate(180%)',

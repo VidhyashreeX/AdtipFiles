@@ -25,7 +25,6 @@ import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
 import { useSidebar } from "../contexts/SidebarContext";
 import { userAPI } from "../services/api";
-import AdTipSidebar from "@/components/ui/AdTipSidebar";
 import usePremiumStatus from "../hooks/usePremiumStatus";
 
 const Navbar = () => {
@@ -297,35 +296,12 @@ const Navbar = () => {
 
   return (
     <>
-    <nav className="fixed top-0 z-50 w-full h-16 backdrop-blur-xl shadow-lg border-b border-gray-200/50 dark:border-gray-800/50">
+    <nav className="fixed top-0 z-50 w-full h-20 backdrop-blur-xl shadow-lg border-b border-gray-200/50 dark:border-gray-800/50">
       {/* Enhanced glassmorphism background */}
-      <div className="absolute inset-0 bg-white/80 dark:bg-gray-900/90" style={{
-        backdropFilter: 'blur(20px) saturate(180%)',
-        WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+      <div className="absolute inset-0 bg-white/70 dark:bg-gray-900/80" style={{
+        backdropFilter: 'blur(24px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(24px) saturate(180%)',
       }} />
-      
-      {/* Mobile Dropdown Sidebar */}
-      {openMobile && (
-        <>
-          <div 
-            className="fixed top-16 left-0 right-0 z-40 max-h-[calc(100vh-4rem)] overflow-y-auto animate-in slide-in-from-top-2 duration-200 bg-white/85 dark:bg-gray-900/90"
-            style={{
-              backdropFilter: 'blur(24px) saturate(180%)',
-              WebkitBackdropFilter: 'blur(24px) saturate(180%)',
-            }}
-          >
-            <div className="px-4 py-4">
-              <AdTipSidebar />
-            </div>
-          </div>
-          
-          {/* Overlay for closing sidebar */}
-          <div 
-            className="fixed inset-0 top-16 bg-black/20 z-30 backdrop-blur-sm animate-in fade-in duration-200"
-            onClick={() => setOpenMobile(false)}
-          />
-        </>
-      )}
 
       <div className="relative max-w-screen-2xl mx-auto h-full flex items-center justify-between px-3 sm:px-4 md:px-6">
         {/* Left: Hamburger and Logo */}
@@ -614,7 +590,10 @@ const Navbar = () => {
     </nav>
 
     {/* Mobile Bottom Navigation - Separate from main nav */}
-    <div className="md:hidden fixed inset-x-0 bottom-0 bg-background/95 dark:bg-gray-900/95 backdrop-blur-xl shadow-lg border-t border-border/60 z-50 mobile-bottom-nav">
+    <div className="md:hidden fixed inset-x-0 bottom-0 bg-background/80 dark:bg-gray-900/90 backdrop-blur-xl shadow-lg border-t border-border/60 z-50 mobile-bottom-nav" style={{
+      backdropFilter: 'blur(24px) saturate(180%)',
+      WebkitBackdropFilter: 'blur(24px) saturate(180%)',
+    }}>
       <div className="flex justify-around items-center px-2 py-2 sm:py-3 pb-[calc(env(safe-area-inset-bottom)+0.25rem)]">
         <Link
           to="/home"
