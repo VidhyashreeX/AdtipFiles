@@ -29,7 +29,7 @@ const UploadCreative = () => {
     
     try {
       // Use the backend upload endpoint that handles Cloudflare
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:7082'}/api/uploadcontent`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://10.67.209.225:7082'}/api/uploadcontent`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('UserLoggedIn')}`

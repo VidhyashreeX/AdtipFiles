@@ -387,10 +387,8 @@ const [showLogoutDialog, setShowLogoutDialog] = React.useState(false);
       <DialogTrigger asChild>
         <Button
           className={cn(
-            "mb-4 bg-gradient-to-r from-[#00dcaa] to-[#00b894] hover:from-[#00b894] hover:to-[#00a085] shadow-md hover:shadow-lg transition-all duration-300",
-            isCollapsed && !isMobile
-              ? "mx-2 w-[48px] h-[40px] flex items-center justify-center p-0"
-              : "w-[calc(100%-32px)] mx-4 px-4 py-2"
+            "mb-6 w-full bg-gradient-to-r from-[#00dcaa] to-[#00b894] hover:from-[#00b894] hover:to-[#00a085] shadow-md hover:shadow-lg transition-all duration-300 text-white font-semibold",
+            "px-4 py-3 rounded-xl flex items-center justify-center gap-2"
           )}
           onClick={() => {
             // Wait for both user and channel data to load
@@ -413,14 +411,8 @@ const [showLogoutDialog, setShowLogoutDialog] = React.useState(false);
             }
           }}
         >
-          {isCollapsed && !isMobile ? (
-            <PlusCircle className="h-5 w-5" />
-          ) : (
-            <>
-              <PlusCircle className="h-5 w-5" />
-              {user?.channelId ? "Upload Content" : "Create Channel"}
-            </>
-          )}
+          <PlusCircle className="h-5 w-5" />
+          <span>{user?.channelId ? "Upload Content" : "Create Channel"}</span>
         </Button>
       </DialogTrigger>
 
@@ -533,36 +525,40 @@ const [showLogoutDialog, setShowLogoutDialog] = React.useState(false);
     </Dialog>
 
       {/* Navigation Groups */}
-      <div className="space-y-5"> {/* Increased vertical spacing */}
+      <div className="space-y-6">
         {/* Main Nav Group */}
         <SidebarGroup>
-          {!(isCollapsed && !isMobile) && (
-            <div className="px-2 py-1 text-xs font-medium text-sidebar-foreground/70">Menu</div>
-          )}
-      <SidebarGroupContent>
-      {mainNavItems.map((item) => (
-        <Link
-          key={item.to}
-          to={item.to}
-          onClick={() => isMobile && setOpenMobile(false)}
-          className={cn(
-            "flex items-center gap-3 rounded-lg px-0 py-3 text-muted-foreground transition-all hover:text-foreground hover:bg-accent",
-            isCollapsed && !isMobile && "justify-center px-0",
-            isActive(item.to) && "bg-accent text-foreground font-medium"
-          )}
-        >
-          {React.cloneElement(item.icon, { className: "h-6 w-6" })}
-          {(!isCollapsed || isMobile) && <span className="text-sm font-medium">{item.label}</span>}
-        </Link>
-      ))}
-    </SidebarGroupContent>
+          <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+            Menu
+          </div>
+          <SidebarGroupContent>
+            {mainNavItems.map((item) => (
+              <Link
+                key={item.to}
+                to={item.to}
+                onClick={() => isMobile && setOpenMobile(false)}
+                className={cn(
+                  "flex items-center gap-3 rounded-xl px-3 py-3 text-gray-700 dark:text-gray-300 transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-800/60 group",
+                  isActive(item.to) && "bg-gradient-to-r from-[#00dcaa]/10 to-[#00b894]/10 text-[#00dcaa] dark:text-[#00dcaa] font-semibold shadow-sm"
+                )}
+              >
+                {React.cloneElement(item.icon, { 
+                  className: cn(
+                    "h-5 w-5 transition-transform duration-200 group-hover:scale-110",
+                    isActive(item.to) && "text-[#00dcaa]"
+                  )
+                })}
+                <span className="text-sm font-medium select-none">{item.label}</span>
+              </Link>
+            ))}
+          </SidebarGroupContent>
         </SidebarGroup>
 
         {/* E-commerce Group */}
         <SidebarGroup>
-          {!(isCollapsed && !isMobile) && (
-            <div className="px-2 py-1 text-xs font-medium text-sidebar-foreground/70">E-commerce</div>
-          )}
+          <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+            E-commerce
+          </div>
           <SidebarGroupContent>
             {ecommerceItems.map((item) => {
               // Handle special seller dashboard item with onClick
@@ -575,14 +571,11 @@ const [showLogoutDialog, setShowLogoutDialog] = React.useState(false);
                       if (isMobile) setOpenMobile(false);
                     }}
                     className={cn(
-                      "flex items-center gap-3 rounded-lg px-0 py-3 text-muted-foreground transition-all hover:text-foreground hover:bg-accent w-full text-left",
-                      isCollapsed && !isMobile && "justify-center px-0"
+                      "flex items-center gap-3 rounded-xl px-3 py-3 text-gray-700 dark:text-gray-300 transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-800/60 w-full text-left group"
                     )}
                   >
-                    {React.cloneElement(item.icon, { className: "h-6 w-6" })}
-                    {(!isCollapsed || isMobile) && (
-                      <span className="text-sm font-medium">{item.label}</span>
-                    )}
+                    {React.cloneElement(item.icon, { className: "h-5 w-5 transition-transform duration-200 group-hover:scale-110" })}
+                    <span className="text-sm font-medium select-none">{item.label}</span>
                   </button>
                 );
               }
@@ -597,15 +590,17 @@ const [showLogoutDialog, setShowLogoutDialog] = React.useState(false);
                       if (isMobile) setOpenMobile(false);
                     }}
                     className={cn(
-                      "flex items-center gap-3 rounded-lg px-0 py-3 text-muted-foreground transition-all hover:text-foreground hover:bg-accent w-full text-left",
-                      isCollapsed && !isMobile && "justify-center px-0",
-                      isActive(item.to) && "bg-accent text-foreground font-medium"
+                      "flex items-center gap-3 rounded-xl px-3 py-3 text-gray-700 dark:text-gray-300 transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-800/60 w-full text-left group",
+                      isActive(item.to) && "bg-gradient-to-r from-[#00dcaa]/10 to-[#00b894]/10 text-[#00dcaa] dark:text-[#00dcaa] font-semibold shadow-sm"
                     )}
                   >
-                    {React.cloneElement(item.icon, { className: "h-6 w-6" })}
-                    {(!isCollapsed || isMobile) && (
-                      <span className="text-sm font-medium">{item.label}</span>
-                    )}
+                    {React.cloneElement(item.icon, { 
+                      className: cn(
+                        "h-5 w-5 transition-transform duration-200 group-hover:scale-110",
+                        isActive(item.to) && "text-[#00dcaa]"
+                      )
+                    })}
+                    <span className="text-sm font-medium select-none">{item.label}</span>
                   </button>
                 );
               }
@@ -617,15 +612,17 @@ const [showLogoutDialog, setShowLogoutDialog] = React.useState(false);
                   to={item.to}
                   onClick={() => isMobile && setOpenMobile(false)}
                   className={cn(
-                    "flex items-center gap-3 rounded-lg px-0 py-3 text-muted-foreground transition-all hover:text-foreground hover:bg-accent",
-                    isCollapsed && !isMobile && "justify-center px-0",
-                    isActive(item.to) && "bg-accent text-foreground font-medium"
+                    "flex items-center gap-3 rounded-xl px-3 py-3 text-gray-700 dark:text-gray-300 transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-800/60 group",
+                    isActive(item.to) && "bg-gradient-to-r from-[#00dcaa]/10 to-[#00b894]/10 text-[#00dcaa] dark:text-[#00dcaa] font-semibold shadow-sm"
                   )}
                 >
-                  {React.cloneElement(item.icon, { className: "h-6 w-6" })}
-                  {(!isCollapsed || isMobile) && (
-                    <span className="text-sm font-medium">{item.label}</span>
-                  )}
+                  {React.cloneElement(item.icon, { 
+                    className: cn(
+                      "h-5 w-5 transition-transform duration-200 group-hover:scale-110",
+                      isActive(item.to) && "text-[#00dcaa]"
+                    )
+                  })}
+                  <span className="text-sm font-medium select-none">{item.label}</span>
                 </Link>
               );
             })}
@@ -633,46 +630,45 @@ const [showLogoutDialog, setShowLogoutDialog] = React.useState(false);
         </SidebarGroup>
 
         {/* Support Group */}
-    {user && (
-  <SidebarGroup>
-    {!(isCollapsed && !isMobile) && (
-      <div className="px-2 py-1 text-xs font-medium text-sidebar-foreground/70">Support</div>
-    )}
-    <SidebarGroupContent>
-      {supportItems.map((item) => (
-        <Link
-          key={item.to}
-          to={item.to}
-          onClick={() => isMobile && setOpenMobile(false)}
-          className={cn(
-            "flex items-center gap-3 rounded-lg px-0 py-3 text-muted-foreground transition-all hover:text-foreground hover:bg-accent",
-            isCollapsed && !isMobile && "justify-center px-0",
-            isActive(item.to) && "bg-accent text-foreground font-medium"
-          )}
-        >
-          {React.cloneElement(item.icon, { className: "h-6 w-6" })}
-          {(!isCollapsed || isMobile) && (
-            <span className="text-sm font-medium">{item.label}</span>
-          )}
-        </Link>
-      ))}
+        {user && (
+          <SidebarGroup>
+            <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              Support
+            </div>
+            <SidebarGroupContent>
+              {supportItems.map((item) => (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  onClick={() => isMobile && setOpenMobile(false)}
+                  className={cn(
+                    "flex items-center gap-3 rounded-xl px-3 py-3 text-gray-700 dark:text-gray-300 transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-800/60 group",
+                    isActive(item.to) && "bg-gradient-to-r from-[#00dcaa]/10 to-[#00b894]/10 text-[#00dcaa] dark:text-[#00dcaa] font-semibold shadow-sm"
+                  )}
+                >
+                  {React.cloneElement(item.icon, { 
+                    className: cn(
+                      "h-5 w-5 transition-transform duration-200 group-hover:scale-110",
+                      isActive(item.to) && "text-[#00dcaa]"
+                    )
+                  })}
+                  <span className="text-sm font-medium select-none">{item.label}</span>
+                </Link>
+              ))}
 
-      {/* Logout button */}
-      <button
-        onClick={() => setShowLogoutDialog(true)}
-        className={cn(
-          "flex items-center gap-3 rounded-lg px-0 py-3 w-full text-muted-foreground transition-all hover:text-foreground hover:bg-accent",
-          isCollapsed && !isMobile && "justify-center px-0"
+              {/* Logout button */}
+              <button
+                onClick={() => setShowLogoutDialog(true)}
+                className={cn(
+                  "flex items-center gap-3 rounded-xl px-3 py-3 w-full text-gray-700 dark:text-gray-300 transition-all duration-200 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400 group"
+                )}
+              >
+                <LogOut className="h-5 w-5 transition-transform duration-200 group-hover:scale-110" />
+                <span className="text-sm font-medium select-none">Logout</span>
+              </button>
+            </SidebarGroupContent>
+          </SidebarGroup>
         )}
-      >
-        <LogOut className="h-6 w-6" />
-        {(!isCollapsed || isMobile) && (
-          <span className="text-sm font-medium">Logout</span>
-        )}
-      </button>
-    </SidebarGroupContent>
-  </SidebarGroup>
-)}
 
 
         {/* Logout Dialog */}
@@ -763,26 +759,36 @@ const [showLogoutDialog, setShowLogoutDialog] = React.useState(false);
 
   return (
     <>
-      {/* Mobile backdrop - do not render aside in overlay, just sidebarContent */}
+      {/* Mobile/Desktop Sidebar with glassmorphism */}
       {isMobile && openMobile ? (
-        <div className="h-full overflow-y-auto bg-background/95 dark:bg-gray-900/95 backdrop-blur-xl">{sidebarContent}</div>
+        <div className="h-full overflow-y-auto bg-background/95 dark:bg-gray-900/95 backdrop-blur-xl px-4">{sidebarContent}</div>
       ) : (
         <aside
           ref={sidebarRef}
           className={cn(
-            "fixed left-0 top-16 h-[calc(100vh-4rem)] flex-col overflow-y-auto bg-background/80 dark:bg-gray-900/80 backdrop-blur-xl py-4 transition-all duration-500 ease-out z-50 shadow-lg",
+            "fixed left-0 top-16 h-[calc(100vh-4rem)] flex-col overflow-y-auto transition-all duration-500 ease-in-out z-50",
+            // Glassmorphism effect when expanded
+            !isCollapsed && !isMobile && "bg-white/70 dark:bg-gray-900/70 backdrop-blur-2xl shadow-2xl border-r border-gray-200/50 dark:border-gray-700/50",
             isMobile ? (
-              openMobile ? "translate-x-0 w-64 px-0" : "-translate-x-full w-64 px-0"
+              openMobile ? "translate-x-0 w-64 px-4 py-4" : "-translate-x-full w-0 px-0"
             ) : (
-              isCollapsed ? "w-16 px-0" : "w-64 px-0"
+              isCollapsed 
+                ? "-translate-x-full w-0 opacity-0" // Completely hide when collapsed
+                : "translate-x-0 w-64 px-4 py-4 opacity-100" // Show with padding when expanded
             )
           )}
-          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-          onMouseEnter={() => setIsHovered(true)}
-          onMouseLeave={() => setIsHovered(false)}
+          style={{ 
+            scrollbarWidth: 'none', 
+            msOverflowStyle: 'none',
+            // Add smooth transitions for all properties
+            transitionProperty: 'transform, width, opacity, background-color',
+          }}
+          onMouseEnter={() => !isMobile && setIsHovered(true)}
+          onMouseLeave={() => !isMobile && setIsHovered(false)}
         >
           <style>{`
             .adtip-sidebar::-webkit-scrollbar { display: none !important; }
+            .adtip-sidebar * { scrollbar-width: none !important; }
           `}</style>
           <div className="adtip-sidebar h-full">
             {sidebarContent}

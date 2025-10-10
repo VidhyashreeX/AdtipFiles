@@ -30,18 +30,27 @@ const AppLayoutContent = () => {
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       <Navbar />
       <div className="flex relative pt-16">
+        {/* Sidebar container - completely hidden when collapsed on desktop */}
         <div className={cn(
           "md:relative",
           isMobile ? "fixed left-0 top-16 bottom-0 z-30" : "sticky top-16 h-[calc(100vh-4rem)]"
         )}>
           <AdTipSidebar />
         </div>
+        {/* Main content - takes full width when sidebar is collapsed */}
         <main
           className={cn(
-            "flex-1 min-h-[calc(100vh-4rem)] transition-all duration-300 ease-in-out bg-gray-50 dark:bg-gray-950",
-            isMobile ? "px-4 ml-0" : isCollapsed ? "ml-16" : "ml-64"
+            "flex-1 min-h-[calc(100vh-4rem)] transition-all duration-500 ease-in-out bg-gray-50 dark:bg-gray-950 px-4 md:px-6",
+            // Remove left margin when collapsed to allow content to use full width
+            !isMobile && !isCollapsed && "ml-0"
           )}
-          style={{ marginLeft: isMobile ? 0 : isCollapsed ? 64 : 256 }}
+          style={{ 
+            marginLeft: isMobile ? 0 : isCollapsed ? 0 : 256,
+            // Smooth transition for margin
+            transitionProperty: 'margin-left',
+            transitionDuration: '500ms',
+            transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)'
+          }}
         >
           <Outlet />
         </main>

@@ -10,6 +10,7 @@ interface AIAdGeneratorProps {
 const AIAdGenerator: React.FC<AIAdGeneratorProps> = ({ onGenerated, onClose }) => {
   const [step, setStep] = useState<'input' | 'generating' | 'preview'>('input');
   const [prompt, setPrompt] = useState('');
+  const [contentType, setContentType] = useState<'image' | 'video'>('image');
   const [productDetails, setProductDetails] = useState({
     name: '',
     category: '',
@@ -40,7 +41,7 @@ const AIAdGenerator: React.FC<AIAdGeneratorProps> = ({ onGenerated, onClose }) =
 
     try {
       // Call backend AI generation endpoint
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:7082'}/api/generate-ad-creative`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://10.67.209.225:7082'}/api/generate-ad-creative`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -49,6 +50,7 @@ const AIAdGenerator: React.FC<AIAdGeneratorProps> = ({ onGenerated, onClose }) =
         body: JSON.stringify({
           prompt: prompt || `Create an ad for ${productDetails.name}`,
           productDetails: productDetails,
+          contentType: contentType, // Send selected content type (image or video)
           imageModel: 'banana-nano', // Use banana nano imagen model
           textModel: 'gemini' // Use Gemini for text generation
         })
@@ -59,10 +61,12 @@ const AIAdGenerator: React.FC<AIAdGeneratorProps> = ({ onGenerated, onClose }) =
       }
 
       const result = await response.json();
+      console.log('AI Generation Result:', result);
 
       if (result.status === 200 && result.data) {
+        // Fix: Backend returns mediaUrl, not imageUrl
         setGeneratedContent({
-          imageUrl: result.data.imageUrl || '',
+          imageUrl: result.data.mediaUrl || result.data.imageUrl || '',
           title: result.data.title || '',
           description: result.data.description || '',
           cta: result.data.cta || 'Shop Now'
@@ -71,7 +75,7 @@ const AIAdGenerator: React.FC<AIAdGeneratorProps> = ({ onGenerated, onClose }) =
         
         toast({
           title: "Success!",
-          description: "AI ad creative generated successfully!",
+          description: `AI ${contentType} creative generated successfully!`,
         });
       } else {
         throw new Error(result.message || 'Failed to generate ad creative');
@@ -119,6 +123,44 @@ const AIAdGenerator: React.FC<AIAdGeneratorProps> = ({ onGenerated, onClose }) =
         <div className="p-6">
           {step === 'input' && (
             <div className="space-y-6">
+              {/* Content Type Toggle */}
+              <div className="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 p-4 rounded-xl border border-purple-200 dark:border-purple-700">
+                <label className="block text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">
+                  Select Content Type
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setContentType('image')}
+                    className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-medium transition-all ${
+                      contentType === 'image'
+                        ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg scale-105'
+                        : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-700 hover:border-purple-400'
+                    }`}
+                  >
+                    <ImageIcon className="w-5 h-5" />
+                    Image Ad
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setContentType('video')}
+                    className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-medium transition-all ${
+                      contentType === 'video'
+                        ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg scale-105'
+                        : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-700 hover:border-purple-400'
+                    }`}
+                  >
+                    <FileText className="w-5 h-5" />
+                    Video Ad
+                  </button>
+                </div>
+                {contentType === 'video' && (
+                  <p className="mt-2 text-xs text-purple-600 dark:text-purple-400 text-center">
+                    ⚡ Video generation takes longer (30-60 seconds)
+                  </p>
+                )}
+              </div>
+
               {/* Quick Prompt */}
               <div>
                 <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
@@ -278,14 +320,32 @@ const AIAdGenerator: React.FC<AIAdGeneratorProps> = ({ onGenerated, onClose }) =
                   Generated Ad Preview
                 </h3>
 
-                {/* Generated Image */}
+                {/* Generated Media (Image or Video) */}
                 {generatedContent.imageUrl && (
-                  <div className="mb-6 rounded-lg overflow-hidden">
-                    <img
-                      src={generatedContent.imageUrl}
-                      alt="Generated Ad"
-                      className="w-full h-auto object-cover"
-                    />
+                  <div className="mb-6 rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800">
+                    {contentType === 'video' && generatedContent.imageUrl.includes('.mp4') ? (
+                      <video
+                        src={generatedContent.imageUrl}
+                        controls
+                        className="w-full h-auto object-cover"
+                      >
+                        Your browser does not support the video tag.
+                      </video>
+                    ) : (
+                      <img
+                        src={generatedContent.imageUrl}
+                        alt="Generated Ad"
+                        className="w-full h-auto object-cover"
+                        onError={(e) => {
+                          console.error('Image load error:', e);
+                          toast({
+                            title: "Image Load Error",
+                            description: "Failed to load the generated image. Please try again.",
+                            variant: "destructive",
+                          });
+                        }}
+                      />
+                    )}
                   </div>
                 )}
 

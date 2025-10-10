@@ -135,6 +135,21 @@
     @apply bg-white/60 dark:bg-gray-900/60 backdrop-blur-md;
   }
 
+  /* Enhanced glassmorphism for sidebar */
+  .glass-sidebar {
+    @apply bg-white/70 dark:bg-gray-900/70 backdrop-blur-2xl;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.1);
+    border-right: 1px solid rgba(255, 255, 255, 0.18);
+  }
+
+  /* Prevent text selection on nav items */
+  .select-none {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+  }
+
   /* Animation delays for staggered effects */
   .delay-75 {
     animation-delay: 75ms;
