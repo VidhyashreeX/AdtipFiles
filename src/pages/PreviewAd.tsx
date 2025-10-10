@@ -123,7 +123,7 @@ const PreviewAd = () => {
     <div className="min-h-screen bg-[#f5f5ff]">
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-6 py-8">
-        <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+        <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg overflow-hidden border border-gray-200 dark:border-gray-800">
           
           {/* Header */}
           <div className="bg-gradient-to-r from-[#00dcaa] to-[#00b894] p-6">
@@ -493,7 +493,7 @@ const PreviewAd = () => {
       </div>
 
       {/* Footer */}
-      <footer className="bg-white border-t border-gray-200 py-12 w-full">
+      <footer className="bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 py-12 w-full">
         <div className="max-w-full mx-auto px-6">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
             {/* Company Info */}

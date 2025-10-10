@@ -146,7 +146,6 @@ const baseNavItems = [
   { to: "/watch", label: "TipTube", icon: <Play className="h-5 w-5" /> },
   { to: "/short", label: "TipShorts", icon: <Video className="h-5 w-5" /> },
   { to: "/livestream", label: "LiveStream", icon: <Video className="h-5 w-5" /> },
-  { to: "/tipcall", label: "TipCall", icon: <Phone className="h-5 w-5" /> },
 ];
 
 // Maintain your state as-is
@@ -759,42 +758,54 @@ const [showLogoutDialog, setShowLogoutDialog] = React.useState(false);
 
   return (
     <>
-      {/* Mobile/Desktop Sidebar with glassmorphism */}
+      {/* Mobile: Sidebar in Navbar dropdown */}
       {isMobile && openMobile ? (
-        <div className="h-full overflow-y-auto bg-background/95 dark:bg-gray-900/95 backdrop-blur-xl px-4">{sidebarContent}</div>
-      ) : (
-        <aside
-          ref={sidebarRef}
-          className={cn(
-            "fixed left-0 top-16 h-[calc(100vh-4rem)] flex-col overflow-y-auto transition-all duration-500 ease-in-out z-50",
-            // Glassmorphism effect when expanded
-            !isCollapsed && !isMobile && "bg-white/70 dark:bg-gray-900/70 backdrop-blur-2xl shadow-2xl border-r border-gray-200/50 dark:border-gray-700/50",
-            isMobile ? (
-              openMobile ? "translate-x-0 w-64 px-4 py-4" : "-translate-x-full w-0 px-0"
-            ) : (
-              isCollapsed 
-                ? "-translate-x-full w-0 opacity-0" // Completely hide when collapsed
-                : "translate-x-0 w-64 px-4 py-4 opacity-100" // Show with padding when expanded
-            )
-          )}
-          style={{ 
-            scrollbarWidth: 'none', 
-            msOverflowStyle: 'none',
-            // Add smooth transitions for all properties
-            transitionProperty: 'transform, width, opacity, background-color',
-          }}
-          onMouseEnter={() => !isMobile && setIsHovered(true)}
-          onMouseLeave={() => !isMobile && setIsHovered(false)}
-        >
-          <style>{`
-            .adtip-sidebar::-webkit-scrollbar { display: none !important; }
-            .adtip-sidebar * { scrollbar-width: none !important; }
-          `}</style>
-          <div className="adtip-sidebar h-full">
-            {sidebarContent}
-          </div>
-        </aside>
-      )}
+        <div className="h-full overflow-y-auto">{sidebarContent}</div>
+      ) : !isMobile && !isCollapsed ? (
+        /* Desktop: Overlay sidebar with enhanced glassmorphism */
+        <>
+          {/* Backdrop overlay */}
+          <div 
+            className="fixed inset-0 top-16 bg-black/10 backdrop-blur-[2px] z-40 transition-opacity duration-300"
+            onClick={toggleSidebar}
+          />
+          
+          {/* Sidebar */}
+          <aside
+            ref={sidebarRef}
+            className="fixed left-0 top-16 h-[calc(100vh-4rem)] w-72 flex-col overflow-y-auto z-50 shadow-2xl transition-all duration-300 ease-out transform"
+            style={{ 
+              scrollbarWidth: 'none', 
+              msOverflowStyle: 'none',
+            }}
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+          >
+            {/* Glassmorphism background with theme support */}
+            <div 
+              className="absolute inset-0 bg-white/80 dark:bg-gray-900/90 backdrop-blur-xl"
+              style={{
+                backdropFilter: 'blur(24px) saturate(180%)',
+                WebkitBackdropFilter: 'blur(24px) saturate(180%)',
+              }}
+            />
+            
+            {/* Border with gradient */}
+            <div className="absolute inset-y-0 right-0 w-[1px] bg-gradient-to-b from-transparent via-gray-200 dark:via-gray-700 to-transparent opacity-60" />
+            
+            {/* Content */}
+            <div className="relative h-full px-5 py-6">
+              <style>{`
+                .adtip-sidebar::-webkit-scrollbar { display: none !important; }
+                .adtip-sidebar * { scrollbar-width: none !important; }
+              `}</style>
+              <div className="adtip-sidebar h-full">
+                {sidebarContent}
+              </div>
+            </div>
+          </aside>
+        </>
+      ) : null}
     </>
   );
 };

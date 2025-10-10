@@ -37,27 +37,32 @@ export const SidebarProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   }, [state, isMobile]);
 
-  const toggleSidebar = () => {
+  const toggleSidebar = React.useCallback(() => {
     if (isMobile) {
       setOpenMobile(prev => !prev);
     } else {
       setState(prev => (prev === 'expanded' ? 'collapsed' : 'expanded'));
       setOpen(prev => !prev);
     }
-  };
+  }, [isMobile]);
+
+  // Memoize context value to prevent unnecessary re-renders
+  const contextValue = React.useMemo(
+    () => ({
+      state,
+      open,
+      setOpen,
+      openMobile,
+      setOpenMobile,
+      isMobile,
+      toggleSidebar,
+      isCollapsed: state === 'collapsed',
+    }),
+    [state, open, openMobile, isMobile, toggleSidebar]
+  );
 
   return (
-    <SidebarContext.Provider      value={{
-        state,
-        open,
-        setOpen,
-        openMobile,
-        setOpenMobile,
-        isMobile,
-        toggleSidebar,
-        isCollapsed: state === 'collapsed',
-      }}
-    >
+    <SidebarContext.Provider value={contextValue}>
       {children}
     </SidebarContext.Provider>
   );

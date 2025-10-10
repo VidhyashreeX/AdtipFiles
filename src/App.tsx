@@ -10,6 +10,7 @@ import { ShoppingProvider } from "./contexts/ShoppingContext";
 import AppLayout from "./AppLayout";
 import { SidebarProvider } from './contexts/SidebarContext';
 import { ThemeProvider } from './contexts/ThemeContext';
+import ErrorBoundary from './components/ErrorBoundary';
 
 const queryClient = new QueryClient();
 
@@ -29,27 +30,29 @@ const App = () => {
   const isAuthPage = authPages.includes(location.pathname);
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <ThemeProvider>
-        <AuthProvider>
-          <UserProvider>
-            <ShoppingProvider>
-              <SidebarProvider>
-                <TooltipProvider>
-                  {isAuthPage ? (
-                    <Outlet />
-                  ) : (
-                    <AppLayout />
-                  )}
-                  <Toaster />
-                  <Sonner />
-                </TooltipProvider>
-              </SidebarProvider>
-            </ShoppingProvider>
-          </UserProvider>
-        </AuthProvider>
-      </ThemeProvider>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider>
+          <AuthProvider>
+            <UserProvider>
+              <ShoppingProvider>
+                <SidebarProvider>
+                  <TooltipProvider>
+                    {isAuthPage ? (
+                      <Outlet />
+                    ) : (
+                      <AppLayout />
+                    )}
+                    <Toaster />
+                    <Sonner />
+                  </TooltipProvider>
+                </SidebarProvider>
+              </ShoppingProvider>
+            </UserProvider>
+          </AuthProvider>
+        </ThemeProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 };
 

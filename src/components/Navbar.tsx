@@ -297,22 +297,37 @@ const Navbar = () => {
   };
 
   return (
-    <nav className="fixed top-0 z-50 w-full h-16 bg-background/80 dark:bg-gray-900/80 backdrop-blur-xl shadow-sm">
-      {/* Mobile Sidebar Overlay */}
-      <div className="md:hidden">
-        {openMobile && (
-          <div className="fixed inset-0 z-50">
-            <div className="fixed inset-0 bg-black/40 backdrop-blur-sm transition-opacity duration-300" onClick={() => setOpenMobile(false)} />
-            <div className="fixed inset-y-0 left-0 w-64 bg-background/95 dark:bg-gray-900/95 backdrop-blur-xl shadow-2xl z-50 transform transition-transform duration-300 ease-out">
-              <div className="h-full overflow-y-auto">
-                <AdTipSidebar />
-              </div>
+    <nav className="fixed top-0 z-50 w-full h-16 backdrop-blur-xl shadow-lg border-b border-gray-200/50 dark:border-gray-800/50">
+      {/* Enhanced glassmorphism background */}
+      <div className="absolute inset-0 bg-white/80 dark:bg-gray-900/90" style={{
+        backdropFilter: 'blur(20px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+      }} />
+      
+      {/* Mobile Dropdown Sidebar */}
+      {openMobile && (
+        <>
+          <div 
+            className="fixed top-16 left-0 right-0 z-40 max-h-[calc(100vh-4rem)] overflow-y-auto animate-in slide-in-from-top-2 duration-200 bg-white/85 dark:bg-gray-900/90"
+            style={{
+              backdropFilter: 'blur(24px) saturate(180%)',
+              WebkitBackdropFilter: 'blur(24px) saturate(180%)',
+            }}
+          >
+            <div className="px-4 py-4">
+              <AdTipSidebar />
             </div>
           </div>
-        )}
-      </div>
+          
+          {/* Overlay for closing sidebar */}
+          <div 
+            className="fixed inset-0 top-16 bg-black/20 z-30 backdrop-blur-sm animate-in fade-in duration-200"
+            onClick={() => setOpenMobile(false)}
+          />
+        </>
+      )}
 
-      <div className="max-w-screen-2xl mx-auto h-full flex items-center justify-between px-3 sm:px-4 md:px-6">
+      <div className="relative max-w-screen-2xl mx-auto h-full flex items-center justify-between px-3 sm:px-4 md:px-6">
         {/* Left: Hamburger and Logo */}
         <div className="flex items-center gap-2 sm:gap-4">
           <button

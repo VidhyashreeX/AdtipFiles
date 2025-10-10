@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Upload, Wand2, Video, FileImage, Camera, Zap, Loader2 } from 'lucide-react';
+import { ArrowLeft, Upload, Wand2, Video, FileImage, Camera, Zap, Loader2, Eye, Sparkles } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from '@/hooks/use-toast';
 import { apiSaveSecondPageAdModel } from '@/api';
@@ -62,6 +62,44 @@ const UploadCreative = () => {
       });
       // Throw with clear error message
       throw new Error(error.message || 'Failed to upload file. Please check your connection and try again.');
+    }
+  };
+
+  // Function to download AI-generated image and upload to Cloudflare
+  const uploadAIImageToCloudflare = async (imageUrl: string): Promise<string> => {
+    try {
+      console.log('Downloading AI-generated image from:', imageUrl);
+      
+      // Fetch the image from Gemini/AI service
+      const imageResponse = await fetch(imageUrl);
+      if (!imageResponse.ok) {
+        throw new Error('Failed to fetch AI-generated image');
+      }
+      
+      const blob = await imageResponse.blob();
+      
+      // Determine file type and create appropriate file
+      const contentType = blob.type || 'image/png';
+      const extension = contentType.split('/')[1] || 'png';
+      const fileName = `ai-generated-${Date.now()}.${extension}`;
+      
+      const file = new File([blob], fileName, { type: contentType });
+      console.log('Created file for upload:', fileName, 'Size:', (file.size / 1024).toFixed(2), 'KB');
+      
+      // Upload to Cloudflare
+      const cloudflareUrl = await uploadToCloudflare(file);
+      console.log('AI image uploaded to Cloudflare:', cloudflareUrl);
+      
+      return cloudflareUrl;
+    } catch (error: any) {
+      console.error('Failed to upload AI image to Cloudflare:', error);
+      // If upload fails, use the original URL as fallback
+      toast({
+        title: "Upload Warning",
+        description: "Using AI-generated image directly. Upload to CDN failed.",
+        variant: "default",
+      });
+      return imageUrl;
     }
   };
 
@@ -148,6 +186,23 @@ const UploadCreative = () => {
     setIsLoading(true);
     
     try {
+      let finalImageUrl = uploadedFileUrl;
+      
+      // If this is an AI-generated image (no uploadedFile but has uploadedFileUrl),
+      // upload it to Cloudflare first
+      if (!uploadedFile && uploadedFileUrl) {
+        toast({
+          title: "Uploading to CDN",
+          description: "Preparing your AI-generated creative...",
+        });
+        
+        console.log('AI-generated content detected, uploading to Cloudflare...');
+        finalImageUrl = await uploadAIImageToCloudflare(uploadedFileUrl);
+        
+        // Update the state with the new Cloudflare URL
+        setUploadedFileUrl(finalImageUrl);
+      }
+      
       // Get user data
       const userData = JSON.parse(localStorage.getItem('user') || '{}');
       
@@ -156,8 +211,8 @@ const UploadCreative = () => {
         adId: adId,
         adTitle: contentData.adTitle,
         adDescription: contentData.adDescription,
-        adVideoPath: uploadedFileUrl,
-        adImagePath: uploadedFileUrl, // Use same URL for both video and image
+        adVideoPath: finalImageUrl,
+        adImagePath: finalImageUrl, // Use same URL for both video and image
         cta: contentData.callToAction,
         createdby: userData.id || '1'
       };
@@ -178,7 +233,7 @@ const UploadCreative = () => {
             selectedModel,
             campaignData,
             uploadedFile,
-            uploadedFileUrl,
+            uploadedFileUrl: finalImageUrl, // Use the Cloudflare URL
             contentData,
             adId,
             apiData
@@ -208,6 +263,7 @@ const UploadCreative = () => {
   };
 
   const handleAIGeneratedContent = (result: { imageUrl: string; title: string; description: string; cta: string }) => {
+    console.log('AI Generated Content Received:', result);
     setUploadedFileUrl(result.imageUrl);
     setContentData({
       adTitle: result.title,
@@ -386,26 +442,85 @@ const UploadCreative = () => {
               </>
             ) : (
               <>
-                {/* File Upload Success State */}
-                {uploadedFile && (
+                {/* Creative Preview Section - Shows for both uploaded files and AI-generated content */}
+                {uploadedFileUrl && (
                   <div className="mb-8">
-                    <div className="bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-dashed border-green-300 rounded-xl p-6">
+                    {/* Success Banner */}
+                    <div className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border-2 border-dashed border-green-300 dark:border-green-700 rounded-xl p-6 mb-6">
                       <div className="flex items-center space-x-4">
-                        <div className="w-20 h-20 bg-green-100 rounded-lg flex items-center justify-center">
-                          <Upload className="w-8 h-8 text-green-600" />
+                        <div className="w-16 h-16 bg-green-100 dark:bg-green-900/40 rounded-lg flex items-center justify-center flex-shrink-0">
+                          {uploadedFile ? (
+                            <Upload className="w-8 h-8 text-green-600 dark:text-green-400" />
+                          ) : (
+                            <Wand2 className="w-8 h-8 text-purple-600 dark:text-purple-400" />
+                          )}
                         </div>
                         <div className="flex-1">
                           <div className="flex items-center space-x-2 mb-2">
                             <div className="w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
                               <span className="text-white text-xs">✓</span>
                             </div>
-                            <span className="text-green-700 font-semibold">File uploaded successfully!</span>
+                            <span className="text-green-700 dark:text-green-400 font-semibold">
+                              {uploadedFile ? 'File uploaded successfully!' : 'AI creative generated successfully!'}
+                            </span>
                           </div>
-                          <p className="text-gray-700 font-medium">{uploadedFile.name}</p>
-                          <p className="text-sm text-gray-500">
-                            {uploadedFile.type.startsWith('image/') ? 'Image file' : 'Video file'} • {(uploadedFile.size / 1024 / 1024).toFixed(2)} MB
-                          </p>
+                          {uploadedFile && (
+                            <>
+                              <p className="text-gray-700 dark:text-gray-300 font-medium">{uploadedFile.name}</p>
+                              <p className="text-sm text-gray-500 dark:text-gray-400">
+                                {uploadedFile.type.startsWith('image/') ? 'Image file' : 'Video file'} • {(uploadedFile.size / 1024 / 1024).toFixed(2)} MB
+                              </p>
+                            </>
+                          )}
                         </div>
+                      </div>
+                    </div>
+
+                    {/* Visual Preview */}
+                    <div className="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-xl p-6 border-2 border-purple-200 dark:border-purple-700">
+                      <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
+                        <Eye className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                        Creative Preview
+                      </h3>
+                      
+                      <div className="bg-white dark:bg-gray-800 rounded-lg overflow-hidden shadow-lg">
+                        {/* Image or Video Preview */}
+                        {uploadedFileUrl.includes('.mp4') || uploadedFileUrl.includes('video') ? (
+                          <video
+                            src={uploadedFileUrl}
+                            controls
+                            className="w-full h-auto max-h-[400px] object-contain bg-gray-900"
+                            onError={(e) => {
+                              console.error('Video load error:', e);
+                              toast({
+                                title: "Preview Error",
+                                description: "Unable to load video preview. The file will still be used.",
+                                variant: "destructive",
+                              });
+                            }}
+                          >
+                            Your browser does not support the video tag.
+                          </video>
+                        ) : (
+                          <img
+                            src={uploadedFileUrl}
+                            alt="Ad Creative Preview"
+                            className="w-full h-auto max-h-[400px] object-contain bg-gray-100 dark:bg-gray-800"
+                            onError={(e) => {
+                              console.error('Image load error:', e);
+                              toast({
+                                title: "Preview Error",
+                                description: "Unable to load image preview. The file will still be used.",
+                                variant: "destructive",
+                              });
+                            }}
+                          />
+                        )}
+                      </div>
+                      
+                      <div className="mt-4 flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                        <Sparkles className="w-4 h-4" />
+                        <span>Preview of your ad creative</span>
                       </div>
                     </div>
                   </div>
@@ -491,7 +606,7 @@ const UploadCreative = () => {
       </div>
 
       {/* Footer */}
-      <footer className="bg-white border-t border-gray-200 py-12 w-full">
+      <footer className="bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 py-12 w-full">
         <div className="max-w-full mx-auto px-6">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
             {/* Company Info */}

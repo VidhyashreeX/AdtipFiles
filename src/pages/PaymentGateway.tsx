@@ -44,7 +44,7 @@ const PaymentGateway = () => {
   if (paymentComplete) {
     return (
       <div className="min-h-screen bg-[#f5f5ff] flex items-center justify-center">
-        <div className="bg-white rounded-xl shadow-lg p-8 text-center max-w-md mx-auto">
+        <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-8 text-center max-w-md mx-auto border border-gray-200 dark:border-gray-800">
           <CheckCircle className="w-20 h-20 text-green-500 mx-auto mb-6" />
           <h2 className="text-2xl font-bold text-gray-900 mb-4">Payment Successful!</h2>
           <p className="text-gray-600 mb-6">Your advertising campaigns have been activated successfully.</p>

@@ -213,7 +213,7 @@ const ViewAllPosts = () => {
         </div>
 
         {/* Filters */}
-        <div className="bg-white rounded-lg p-6 mb-8">
+        <div className="bg-white dark:bg-gray-900 rounded-lg p-6 mb-8 border border-gray-200 dark:border-gray-800">
           <div className="flex flex-wrap gap-4 items-center">
             <div className="flex items-center space-x-2">
               <label className="text-sm font-medium text-gray-700">Category:</label>
@@ -251,7 +251,7 @@ const ViewAllPosts = () => {
         {/* Posts List */}
         <div className="space-y-6">
           {posts.map((post) => (
-            <div key={post.id} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+            <div key={post.id} className="bg-white dark:bg-gray-900 rounded-lg shadow-sm border border-gray-200 dark:border-gray-800 p-6 hover:shadow-md transition-shadow">
               <div className="flex items-start justify-between mb-4">
                 <div className="flex-1">
                   <div className="flex items-center space-x-3 mb-2">
@@ -355,7 +355,7 @@ const ViewAllPosts = () => {
       </div>
 
       {/* Footer */}
-      <footer className="bg-white border-t border-gray-200 py-12 mt-12">
+      <footer className="bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 py-12 mt-12">
         <div className="max-w-7xl mx-auto px-6">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
             {/* Company Info */}

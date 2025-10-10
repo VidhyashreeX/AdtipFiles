@@ -69,8 +69,8 @@ const ViewAllReviews: React.FC = () => {
           </button>
         </div>
 
-        <div className="bg-white rounded-lg p-8 mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-6">Customer Reviews</h1>
+        <div className="bg-white dark:bg-gray-900 rounded-lg p-8 mb-8 border border-gray-200 dark:border-gray-800">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-6">Customer Reviews</h1>
           
           {/* Loading State */}
           {loading ? (
@@ -151,7 +151,7 @@ const ViewAllReviews: React.FC = () => {
         {!loading && reviews.length > 0 && (
         <div className="space-y-6">
           {filteredReviews.map((review) => (
-            <div key={review.id} className="bg-white rounded-lg p-6 shadow-sm">
+            <div key={review.id} className="bg-white dark:bg-gray-900 rounded-lg p-6 shadow-sm border border-gray-200 dark:border-gray-800">
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center space-x-4">
                   <div className="w-12 h-12 bg-[#00dcaa] rounded-full flex items-center justify-center">

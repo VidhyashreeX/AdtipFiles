@@ -81,7 +81,7 @@ const Settings = () => {
   return (
     <div className="pb-20 md:pb-0">
       {/* Header */}
-      <div className="bg-white p-4 flex items-center justify-between border-b">
+      <div className="bg-white dark:bg-gray-900 p-4 flex items-center justify-between border-b border-gray-200 dark:border-gray-800">
         <div className="flex items-center">
           <button onClick={() => navigate(-1)}>
             <ArrowLeft className="h-6 w-6" />
@@ -93,10 +93,10 @@ const Settings = () => {
       <div className="max-w-screen-md mx-auto p-4 space-y-6">
         {/* Account Settings */}
         <div>
-          <h3 className="text-sm font-medium text-gray-500 mb-2">ACCOUNT</h3>
-          <div className="bg-white rounded-md overflow-hidden">
+          <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">ACCOUNT</h3>
+          <div className="bg-white dark:bg-gray-900 rounded-md overflow-hidden border border-gray-200 dark:border-gray-800">
             <button 
-              className="w-full flex items-center justify-between p-4 border-b"
+              className="w-full flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-800 text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-800"
               onClick={() => navigate("/edit-profile")}
             >
               <div className="flex items-center">
@@ -132,9 +132,9 @@ const Settings = () => {
         
         {/* App Settings */}
         <div>
-          <h3 className="text-sm font-medium text-gray-500 mb-2">APP SETTINGS</h3>
-          <div className="bg-white rounded-md overflow-hidden">
-            <div className="flex items-center justify-between p-4 border-b">
+          <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">APP SETTINGS</h3>
+          <div className="bg-white dark:bg-gray-900 rounded-md overflow-hidden border border-gray-200 dark:border-gray-800">
+            <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-800 text-gray-900 dark:text-gray-100">
               <div className="flex items-center">
                 <Shield className="h-5 w-5 text-adtip-teal mr-3" />
                 <span>Privacy</span>
@@ -166,10 +166,10 @@ const Settings = () => {
         
         {/* Contact & Support */}
         <div>
-          <h3 className="text-sm font-medium text-gray-500 mb-2">CONTACT & SUPPORT</h3>
-          <div className="bg-white rounded-md overflow-hidden">
+          <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">CONTACT & SUPPORT</h3>
+          <div className="bg-white dark:bg-gray-900 rounded-md overflow-hidden border border-gray-200 dark:border-gray-800">
             <button 
-              className="w-full flex items-center justify-between p-4 border-b"
+              className="w-full flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-800 text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-800"
               onClick={() => navigate("/contact-us")}
             >
               <div className="flex items-center">
