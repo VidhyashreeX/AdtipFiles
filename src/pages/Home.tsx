@@ -706,7 +706,7 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
           style={{ textDecoration: 'none' }}
         >
           <div
-            className="rounded-l-2xl pl-5 pr-4 py-3 flex items-center bg-gradient-to-r from-[#e0e7ef] via-[#d1f1e6] to-[#f7e7fa] shadow-lg border border-border hover:from-[#d1e7f7] hover:to-[#e7f7e7] transition-colors duration-300"
+            className="rounded-l-2xl pl-5 pr-4 py-3 flex items-center bg-gradient-to-r from-[#e0e7ef] via-[#d1f1e6] to-[#f7e7fa] dark:from-gray-800 dark:via-gray-700 dark:to-gray-800 shadow-lg border border-border hover:from-[#d1e7f7] hover:to-[#e7f7e7] dark:hover:from-gray-700 dark:hover:to-gray-600 transition-colors duration-300"
             style={{ minWidth: 120 }}
           >
             <span className="font-semibold text-foreground text-base tracking-wide drop-shadow-sm mr-2">Install now</span>
@@ -717,7 +717,7 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
             <img
               src="/playstore.png"
               alt="Google Play Store"
-              className="w-8 h-8 object-contain mr-1"
+              className="w-8 h-8 object-contain mr-1 dark:brightness-90"
               style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.08))' }}
             />
           </div>
@@ -735,7 +735,7 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
         <img
           src="/playstore.png"
           alt="Google Play Store"
-          className="w-14 h-14 object-contain drop-shadow-lg rounded-2xl border border-border bg-card p-2"
+          className="w-14 h-14 object-contain drop-shadow-lg rounded-2xl border border-border bg-card p-2 dark:brightness-90"
         />
       </a>
 {selectedPost && (

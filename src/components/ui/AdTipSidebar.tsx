@@ -251,12 +251,12 @@ const AdTipSidebar = () => {
     checkUserCompanies();
   }, [user?.id]);
 
-  // Close mobile sidebar on route change
+  // Close mobile sidebar on route change only
   React.useEffect(() => {
     if (isMobile && openMobile) {
       setOpenMobile(false);
     }
-  }, [location.pathname, isMobile, openMobile, setOpenMobile]);
+  }, [location.pathname]); // Only depend on pathname changes
 
   // Prevent body scroll when mobile sidebar is open
   React.useEffect(() => {

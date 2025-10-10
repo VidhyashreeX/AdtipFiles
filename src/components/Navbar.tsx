@@ -319,9 +319,9 @@ const Navbar = () => {
           </Link>
         </div>
 
-        {/* Center: Search Bar */}
-        <div className="flex-1 max-w-3xl mx-2 sm:mx-4">
-          <form onSubmit={handleSearchSubmit} className="relative">
+        {/* Center: Search Bar - Hidden on mobile */}
+        <div className="hidden md:flex flex-1 max-w-3xl mx-2 sm:mx-4">
+          <form onSubmit={handleSearchSubmit} className="relative w-full">
             <input
               type="text"
               placeholder="Search users or content..."
