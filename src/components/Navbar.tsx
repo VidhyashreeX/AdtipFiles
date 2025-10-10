@@ -12,12 +12,11 @@ import {
   Home,
   Video,
   Plus,
-  PhoneCall,
   ToggleLeft,
   ToggleRight,
   Menu,
   CirclePlay,
-  PhoneIcon,
+  Radio,
   AlertTriangle,
   X,
 } from "lucide-react";
@@ -432,8 +431,8 @@ const Navbar = () => {
       </div>
 
       {/* Mobile Bottom Navigation */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-background/80 dark:bg-gray-900/80 backdrop-blur-xl shadow-lg z-20">
-        <div className="flex justify-around items-center px-2 py-2 sm:py-3">
+      <div className="md:hidden fixed inset-x-0 bottom-0 top-auto bg-background/80 dark:bg-gray-900/80 backdrop-blur-xl shadow-lg border-t border-border/60 z-40">
+        <div className="flex justify-around items-center px-2 py-2 sm:py-3 pb-[calc(env(safe-area-inset-bottom)+0.25rem)]">
           <Link
             to="/home"
             className={`flex flex-col items-center ${isActive("/home") ? "text-adtip-teal" : "text-muted-foreground"}`}
@@ -443,7 +442,7 @@ const Navbar = () => {
           </Link>
           <Link
            to="/watch"
-            className={`flex flex-col items-center ${isActive("/tiptube") ? "text-adtip-teal" : "text-muted-foreground"}`}
+            className={`flex flex-col items-center ${isActive("/watch") ? "text-adtip-teal" : "text-muted-foreground"}`}
           >
             <Video className="h-5 w-5 sm:h-6 sm:w-6" />
             <span className="text-[10px] sm:text-xs mt-1">TipTube</span>
@@ -458,17 +457,17 @@ const Navbar = () => {
           </Link>
           <Link
             to="/short"
-            className={`flex flex-col items-center ${isActive("/tipshort") ? "text-adtip-teal" : "text-muted-foreground"}`}
+            className={`flex flex-col items-center ${isActive("/short") ? "text-adtip-teal" : "text-muted-foreground"}`}
           >
             <CirclePlay className="h-5 w-5 sm:h-6 sm:w-6" />
             <span className="text-[10px] sm:text-xs mt-1">TipShort</span>
           </Link>
           <Link
-            to="/tipcall"
-            className={`flex flex-col items-center ${isActive("/tipcall") ? "text-adtip-teal" : "text-muted-foreground"}`}
+            to="/livestream"
+            className={`flex flex-col items-center ${isActive("/livestream") ? "text-adtip-teal" : "text-muted-foreground"}`}
           >
-            <PhoneIcon className="h-5 w-5 sm:h-6 sm:w-6" />
-            <span className="text-[10px] sm:text-xs mt-1">TipCall</span>
+            <Radio className="h-5 w-5 sm:h-6 sm:w-6" />
+            <span className="text-[10px] sm:text-xs mt-1">LiveStream</span>
           </Link>
         </div>
       </div>
