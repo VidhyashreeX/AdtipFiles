@@ -444,7 +444,7 @@ const AdOrders = () => {
               {searchTerm ? 'Try adjusting your search criteria' : 'Create your first advertising campaign to see orders here'}
             </p>
             <button
-              onClick={() => navigate('/seller/ad-models')}
+              onClick={() => navigate('/post-ads')}
               className="bg-[#00dcaa] text-white px-6 py-3 rounded-lg font-semibold hover:bg-[#00b894] transition-colors"
             >
               Create New Campaign

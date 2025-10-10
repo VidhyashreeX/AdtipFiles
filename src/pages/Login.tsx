@@ -62,11 +62,11 @@ const Login = () => {
   };
 
   return (
-    <div className="flex flex-col min-h-screen p-6 bg-white dark:bg-gray-900">
+    <div className="flex flex-col min-h-screen p-6 bg-background">
       <div className="mb-8">
         <button
           onClick={() => navigate("/onboarding")}
-          className="text-gray-500 dark:text-gray-400 flex items-center hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+          className="text-muted-foreground flex items-center hover:text-foreground transition-colors"
         >
           <ArrowLeft size={20} className="mr-1" />
           <span>Back</span>
@@ -78,22 +78,22 @@ const Login = () => {
           <img src="/logo.png" alt="AdTip Logo" className="h-16 w-16" />
         </div>
 
-        <h1 className="text-2xl font-bold mb-2 text-center text-black">
+        <h1 className="text-2xl font-bold mb-2 text-center text-foreground">
           Welcome to AdTip
         </h1>
 
-        <p className="text-center text-gray-600 mb-8">
+        <p className="text-center text-muted-foreground mb-8">
           Choose your preferred login method
         </p>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-1 mb-8">
+          <TabsList className="grid w-full grid-cols-1 mb-8 bg-muted">
             <TabsTrigger value="phone">Phone Login</TabsTrigger>
           </TabsList>
 
           <TabsContent value="phone">
             <form onSubmit={handlePhoneSubmit} className="space-y-6">
-              <div className="border border-gray-300 rounded-md overflow-hidden focus-within:border-adtip-teal focus-within:ring-1 focus-within:ring-adtip-teal">
+              <div className="border border-border rounded-md overflow-hidden focus-within:border-adtip-teal focus-within:ring-1 focus-within:ring-adtip-teal bg-background">
                 <Input
                   type="tel"
                   placeholder="Phone number"
@@ -114,7 +114,7 @@ const Login = () => {
           </TabsContent>
         </Tabs>
 
-        <div className="mt-8 text-center text-sm text-gray-600">
+        <div className="mt-8 text-center text-sm text-muted-foreground">
           <p>By continuing, you agree to our</p>
           <p>
             <a href="/terms" className="text-adtip-teal hover:text-adtip-teal/90 transition-colors">

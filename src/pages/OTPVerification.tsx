@@ -157,28 +157,28 @@ const OTPVerification = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-white to-gray-50 dark:from-gray-900 dark:to-gray-800">
+    <div className="min-h-screen bg-gradient-to-b from-background to-muted/30">
       <div className="container max-w-md mx-auto px-4 py-8">
         <button
           onClick={() => navigate("/login")}
-          className="mb-8 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors inline-flex items-center"
+          className="mb-8 text-muted-foreground hover:text-foreground transition-colors inline-flex items-center"
         >
           <ArrowLeft size={20} className="mr-2" />
           Back to Login
         </button>
 
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-8">
+        <div className="bg-card border border-border rounded-2xl shadow-lg p-8">
           <div className="flex justify-center mb-6">
             <img src="/logo.png" alt="AdTip Logo" className="h-16 w-16" />
           </div>
 
-          <h1 className="text-2xl font-bold text-center text-gray-900 mb-2">
+          <h1 className="text-2xl font-bold text-center text-foreground mb-2">
             Verify Your {verificationType === "phone" ? "Phone" : "Email"}
           </h1>
           
-          <p className="text-center text-gray-600 mb-8">
+          <p className="text-center text-muted-foreground mb-8">
             Enter the 6-digit code sent to{" "}
-            <span className="font-medium text-gray-900">
+            <span className="font-medium text-foreground">
               {verificationType === "phone" ? mobileNumber : email}
             </span>
           </p>
@@ -241,7 +241,7 @@ const OTPVerification = () => {
           </form>
         </div>
 
-        <div className="mt-8 text-center text-sm text-gray-500">
+        <div className="mt-8 text-center text-sm text-muted-foreground">
           <p>By continuing, you agree to our</p>
           <p className="mt-1">
             <a href="/terms" className="text-adtip-teal hover:underline">Terms of Service</a>

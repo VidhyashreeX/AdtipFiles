@@ -346,21 +346,21 @@ const Profile = () => {
   const isNewUser = !user?.name;
 
   return (
-    <div className="pb-20 md:pb-0 bg-white dark:bg-gray-900 min-h-screen">
+    <div className="pb-20 md:pb-0 bg-background min-h-screen">
       {/* Header */}
-      <div className="bg-white dark:bg-gray-800 p-4 flex items-center justify-between border-b dark:border-gray-700">
+      <div className="bg-card border-b border-border p-4 flex items-center justify-between">
         <div className="flex items-center">
           <button onClick={() => navigate(-1)}>
-            <ArrowLeft className="h-6 w-6" />
+            <ArrowLeft className="h-6 w-6 text-foreground" />
           </button>
-          <h1 className="text-lg font-semibold ml-4">Profile</h1>
+          <h1 className="text-lg font-semibold ml-4 text-foreground">Profile</h1>
         </div>
         <div className="flex items-center space-x-2">
           <button onClick={() => setShowSettingsDialog(true)}>
-            <Settings className="h-6 w-6" />
+            <Settings className="h-6 w-6 text-foreground" />
           </button>
           <button onClick={() => setShowLogoutDialog(true)}>
-            <LogOut className="h-6 w-6" />
+            <LogOut className="h-6 w-6 text-foreground" />
           </button>
         </div>
       </div>
@@ -368,7 +368,7 @@ const Profile = () => {
       {/* Profile Information */}
       <div className="p-6">
         <div className="flex items-center">
-                     <div className="w-20 h-20 rounded-full bg-gray-200 overflow-hidden">
+                     <div className="w-20 h-20 rounded-full bg-muted overflow-hidden">
              {user?.profile_image ? (
                <img
                  src={user.profile_image}
@@ -376,16 +376,16 @@ const Profile = () => {
                  className="w-full h-full object-cover"
                />
              ) : (
-               <div className="w-full h-full flex items-center justify-center bg-gray-300 text-gray-500 text-2xl font-bold">
+               <div className="w-full h-full flex items-center justify-center bg-muted text-muted-foreground text-2xl font-bold">
                  {user?.name ? user.name[0].toUpperCase() : "U"}
                </div>
              )}
            </div>
 
           <div className="ml-4 flex-1">
-            <h2 className="text-xl font-bold">{user?.name || "User"}</h2>
-                         <p className="text-gray-500">@{user?.name || "user"}</p>
-            <p className="text-sm mt-1">{user?.bio || "No bio yet"}</p>
+            <h2 className="text-xl font-bold text-foreground">{user?.name || "User"}</h2>
+                         <p className="text-muted-foreground">@{user?.name || "user"}</p>
+            <p className="text-sm mt-1 text-muted-foreground">{user?.bio || "No bio yet"}</p>
           </div>
         </div>
 

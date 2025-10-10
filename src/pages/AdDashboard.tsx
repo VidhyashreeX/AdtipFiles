@@ -164,7 +164,7 @@ const AdDashboard: React.FC = () => {
                 View All Campaigns
               </button>
               <button
-                onClick={() => navigate('/seller/ad-model')}
+                onClick={() => navigate('/post-ads')}
                 className="px-6 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-700 hover:to-blue-700 transition-all shadow-lg hover:shadow-xl flex items-center gap-2"
               >
                 <Plus className="w-5 h-5" />
@@ -264,7 +264,7 @@ const AdDashboard: React.FC = () => {
                   Create your first advertising campaign to start reaching your audience
                 </p>
                 <button
-                  onClick={() => navigate('/seller/ad-model')}
+                  onClick={() => navigate('/post-ads')}
                   className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors inline-flex items-center gap-2"
                 >
                   <Plus className="w-5 h-5" />
@@ -339,7 +339,7 @@ const AdDashboard: React.FC = () => {
         {/* Quick Actions */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <button
-            onClick={() => navigate('/seller/ad-model')}
+            onClick={() => navigate('/post-ads')}
             className="p-6 bg-gradient-to-br from-purple-500 to-purple-600 text-white rounded-xl shadow-lg hover:shadow-xl transition-all text-left"
           >
             <Plus className="w-8 h-8 mb-3" />

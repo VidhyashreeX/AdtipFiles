@@ -187,12 +187,12 @@ const PostAds: React.FC = () => {
   };
 
   return (
-    <div className="container mx-auto px-4 py-6">
-      <h1 className="text-2xl font-bold mb-2">Create Ad Campaign</h1>
+    <div className="container mx-auto px-4 py-6 bg-background">
+      <h1 className="text-2xl font-bold mb-2 text-foreground">Create Ad Campaign</h1>
       <p className="text-muted-foreground mb-8">Reach potential customers and promote your products or services.</p>
 
       <Tabs defaultValue="create" className="w-full">
-        <TabsList className="grid w-full grid-cols-3 mb-6">
+        <TabsList className="grid w-full grid-cols-3 mb-6 bg-muted">
           <TabsTrigger value="create">Create Ad</TabsTrigger>
           <TabsTrigger value="analytics">Campaign Analytics</TabsTrigger>
           <TabsTrigger value="history">Ad History</TabsTrigger>
@@ -201,9 +201,9 @@ const PostAds: React.FC = () => {
         <TabsContent value="create">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2">
-              <Card>
+              <Card className="bg-card border-border">
                 <CardHeader>
-                  <CardTitle>Ad Details</CardTitle>
+                  <CardTitle className="text-foreground">Ad Details</CardTitle>
                   <CardDescription>
                     Provide information about your ad campaign
                   </CardDescription>
@@ -562,12 +562,12 @@ const PostAds: React.FC = () => {
             
             {/* Ad Preview & Tips */}
             <div className="space-y-6">
-              <Card>
+              <Card className="bg-card border-border">
                 <CardHeader>
-                  <CardTitle>Ad Preview</CardTitle>
+                  <CardTitle className="text-foreground">Ad Preview</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="border rounded-lg p-4 text-center">
+                  <div className="border border-border rounded-lg p-4 text-center bg-background">
                     {adImagePreview ? (
                       <img
                         src={adImagePreview}
@@ -600,9 +600,9 @@ const PostAds: React.FC = () => {
                 </CardContent>
               </Card>
               
-              <Card>
+              <Card className="bg-card border-border">
                 <CardHeader>
-                  <CardTitle>Ad Tips</CardTitle>
+                  <CardTitle className="text-foreground">Ad Tips</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <ul className="space-y-2 text-sm">
@@ -644,9 +644,9 @@ const PostAds: React.FC = () => {
                 </CardFooter>
               </Card>
               
-              <Card>
+              <Card className="bg-card border-border">
                 <CardHeader>
-                  <CardTitle>Estimated Reach</CardTitle>
+                  <CardTitle className="text-foreground">Estimated Reach</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="flex items-center justify-between mb-2">
@@ -668,9 +668,9 @@ const PostAds: React.FC = () => {
         </TabsContent>
         
         <TabsContent value="analytics">
-          <Card>
+          <Card className="bg-card border-border">
             <CardHeader>
-              <CardTitle>Campaign Analytics</CardTitle>
+              <CardTitle className="text-foreground">Campaign Analytics</CardTitle>
               <CardDescription>
                 View the performance of your ad campaigns
               </CardDescription>
@@ -689,9 +689,9 @@ const PostAds: React.FC = () => {
         </TabsContent>
         
         <TabsContent value="history">
-          <Card>
+          <Card className="bg-card border-border">
             <CardHeader>
-              <CardTitle>Ad Campaign History</CardTitle>
+              <CardTitle className="text-foreground">Ad Campaign History</CardTitle>
               <CardDescription>
                 View and manage your previous ad campaigns
               </CardDescription>

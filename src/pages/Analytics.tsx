@@ -165,44 +165,44 @@ const Analytics = () => {
     icon: any;
     color: string;
   }) => (
-    <Card className="overflow-hidden">
+    <Card className="overflow-hidden bg-card border-border">
       <CardContent className="p-4">
         <div className="flex items-center justify-between mb-2">
-          <div className={`p-2 rounded-lg bg-${color}-100`}>
-            <Icon className={`w-5 h-5 text-${color}-600`} />
+          <div className={`p-2 rounded-lg bg-${color}-100 dark:bg-${color}-900/30`}>
+            <Icon className={`w-5 h-5 text-${color}-600 dark:text-${color}-400`} />
           </div>
         </div>
-        <div className="text-2xl font-bold text-gray-900 mb-1">
+        <div className="text-2xl font-bold text-foreground mb-1">
           {value}
         </div>
-        <div className="text-gray-600 text-sm">{title}</div>
+        <div className="text-muted-foreground text-sm">{title}</div>
       </CardContent>
     </Card>
   );
 
   if (!hasContentPremium()) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-background">
         {/* Header */}
-        <div className="bg-white p-4 flex items-center border-b">
+        <div className="bg-card border-b border-border p-4 flex items-center">
           <button onClick={() => navigate(-1)} className="mr-4">
-            <ArrowLeft className="w-6 h-6" />
+            <ArrowLeft className="w-6 h-6 text-foreground" />
           </button>
-          <h1 className="text-lg font-semibold">Analytics</h1>
+          <h1 className="text-lg font-semibold text-foreground">Analytics</h1>
         </div>
 
         {/* Premium Required Message */}
         <div className="flex flex-col items-center justify-center py-20 px-6 text-center">
-          <div className="p-4 bg-blue-100 rounded-full mb-6">
-            <BarChart3 className="h-12 w-12 text-blue-600" />
+          <div className="p-4 bg-blue-100 dark:bg-blue-900/30 rounded-full mb-6">
+            <BarChart3 className="h-12 w-12 text-blue-600 dark:text-blue-400" />
           </div>
-          <h3 className="text-2xl font-semibold text-blue-900 mb-4">Premium Required</h3>
-          <p className="text-blue-800 mb-8 max-w-md leading-relaxed">
+          <h3 className="text-2xl font-semibold text-foreground mb-4">Premium Required</h3>
+          <p className="text-muted-foreground mb-8 max-w-md leading-relaxed">
             Channel analytics are only available for premium users. Upgrade to premium to access detailed insights about your content performance and earnings.
           </p>
-          <div className="bg-gradient-to-r from-blue-50 to-teal-50 border border-blue-200 rounded-xl p-6 mb-8 max-w-md">
-            <h4 className="font-semibold text-blue-900 mb-2">Premium Benefits:</h4>
-            <ul className="text-sm text-blue-700 space-y-1">
+          <div className="bg-card border border-border rounded-xl p-6 mb-8 max-w-md">
+            <h4 className="font-semibold text-foreground mb-2">Premium Benefits:</h4>
+            <ul className="text-sm text-muted-foreground space-y-1">
               <li>• Detailed earnings analytics</li>
               <li>• View and engagement metrics</li>
               <li>• Withdrawal tracking</li>
@@ -231,29 +231,29 @@ const Analytics = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <div className="bg-white p-4 flex items-center border-b">
+      <div className="min-h-screen bg-background">
+        <div className="bg-card border-b border-border p-4 flex items-center">
           <button onClick={() => navigate(-1)} className="mr-4">
-            <ArrowLeft className="w-6 h-6" />
+            <ArrowLeft className="w-6 h-6 text-foreground" />
           </button>
-          <h1 className="text-lg font-semibold">Analytics</h1>
+          <h1 className="text-lg font-semibold text-foreground">Analytics</h1>
         </div>
         <div className="flex items-center justify-center py-20">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600"></div>
-          <span className="ml-4 text-gray-600">Loading analytics...</span>
+          <span className="ml-4 text-muted-foreground">Loading analytics...</span>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background">
       {/* Header */}
-      <div className="bg-white p-4 flex items-center border-b">
+      <div className="bg-card border-b border-border p-4 flex items-center">
         <button onClick={() => navigate(-1)} className="mr-4">
-          <ArrowLeft className="w-6 h-6" />
+          <ArrowLeft className="w-6 h-6 text-foreground" />
         </button>
-        <h1 className="text-lg font-semibold">Analytics</h1>
+        <h1 className="text-lg font-semibold text-foreground">Analytics</h1>
       </div>
 
       <div className="p-4 space-y-6">
@@ -265,7 +265,7 @@ const Analytics = () => {
               className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors ${
                 selectedPeriod === period.id
                   ? 'bg-teal-500 text-white'
-                  : 'bg-white text-gray-700 border border-gray-200'
+                  : 'bg-card text-foreground border border-border'
               }`}
               onClick={() => setSelectedPeriod(period.id)}
             >
@@ -303,16 +303,16 @@ const Analytics = () => {
         </div>
 
         {/* Earnings Summary */}
-        <Card>
+        <Card className="bg-card border-border">
           <CardContent className="p-4">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Earnings Summary</h3>
+            <h3 className="text-lg font-semibold text-foreground mb-4">Earnings Summary</h3>
             <div className="flex items-center mb-4">
               <TrendingUp className="w-6 h-6 text-green-500 mr-3" />
               <div>
-                <div className="font-semibold text-gray-900">
+                <div className="font-semibold text-foreground">
                   Paid Video Earnings: ₹{parseFloat(analytics?.paid_video_earned || '0').toFixed(2)}
                 </div>
-                <div className="text-sm text-gray-600">
+                <div className="text-sm text-muted-foreground">
                   Withdrawn: ₹{parseFloat(analytics?.withdrawn || '0').toFixed(2)}
                 </div>
               </div>
@@ -321,19 +321,19 @@ const Analytics = () => {
         </Card>
 
         {/* Views Breakdown */}
-        <Card>
+        <Card className="bg-card border-border">
           <CardContent className="p-4">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Views Breakdown</h3>
+            <h3 className="text-lg font-semibold text-foreground mb-4">Views Breakdown</h3>
             <div className="space-y-3">
               <div className="flex justify-between items-center">
-                <span className="text-gray-600">Paid Views</span>
-                <span className="font-semibold text-gray-900">
+                <span className="text-muted-foreground">Paid Views</span>
+                <span className="font-semibold text-foreground">
                   {formatNumber(analytics?.total_paid_views || 0)}
                 </span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-gray-600">Normal Views</span>
-                <span className="font-semibold text-gray-900">
+                <span className="text-muted-foreground">Normal Views</span>
+                <span className="font-semibold text-foreground">
                   {formatNumber(analytics?.total_normal_views || 0)}
                 </span>
               </div>

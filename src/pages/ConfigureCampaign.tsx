@@ -274,7 +274,7 @@ const ConfigureCampaign = () => {
               <div className="flex items-center space-x-4">
                 <button 
                   className="p-2 hover:bg-white/20 rounded-lg transition-colors" 
-                  onClick={() => navigate('/seller/ad-model')}
+                  onClick={() => navigate('/post-ads')}
                   title="Back to Ad Models"
                   aria-label="Back to Ad Models"
                 >

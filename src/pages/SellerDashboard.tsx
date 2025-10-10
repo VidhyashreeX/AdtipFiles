@@ -426,12 +426,12 @@ const SellerDashboard = () => {
           <div className="flex flex-col md:flex-row items-center md:items-end space-y-6 md:space-y-0 md:space-x-8 -mt-16 pb-8">
             {/* Company Information */}
             <div className="text-center md:text-left flex-1">
-              <div className="bg-white rounded-xl p-6 shadow-lg">
+              <div className="bg-card border border-border rounded-xl p-6 shadow-lg">
                 {/* Company Header with Logo beside title */}
                 <div className="flex items-center space-x-4 mb-4">
                   {/* Company Logo */}
                   <div className="relative flex-shrink-0">
-                    <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center shadow-lg border-4 border-white">
+                    <div className="w-20 h-20 bg-card rounded-full flex items-center justify-center shadow-lg border-4 border-border">
                       {sellerInfo.logo ? (
                         <img 
                           src={typeof sellerInfo.logo === 'string' ? sellerInfo.logo : URL.createObjectURL(sellerInfo.logo)}
@@ -523,13 +523,13 @@ const SellerDashboard = () => {
                   </button>
                   <button 
                     onClick={() => navigate('/seller/register')}
-                    className="bg-white border-2 border-blue-500 text-blue-500 hover:bg-blue-500 hover:text-white px-6 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 shadow-sm hover:shadow-md"
+                    className="bg-card border-2 border-blue-500 text-blue-500 hover:bg-blue-500 hover:text-white px-6 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 shadow-sm hover:shadow-md"
                   >
                     + New Company
                   </button>
                   <button 
                     onClick={() => navigate('/seller/ad-orders')}
-                    className="bg-white border-2 border-[#00dcaa] text-[#00dcaa] hover:bg-[#00dcaa] hover:text-white px-6 py-2.5 rounded-lg text-sm font-medium transition-all duration-200"
+                    className="bg-card border-2 border-[#00dcaa] text-[#00dcaa] hover:bg-[#00dcaa] hover:text-white px-6 py-2.5 rounded-lg text-sm font-medium transition-all duration-200"
                   >
                     Analytics
                   </button>
@@ -545,9 +545,9 @@ const SellerDashboard = () => {
           {/* Left Column */}
           <div className="lg:col-span-2 space-y-8">
             {/* Top Products */}
-            <div className="bg-white rounded-lg p-6">
+            <div className="bg-card border border-border rounded-lg p-6">
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold text-gray-900">Top products</h2>
+                <h2 className="text-2xl font-bold text-foreground">Top products</h2>
                 <button 
                   className="bg-[#00dcaa] text-white px-6 py-2.5 rounded-lg text-sm font-semibold hover:bg-[#00c59a] transition-colors"
                   onClick={() => navigate('/seller/add-product')}
@@ -559,7 +559,7 @@ const SellerDashboard = () => {
                 {products.length > 0 ? products.map((rawProduct) => {
                   const product = normalizeProduct(rawProduct);
                   return (
-                    <div key={product.id} className="bg-white rounded-xl shadow-lg p-4 min-w-[240px] max-w-[240px] flex-shrink-0 border border-gray-100">
+                    <div key={product.id} className="bg-card border border-border rounded-xl shadow-lg p-4 min-w-[240px] max-w-[240px] flex-shrink-0">
                       <div className="w-full h-28 bg-gray-50 rounded-lg mb-3 flex items-center justify-center overflow-hidden">
                         {product.primaryImage ? (
                           <img 
@@ -607,7 +607,7 @@ const SellerDashboard = () => {
                       <div className="space-y-2">
                         <button 
                           className="w-full bg-[#00dcaa] text-white py-2 px-3 rounded-lg text-sm font-semibold hover:bg-[#00c59a] transition-colors"
-                          onClick={() => navigate('/seller/ad-model')}
+                          onClick={() => navigate('/post-ads')}
                         >
                           Promote ⭐
                         </button>
@@ -651,9 +651,9 @@ const SellerDashboard = () => {
             </div>
 
             {/* Posts */}
-            <div className="bg-white rounded-lg p-6">
+            <div className="bg-card border border-border rounded-lg p-6">
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold text-gray-900">Posts</h2>
+                <h2 className="text-2xl font-bold text-foreground">Posts</h2>
                 <button 
                   className="bg-[#00dcaa] text-white px-6 py-2.5 rounded-lg text-sm font-semibold hover:bg-[#00c59a] transition-colors"
                   onClick={() => navigate('/seller/add-post')}
@@ -663,7 +663,7 @@ const SellerDashboard = () => {
               </div>
               <div className="flex space-x-6 overflow-x-auto pb-4 scrollbar-hide">
                 {posts.length > 0 ? posts.map((post) => (
-                  <div key={post.id} className="bg-white rounded-xl shadow-lg p-4 min-w-[240px] max-w-[240px] flex-shrink-0 border border-gray-100">
+                  <div key={post.id} className="bg-card border border-border rounded-xl shadow-lg p-4 min-w-[240px] max-w-[240px] flex-shrink-0">
                     <div className="flex items-start space-x-2 mb-3">
                       <div className="w-6 h-6 bg-[#00dcaa] rounded-full flex items-center justify-center flex-shrink-0">
                         <span className="text-white font-bold text-xs">
@@ -717,7 +717,7 @@ const SellerDashboard = () => {
                     <div className="space-y-2">
                       <button 
                         className="w-full bg-[#00dcaa] text-white py-2 px-3 rounded-lg text-sm font-semibold hover:bg-[#00c59a] transition-colors"
-                        onClick={() => navigate('/seller/ad-model')}
+                        onClick={() => navigate('/post-ads')}
                       >
                         Promote ⭐
                       </button>
@@ -752,19 +752,19 @@ const SellerDashboard = () => {
             </div>
 
             {/* Recent Ads */}
-            <div className="bg-white rounded-lg p-6">
+            <div className="bg-card border border-border rounded-lg p-6">
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold text-gray-900">Recent Ads</h2>
+                <h2 className="text-2xl font-bold text-foreground">Recent Ads</h2>
                 <button 
                   className="bg-[#00dcaa] text-white px-6 py-2.5 rounded-lg text-sm font-semibold hover:bg-[#00c59a] transition-colors"
-                  onClick={() => navigate('/seller/ad-models')}
+                  onClick={() => navigate('/post-ads')}
                 >
                   Book Ad
                 </button>
               </div>
               <div className="flex space-x-6 overflow-x-auto pb-4 scrollbar-hide">
                 {recentAds.length > 0 ? recentAds.map((ad) => (
-                  <div key={ad.id} className="bg-white rounded-xl shadow-lg p-4 min-w-[240px] max-w-[240px] flex-shrink-0 border border-gray-100">
+                  <div key={ad.id} className="bg-card border border-border rounded-xl shadow-lg p-4 min-w-[240px] max-w-[240px] flex-shrink-0">
                     <div className="flex items-start space-x-2 mb-3">
                       <div className="w-6 h-6 bg-[#00dcaa] rounded-full flex items-center justify-center flex-shrink-0">
                         <span className="text-white font-bold text-xs">
@@ -831,7 +831,7 @@ const SellerDashboard = () => {
                       <TrendingUp className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                       <p className="text-gray-500 mb-4">No ads yet</p>
                       <button 
-                        onClick={() => navigate('/seller/ad-models')}
+                        onClick={() => navigate('/post-ads')}
                         className="bg-[#00dcaa] text-white px-6 py-2 rounded-lg hover:bg-[#00c59a] transition-colors"
                       >
                         Create Your First Ad
@@ -854,9 +854,9 @@ const SellerDashboard = () => {
           {/* Right Column */}
           <div className="space-y-8">
             {/* About Company */}
-            <div className="bg-white rounded-lg p-6">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">About {sellerInfo.companyName || 'Company'}</h2>
-              <p className="text-gray-600 text-sm leading-relaxed mb-4">
+            <div className="bg-card border border-border rounded-lg p-6">
+              <h2 className="text-xl font-bold text-foreground mb-4">About {sellerInfo.companyName || 'Company'}</h2>
+              <p className="text-muted-foreground text-sm leading-relaxed mb-4">
                 {sellerInfo.description || 'Company description not provided.'}
               </p>
               <div className="space-y-3">
@@ -921,8 +921,8 @@ const SellerDashboard = () => {
             </div>
 
             {/* Company Location */}
-            <div className="bg-white rounded-lg p-6">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">Company Location</h2>
+            <div className="bg-card border border-border rounded-lg p-6">
+              <h2 className="text-xl font-bold text-foreground mb-4">Company Location</h2>
               <div className="bg-gray-100 rounded-lg h-48 flex items-center justify-center mb-4">
                 <div className="text-center">
                   <MapPin className="w-8 h-8 text-gray-400 mx-auto mb-2" />
@@ -944,8 +944,8 @@ const SellerDashboard = () => {
             </div>
 
             {/* Reviews */}
-            <div className="bg-white rounded-lg p-6">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">Customer Reviews</h2>
+            <div className="bg-card border border-border rounded-lg p-6">
+              <h2 className="text-xl font-bold text-foreground mb-4">Customer Reviews</h2>
               <div className="space-y-4">
                 {reviews.length > 0 ? reviews.slice(0, 3).map((review, index) => (
                   <div key={review.id || index} className="border-b border-gray-100 pb-4 last:border-b-0">
@@ -1088,7 +1088,7 @@ const SellerDashboard = () => {
       {/* Edit Info Modal - Modern Design */}
       {showEditModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden">
+          <div className="bg-card border border-border rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden">
             {/* Modal Header */}
             <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-8 py-6">
               <div className="flex items-center justify-between">

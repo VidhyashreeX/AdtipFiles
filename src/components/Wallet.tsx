@@ -117,7 +117,7 @@ const Wallet = () => {
   if (!userId || !token) return null;
 
   return (
-    <div className="pb-20 md:pb̔-0 bg-gray-50 dark:bg-gray-900 min-h-screen">
+    <div className="pb-20 md:pb-0 bg-background min-h-screen">
       {/* Header */}
       <div className="bg-gradient-to-r from-adtip-teal to-[#13b799] text-white dark:from-teal-700 dark:to-teal-800">
         <div className="max-w-screen-md mx-auto p-6">
@@ -156,14 +156,14 @@ const Wallet = () => {
       </div>
 
       {/* Subscription Status */}
-      <div className="max-w-screen-md mx-auto p-4 bg-white rounded-lg shadow-sm mt-4">
+      <div className="max-w-screen-md mx-auto p-4 bg-card border border-border rounded-lg shadow-sm mt-4">
         <div className="text-center py-6">
           {loading ? (
-            <h3 className="text-lg font-medium mb-2">Loading subscription status...</h3>
+            <h3 className="text-lg font-medium mb-2 text-foreground">Loading subscription status...</h3>
           ) : isPremium ? (
             <>
-              <h3 className="text-lg font-medium mb-2">Content Creator Premium Active</h3>
-              <p className="text-gray-500 text-sm mb-4">
+              <h3 className="text-lg font-medium mb-2 text-foreground">Content Creator Premium Active</h3>
+              <p className="text-muted-foreground text-sm mb-4">
                 Enjoy enhanced content creation features and higher earnings with your premium plan
               </p>
               <Button
@@ -175,8 +175,8 @@ const Wallet = () => {
             </>
           ) : (
             <>
-              <h3 className="text-lg font-medium mb-2">No Active Content Creator Plan</h3>
-              <p className="text-gray-500 text-sm mb-4">
+              <h3 className="text-lg font-medium mb-2 text-foreground">No Active Content Creator Plan</h3>
+              <p className="text-muted-foreground text-sm mb-4">
                 Upgrade to content creator premium to enjoy better features and higher earnings
               </p>
               <Button
@@ -193,13 +193,13 @@ const Wallet = () => {
       {/* Tabs */}
       <div className="max-w-screen-md mx-auto p-4 mt-4">
         <Tabs defaultValue="withdraw" className="w-full">
-          <TabsList className="grid grid-cols-1 w-full mb-4">
+          <TabsList className="grid grid-cols-1 w-full mb-4 bg-muted">
             <TabsTrigger value="withdraw">Withdraw</TabsTrigger>
           </TabsList>
 
           <TabsContent value="withdraw">
-            <div className="bg-white rounded-lg p-6 shadow-sm">
-              <h3 className="font-semibold mb-4">Withdraw to</h3>
+            <div className="bg-card border border-border rounded-lg p-6 shadow-sm">
+              <h3 className="font-semibold mb-4 text-foreground">Withdraw to</h3>
 
               <div className="space-y-3 mb-6">
                 {["PayTM", "PhonePe", "Bank Transfer", "UPI"].map((method) => (
@@ -209,7 +209,7 @@ const Wallet = () => {
                     className={`border rounded-lg p-4 flex items-center cursor-pointer transition-colors ${
                       selectedMethod === method
                         ? "border-adtip-teal bg-adtip-teal/5"
-                        : "border-gray-200"
+                        : "border-border"
                     }`}
                   >
                     <div
@@ -225,7 +225,7 @@ const Wallet = () => {
                     >
                       {method[0]}
                     </div>
-                    <div className="ml-3">{method}</div>
+                    <div className="ml-3 text-foreground">{method}</div>
                     <div className="ml-auto">
                       <div
                         className={`w-5 h-5 rounded-full border ${
@@ -243,9 +243,9 @@ const Wallet = () => {
                 ))}
               </div>
 
-              <h3 className="font-semibold mb-4">Enter amount</h3>
+              <h3 className="font-semibold mb-4 text-foreground">Enter amount</h3>
               <div className="relative mb-6">
-                <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">
+                <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground">
                   ₹
                 </span>
                 <input
@@ -255,7 +255,7 @@ const Wallet = () => {
                   placeholder="0.00"
                   min="1"
                   max={balance}
-                  className="w-full px-8 py-3 border border-gray-200 rounded-lg focus:outline-none focus:border-adtip-teal"
+                  className="w-full px-8 py-3 border border-border bg-background text-foreground rounded-lg focus:outline-none focus:border-adtip-teal"
                 />
               </div>
 

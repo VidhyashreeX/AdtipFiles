@@ -155,7 +155,7 @@ const AdsCart = () => {
               <h3 className="text-lg font-semibold text-foreground mb-2">Your cart is empty</h3>
               <p className="text-muted-foreground mb-6">Add some campaigns to get started with your advertising</p>
               <button
-                onClick={() => navigate('/seller/ad-models')}
+                onClick={() => navigate('/post-ads')}
                 className="bg-[#00dcaa] text-white px-6 py-3 rounded-lg font-semibold hover:bg-[#00b894] transition-colors"
               >
                 Create New Campaign
