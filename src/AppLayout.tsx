@@ -27,7 +27,7 @@ const AppLayoutContent = () => {
   // Allow access regardless of authentication status
 
   return (
-    <div className="min-h-screen bg-background dark:bg-gray-950">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       <Navbar />
       <div className="flex relative pt-16">
         <div className={cn(
@@ -38,7 +38,7 @@ const AppLayoutContent = () => {
         </div>
         <main
           className={cn(
-            "flex-1 min-h-[calc(100vh-4rem)] transition-all duration-300 ease-in-out bg-background dark:bg-gray-950",
+            "flex-1 min-h-[calc(100vh-4rem)] transition-all duration-300 ease-in-out bg-gray-50 dark:bg-gray-950",
             isMobile ? "px-4 ml-0" : isCollapsed ? "ml-16" : "ml-64"
           )}
           style={{ marginLeft: isMobile ? 0 : isCollapsed ? 64 : 256 }}

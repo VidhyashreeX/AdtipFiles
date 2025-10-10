@@ -297,13 +297,13 @@ const Navbar = () => {
   };
 
   return (
-    <nav className="fixed top-0 z-50 w-full h-16 bg-background shadow-sm border-b border-border">
+    <nav className="fixed top-0 z-50 w-full h-16 bg-background/80 dark:bg-gray-900/80 backdrop-blur-xl shadow-sm">
       {/* Mobile Sidebar Overlay */}
       <div className="md:hidden">
         {openMobile && (
           <div className="fixed inset-0 z-50">
-            <div className="fixed inset-0 bg-black/40" onClick={() => setOpenMobile(false)} />
-            <div className="fixed inset-y-0 left-0 w-64 bg-background shadow-lg z-50">
+            <div className="fixed inset-0 bg-black/40 backdrop-blur-sm transition-opacity duration-300" onClick={() => setOpenMobile(false)} />
+            <div className="fixed inset-y-0 left-0 w-64 bg-background/95 dark:bg-gray-900/95 backdrop-blur-xl shadow-2xl z-50 transform transition-transform duration-300 ease-out">
               <div className="h-full overflow-y-auto">
                 <AdTipSidebar />
               </div>
@@ -334,7 +334,7 @@ const Navbar = () => {
             <input
               type="text"
               placeholder="Search users or content..."
-              className="w-full px-3 sm:px-4 md:px-5 py-2 sm:py-2.5 pr-8 text-sm md:text-base rounded-full bg-background border border-border focus:outline-none focus:border-adtip-teal focus:ring-2 focus:ring-adtip-teal/20"
+              className="w-full px-3 sm:px-4 md:px-5 py-2 sm:py-2.5 pr-8 text-sm md:text-base rounded-full bg-muted/50 dark:bg-gray-800/50 backdrop-blur-sm border-0 focus:outline-none focus:ring-2 focus:ring-adtip-teal/50 transition-all text-foreground placeholder:text-muted-foreground"
               value={searchQuery}
               onChange={handleSearchInputChange}
               onBlur={handleSearchInputBlur}
@@ -346,10 +346,10 @@ const Navbar = () => {
             
             {/* Search Suggestions */}
             {showSearchSuggestions && searchQuery && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-card border border-border rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto">
+              <div className="absolute top-full left-0 right-0 mt-2 bg-card/95 dark:bg-gray-800/95 backdrop-blur-xl rounded-2xl shadow-2xl z-50 max-h-60 overflow-y-auto border-0">
                 <div className="p-2">
                   <div 
-                    className="px-3 py-2 hover:bg-muted rounded cursor-pointer flex items-center gap-2"
+                    className="px-3 py-2 hover:bg-muted/80 dark:hover:bg-gray-700/80 rounded-xl cursor-pointer flex items-center gap-2 transition-colors"
                     onClick={() => {
                       navigate(`/search?q=${encodeURIComponent(searchQuery)}`);
                       setShowSearchSuggestions(false);
@@ -395,7 +395,7 @@ const Navbar = () => {
 
   <Link
     to={user ? "/wallet" : "/login"}
-    className="flex items-center text-foreground hover:text-adtip-teal transition-colors bg-muted border border-border rounded-full px-3 py-1 mr-1"
+    className="flex items-center text-foreground hover:text-adtip-teal transition-all bg-muted/50 dark:bg-gray-800/50 backdrop-blur-sm rounded-full px-3 py-1 mr-1 hover:bg-muted/80 dark:hover:bg-gray-800/80"
     style={{ minWidth: 70 }}
   >
     <Wallet className="h-5 w-5 sm:h-6 sm:w-6 mr-1" />
@@ -417,7 +417,7 @@ const Navbar = () => {
       </div>
 
       {/* Mobile Bottom Navigation */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-background shadow-md border-t border-border z-20">
+      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-background/80 dark:bg-gray-900/80 backdrop-blur-xl shadow-lg z-20">
         <div className="flex justify-around items-center px-2 py-2 sm:py-3">
           <Link
             to="/home"

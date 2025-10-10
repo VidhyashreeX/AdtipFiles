@@ -224,7 +224,7 @@ const UploadCreative = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#f5f5ff] dark:bg-gray-950">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       {/* AI Generator Modal */}
       {showAIGenerator && (
         <AIAdGenerator
@@ -235,13 +235,13 @@ const UploadCreative = () => {
       
       {/* Main Content */}
       <div className="max-w-4xl mx-auto px-6 py-8">
-        <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+        <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl rounded-2xl shadow-2xl overflow-hidden">
           
           {/* Header */}
           <div className="bg-gradient-to-r from-[#00dcaa] to-[#00b894] p-6">
             <div className="flex items-center space-x-4">
               <button 
-                className="p-2 hover:bg-white/20 rounded-lg transition-colors" 
+                className="p-2 hover:bg-white/20 rounded-lg transition-all duration-300" 
                 onClick={() => navigate('/seller/configure-campaign')}
                 title="Back to Configure Campaign"
                 aria-label="Back to Configure Campaign"
@@ -250,7 +250,7 @@ const UploadCreative = () => {
               </button>
               <div>
                 <h1 className="text-2xl font-bold text-white">Upload Creative or Generate with AI</h1>
-                <p className="text-white/80">Step 2 of 5 - Add your creative assets or let AI create them for you</p>
+                <p className="text-white/90">Step 2 of 5 - Add your creative assets or let AI create them for you</p>
               </div>
             </div>
           </div>
@@ -262,19 +262,19 @@ const UploadCreative = () => {
                 <div className="grid md:grid-cols-2 gap-8 mb-8">
                   
                   {/* Upload Creative */}
-                  <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-xl border-2 border-dashed border-blue-200 hover:border-blue-300 transition-colors">
+                  <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 p-6 rounded-xl border-2 border-dashed border-blue-200 dark:border-blue-700 hover:border-blue-300 dark:hover:border-blue-600 transition-colors backdrop-blur-sm">
                     <div className="text-center">
-                      <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <Upload className="w-8 h-8 text-blue-600" />
+                      <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/50 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <Upload className="w-8 h-8 text-blue-600 dark:text-blue-400" />
                       </div>
-                      <h3 className="text-xl font-bold text-gray-900 mb-2">Upload Creative</h3>
-                      <p className="text-gray-600 mb-6">
+                      <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">Upload Creative</h3>
+                      <p className="text-gray-600 dark:text-gray-400 mb-6">
                         Drag and drop or click to browse<br />
                         Supports: JPG, PNG, MP4, MOV (Max 50MB)
                       </p>
                       
                       <label className="inline-block">
-                        <div className={`bg-white border-2 border-blue-300 text-blue-700 px-6 py-3 rounded-lg font-semibold hover:bg-blue-50 transition-colors cursor-pointer flex items-center justify-center gap-2 ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                        <div className={`bg-white dark:bg-gray-800 border-2 border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-400 px-6 py-3 rounded-lg font-semibold hover:bg-blue-50 dark:hover:bg-gray-700 transition-all duration-300 cursor-pointer flex items-center justify-center gap-2 ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
                           {isUploading ? (
                             <>
                               <Loader2 className="w-4 h-4 animate-spin" />
@@ -296,33 +296,33 @@ const UploadCreative = () => {
                         />
                       </label>
                       
-                      <div className="mt-4 text-sm text-gray-500">
+                      <div className="mt-4 text-sm text-gray-500 dark:text-gray-400">
                         Upload your own photos, videos or graphics
                       </div>
                     </div>
                   </div>
 
                   {/* AI Ad Generator */}
-                  <div className="bg-gradient-to-br from-purple-50 to-pink-50 p-6 rounded-xl border-2 border-dashed border-purple-200 hover:border-purple-300 transition-colors">
+                  <div className="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 p-6 rounded-xl border-2 border-dashed border-purple-200 dark:border-purple-700 hover:border-purple-300 dark:hover:border-purple-600 transition-colors backdrop-blur-sm">
                     <div className="text-center">
-                      <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <Wand2 className="w-8 h-8 text-purple-600" />
+                      <div className="w-16 h-16 bg-purple-100 dark:bg-purple-900/50 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <Wand2 className="w-8 h-8 text-purple-600 dark:text-purple-400" />
                       </div>
-                      <h3 className="text-xl font-bold text-gray-900 mb-2">AI Ad Generator</h3>
-                      <p className="text-gray-600 mb-6">
+                      <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">AI Ad Generator</h3>
+                      <p className="text-gray-600 dark:text-gray-400 mb-6">
                         Create professional marketing videos with AI avatars,<br />
                         product showcases, and automated scripts
                       </p>
                       
                       <button 
                         onClick={() => handleAIGeneration('general')}
-                        className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-6 py-3 rounded-lg font-semibold hover:from-purple-700 hover:to-pink-700 transition-all duration-200 transform hover:scale-105"
+                        className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white px-6 py-3 rounded-lg font-semibold transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl"
                       >
                         <Zap className="w-4 h-4 inline mr-2" />
                         Start AI Generation
                       </button>
                       
-                      <div className="mt-4 text-sm text-gray-500">
+                      <div className="mt-4 text-sm text-gray-500 dark:text-gray-400">
                         Let AI create compelling content for you
                       </div>
                     </div>
@@ -412,44 +412,44 @@ const UploadCreative = () => {
                 )}
 
                 {/* Edit Content Details */}
-                <div className="bg-gradient-to-br from-gray-50 to-blue-50 p-6 rounded-xl">
-                  <h3 className="text-xl font-bold text-gray-900 mb-6">Edit Content Details</h3>
+                <div className="bg-gradient-to-br from-gray-50 to-blue-50 dark:from-gray-800/50 dark:to-blue-900/20 p-6 rounded-xl backdrop-blur-sm">
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-6">Edit Content Details</h3>
                   
                   <div className="space-y-6">
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">Ad Title *</label>
+                      <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Ad Title *</label>
                       <input 
                         type="text" 
                         name="adTitle"
                         value={contentData.adTitle}
                         onChange={handleInputChange}
                         placeholder="Enter compelling ad title" 
-                        className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#00dcaa] focus:border-transparent"
+                        className="w-full rounded-xl bg-white dark:bg-gray-800/50 backdrop-blur-sm border-0 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#00dcaa]/50 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all"
                         required
                       />
                     </div>
 
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">Ad Description</label>
+                      <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Ad Description</label>
                       <textarea 
                         name="adDescription"
                         value={contentData.adDescription}
                         onChange={handleInputChange}
                         placeholder="Describe your product or service..." 
                         rows={4}
-                        className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#00dcaa] focus:border-transparent resize-none"
+                        className="w-full rounded-xl bg-white dark:bg-gray-800/50 backdrop-blur-sm border-0 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#00dcaa]/50 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all resize-none"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">Call to Action</label>
+                      <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Call to Action</label>
                       <input 
                         type="text" 
                         name="callToAction"
                         value={contentData.callToAction}
                         onChange={handleInputChange}
                         placeholder="e.g., Shop Now, Learn More, Get Started" 
-                        className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#00dcaa] focus:border-transparent"
+                        className="w-full rounded-xl bg-white dark:bg-gray-800/50 backdrop-blur-sm border-0 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#00dcaa]/50 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all"
                       />
                     </div>
                   </div>
@@ -458,11 +458,11 @@ const UploadCreative = () => {
             )}
 
             {/* Form Actions */}
-            <div className="border-t border-gray-200 mt-8 pt-6 flex flex-col sm:flex-row gap-4 justify-between">
+            <div className="border-t border-gray-200 dark:border-gray-800 mt-8 pt-6 flex flex-col sm:flex-row gap-4 justify-between">
               <button
                 type="button"
                 onClick={() => navigate('/seller/configure-campaign')}
-                className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                className="px-6 py-3 bg-gray-100 dark:bg-gray-800/50 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-800/70 transition-all duration-300 backdrop-blur-sm"
               >
                 <ArrowLeft className="w-4 h-4 inline mr-2" />
                 Back
@@ -473,7 +473,7 @@ const UploadCreative = () => {
                   type="button"
                   onClick={handleNextPreview}
                   disabled={isLoading}
-                  className={`px-8 py-3 bg-[#00dcaa] text-white rounded-lg hover:bg-[#00b894] transition-colors font-semibold flex items-center gap-2 ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  className={`px-8 py-3 bg-gradient-to-r from-[#00dcaa] to-[#00b894] hover:from-[#00b894] hover:to-[#00a085] text-white rounded-xl transition-all duration-300 font-semibold flex items-center gap-2 shadow-lg hover:shadow-xl ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   {isLoading ? (
                     <>

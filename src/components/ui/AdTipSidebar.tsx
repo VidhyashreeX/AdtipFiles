@@ -387,7 +387,7 @@ const [showLogoutDialog, setShowLogoutDialog] = React.useState(false);
       <DialogTrigger asChild>
         <Button
           className={cn(
-            "mb-4 bg-adtip-teal hover:bg-adtip-teal/90",
+            "mb-4 bg-gradient-to-r from-[#00dcaa] to-[#00b894] hover:from-[#00b894] hover:to-[#00a085] shadow-md hover:shadow-lg transition-all duration-300",
             isCollapsed && !isMobile
               ? "mx-2 w-[48px] h-[40px] flex items-center justify-center p-0"
               : "w-[calc(100%-32px)] mx-4 px-4 py-2"
@@ -765,12 +765,12 @@ const [showLogoutDialog, setShowLogoutDialog] = React.useState(false);
     <>
       {/* Mobile backdrop - do not render aside in overlay, just sidebarContent */}
       {isMobile && openMobile ? (
-        <div className="h-full overflow-y-auto bg-background dark:bg-gray-900">{sidebarContent}</div>
+        <div className="h-full overflow-y-auto bg-background/95 dark:bg-gray-900/95 backdrop-blur-xl">{sidebarContent}</div>
       ) : (
         <aside
           ref={sidebarRef}
           className={cn(
-            "fixed left-0 top-16 h-[calc(100vh-4rem)] flex-col overflow-y-auto border-r border-border bg-background dark:bg-gray-900 py-4 transition-all duration-300 z-50",
+            "fixed left-0 top-16 h-[calc(100vh-4rem)] flex-col overflow-y-auto bg-background/80 dark:bg-gray-900/80 backdrop-blur-xl py-4 transition-all duration-500 ease-out z-50 shadow-lg",
             isMobile ? (
               openMobile ? "translate-x-0 w-64 px-0" : "-translate-x-full w-64 px-0"
             ) : (

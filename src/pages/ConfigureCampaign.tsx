@@ -263,17 +263,17 @@ const ConfigureCampaign = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#f5f5ff] dark:bg-gray-950">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       {/* Main Content */}
       <div className="max-w-5xl mx-auto px-6 py-8">
-        <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg overflow-hidden border dark:border-gray-800">
+        <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl rounded-2xl shadow-2xl overflow-hidden">
           
           {/* Header */}
           <div className="bg-gradient-to-r from-[#00dcaa] to-[#00b894] p-6">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
                 <button 
-                  className="p-2 hover:bg-white/20 rounded-lg transition-colors" 
+                  className="p-2 hover:bg-white/20 rounded-lg transition-all duration-300" 
                   onClick={() => navigate('/post-ads')}
                   title="Back to Ad Models"
                   aria-label="Back to Ad Models"
@@ -282,10 +282,10 @@ const ConfigureCampaign = () => {
                 </button>
                 <div>
                   <h1 className="text-2xl font-bold text-white">Campaign Setup</h1>
-                  <p className="text-white/80">Configure your {selectedModel?.title || 'Ad'} campaign</p>
+                  <p className="text-white/90">Configure your {selectedModel?.title || 'Ad'} campaign</p>
                 </div>
               </div>
-              <div className="bg-white/20 backdrop-blur-sm rounded-lg px-4 py-2">
+              <div className="bg-white/20 backdrop-blur-sm rounded-xl px-4 py-2">
                 <span className="text-white font-bold text-lg">₹{modelPrice.toFixed(2)}</span>
               </div>
             </div>
@@ -307,12 +307,12 @@ const ConfigureCampaign = () => {
                     value={formData.campaignName}
                     onChange={handleInputChange}
                     placeholder="Enter campaign name"
-                    className="w-full p-3 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-[#00dcaa] focus:border-transparent dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-400"
+                    className="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 backdrop-blur-sm border-0 focus:ring-2 focus:ring-[#00dcaa]/50 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Campaign Description
                   </label>
                   <textarea
@@ -320,7 +320,7 @@ const ConfigureCampaign = () => {
                     value={formData.campaignDescription}
                     onChange={handleInputChange}
                     placeholder="Describe your campaign"
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00dcaa] focus:border-transparent"
+                    className="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 backdrop-blur-sm border-0 focus:ring-2 focus:ring-[#00dcaa]/50 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all"
                     rows={3}
                   />
                 </div>
@@ -331,14 +331,14 @@ const ConfigureCampaign = () => {
             <div className="mb-8">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Select Company
                   </label>
                   <select
                     name="selectedCompany"
                     value={formData.selectedCompany}
                     onChange={handleInputChange}
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00dcaa] focus:border-transparent"
+                    className="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 backdrop-blur-sm border-0 focus:ring-2 focus:ring-[#00dcaa]/50 text-gray-900 dark:text-gray-100 transition-all"
                   >
                     <option value="">Choose company</option>
                     <option value="company1">Company 1</option>
@@ -348,14 +348,14 @@ const ConfigureCampaign = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Target Gender
                   </label>
                   <select
                     name="targetGender"
                     value={formData.targetGender}
                     onChange={handleInputChange}
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00dcaa] focus:border-transparent"
+                    className="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 backdrop-blur-sm border-0 focus:ring-2 focus:ring-[#00dcaa]/50 text-gray-900 dark:text-gray-100 transition-all"
                   >
                     <option value="">Select gender</option>
                     <option value="male">Male</option>
@@ -370,14 +370,14 @@ const ConfigureCampaign = () => {
             <div className="mb-8">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Target Marital Status
                   </label>
                   <select
                     name="targetMaritalStatus"
                     value={formData.targetMaritalStatus}
                     onChange={handleInputChange}
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00dcaa] focus:border-transparent"
+                    className="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 backdrop-blur-sm border-0 focus:ring-2 focus:ring-[#00dcaa]/50 text-gray-900 dark:text-gray-100 transition-all"
                   >
                     <option value="">Select marital status</option>
                     <option value="single">Single</option>
@@ -389,14 +389,14 @@ const ConfigureCampaign = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Target Age
                   </label>
                   <select
                     name="targetAge"
                     value={formData.targetAge}
                     onChange={handleInputChange}
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00dcaa] focus:border-transparent"
+                    className="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 backdrop-blur-sm border-0 focus:ring-2 focus:ring-[#00dcaa]/50 text-gray-900 dark:text-gray-100 transition-all"
                   >
                     <option value="">Select age range</option>
                     <option value="all">All Ages</option>
@@ -413,14 +413,14 @@ const ConfigureCampaign = () => {
 
             {/* Target Profession */}
             <div className="mb-8">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Target Profession
               </label>
               <select
                 name="targetProfession"
                 value={formData.targetProfession}
                 onChange={handleInputChange}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00dcaa] focus:border-transparent"
+                className="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 backdrop-blur-sm border-0 focus:ring-2 focus:ring-[#00dcaa]/50 text-gray-900 dark:text-gray-100 transition-all"
               >
                 <option value="">Select profession</option>
                 <option value="student">Student</option>
@@ -436,7 +436,7 @@ const ConfigureCampaign = () => {
 
             {/* Target Areas */}
             <div className="mb-8">
-              <label className="block text-sm font-medium text-gray-700 mb-4">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">
                 Target Areas
               </label>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
@@ -448,14 +448,14 @@ const ConfigureCampaign = () => {
                   { id: 'hyderabad', label: 'Hyderabad' },
                   { id: 'kolkata', label: 'Kolkata' }
                 ].map((area) => (
-                  <label key={area.id} className="flex items-center space-x-3 cursor-pointer">
+                  <label key={area.id} className="flex items-center space-x-3 cursor-pointer p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800/70 transition-all">
                     <input
                       type="checkbox"
                       checked={formData.targetAreas[area.id as keyof typeof formData.targetAreas]}
                       onChange={(e) => handleTargetAreaChange(area.id, e.target.checked)}
-                      className="w-4 h-4 text-[#00dcaa] border-gray-300 rounded focus:ring-[#00dcaa]"
+                      className="w-4 h-4 text-[#00dcaa] bg-gray-100 dark:bg-gray-700 border-0 rounded focus:ring-2 focus:ring-[#00dcaa]/50"
                     />
-                    <span className="text-sm font-medium text-gray-700">{area.label}</span>
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{area.label}</span>
                   </label>
                 ))}
               </div>
@@ -467,11 +467,11 @@ const ConfigureCampaign = () => {
                   value={formData.customLocation}
                   onChange={handleInputChange}
                   placeholder="Add custom location"
-                  className="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00dcaa] focus:border-transparent"
+                  className="flex-1 p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 backdrop-blur-sm border-0 focus:ring-2 focus:ring-[#00dcaa]/50 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all"
                 />
                 <button
                   type="button"
-                  className="bg-[#00dcaa] text-white px-4 py-3 rounded-lg font-medium hover:bg-[#00b894] transition-colors flex items-center space-x-2"
+                  className="bg-gradient-to-r from-[#00dcaa] to-[#00b894] text-white px-4 py-3 rounded-xl font-medium hover:shadow-lg transition-all duration-300 flex items-center space-x-2"
                 >
                   <Plus className="w-4 h-4" />
                   <span>Add</span>
@@ -481,12 +481,12 @@ const ConfigureCampaign = () => {
 
             {/* Engagement Details Section */}
             <div className="mb-8">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Engagement Details</h3>
-              <p className="text-sm text-gray-600 mb-6">Configure your campaign engagement and budget settings</p>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Engagement Details</h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">Configure your campaign engagement and budget settings</p>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Watches per customer per day
                   </label>
                   <input
@@ -495,12 +495,12 @@ const ConfigureCampaign = () => {
                     value={formData.watchesPerCustomerPerDay}
                     onChange={handleInputChange}
                     placeholder="Enter number"
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00dcaa] focus:border-transparent"
+                    className="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 backdrop-blur-sm border-0 focus:ring-2 focus:ring-[#00dcaa]/50 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Amount per customer (₹)
                   </label>
                   <input
@@ -509,12 +509,12 @@ const ConfigureCampaign = () => {
                     value={formData.amountPerCustomer}
                     onChange={handleInputChange}
                     placeholder="Enter amount"
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00dcaa] focus:border-transparent"
+                    className="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 backdrop-blur-sm border-0 focus:ring-2 focus:ring-[#00dcaa]/50 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Customers per day
                   </label>
                   <input
@@ -523,12 +523,12 @@ const ConfigureCampaign = () => {
                     value={formData.customersPerDay}
                     onChange={handleInputChange}
                     placeholder="Enter number"
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00dcaa] focus:border-transparent"
+                    className="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 backdrop-blur-sm border-0 focus:ring-2 focus:ring-[#00dcaa]/50 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Amount per day (₹)
                   </label>
                   <input
@@ -537,13 +537,13 @@ const ConfigureCampaign = () => {
                     value={formData.amountPerDay}
                     onChange={handleInputChange}
                     placeholder="Enter amount"
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00dcaa] focus:border-transparent"
+                    className="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 backdrop-blur-sm border-0 text-gray-900 dark:text-gray-100 cursor-not-allowed"
                     readOnly
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Campaign duration (days)
                   </label>
                   <input
@@ -552,15 +552,15 @@ const ConfigureCampaign = () => {
                     value={formData.campaignDuration}
                     onChange={handleInputChange}
                     placeholder="Enter number of days"
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00dcaa] focus:border-transparent"
+                    className="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 backdrop-blur-sm border-0 focus:ring-2 focus:ring-[#00dcaa]/50 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Estimated Total Amount
                   </label>
-                  <div className="bg-[#00dcaa]/10 border border-[#00dcaa]/30 rounded-lg p-3 font-bold text-[#00dcaa]">
+                  <div className="bg-gradient-to-r from-[#00dcaa]/20 to-[#00b894]/20 dark:from-[#00dcaa]/30 dark:to-[#00b894]/30 backdrop-blur-sm rounded-xl p-3 font-bold text-[#00dcaa] dark:text-[#00dcaa]">
                     ₹{formData.estimatedTotalAmount.toFixed(2)}
                   </div>
                 </div>
@@ -568,7 +568,7 @@ const ConfigureCampaign = () => {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Start Date & Time
                   </label>
                   <input
@@ -576,12 +576,12 @@ const ConfigureCampaign = () => {
                     name="startDateTime"
                     value={formData.startDateTime}
                     onChange={handleInputChange}
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00dcaa] focus:border-transparent"
+                    className="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 backdrop-blur-sm border-0 focus:ring-2 focus:ring-[#00dcaa]/50 text-gray-900 dark:text-gray-100 transition-all"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     End Date & Time
                   </label>
                   <input
@@ -589,7 +589,7 @@ const ConfigureCampaign = () => {
                     name="endDateTime"
                     value={formData.endDateTime}
                     onChange={handleInputChange}
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00dcaa] focus:border-transparent"
+                    className="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 backdrop-blur-sm border-0 focus:ring-2 focus:ring-[#00dcaa]/50 text-gray-900 dark:text-gray-100 transition-all"
                   />
                 </div>
               </div>
@@ -597,12 +597,12 @@ const ConfigureCampaign = () => {
 
             {/* Customer Conversion & Button Setup */}
             <div className="mb-8">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Customer Conversion & Button Setup</h3>
-              <p className="text-sm text-gray-600 mb-6">Configure conversion rates and call-to-action buttons</p>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Customer Conversion & Button Setup</h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">Configure conversion rates and call-to-action buttons</p>
 
               <div className="space-y-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-3">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
                     Customer per view percentage: {formData.customerViewPercentage}%
                   </label>
                   <input
@@ -611,15 +611,15 @@ const ConfigureCampaign = () => {
                     max="100"
                     value={formData.customerViewPercentage}
                     onChange={(e) => handleRangeChange('customerViewPercentage', parseInt(e.target.value))}
-                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
+                    className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer slider"
                     style={{
-                      background: `linear-gradient(to right, #00dcaa 0%, #00dcaa ${formData.customerViewPercentage}%, #e5e7eb ${formData.customerViewPercentage}%, #e5e7eb 100%)`
+                      background: `linear-gradient(to right, #00dcaa 0%, #00dcaa ${formData.customerViewPercentage}%, ${document.documentElement.classList.contains('dark') ? '#374151' : '#e5e7eb'} ${formData.customerViewPercentage}%, ${document.documentElement.classList.contains('dark') ? '#374151' : '#e5e7eb'} 100%)`
                     }}
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-3">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
                     Customer per like percentage: {formData.customerLikePercentage}%
                   </label>
                   <input
@@ -628,23 +628,23 @@ const ConfigureCampaign = () => {
                     max="100"
                     value={formData.customerLikePercentage}
                     onChange={(e) => handleRangeChange('customerLikePercentage', parseInt(e.target.value))}
-                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
+                    className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer slider"
                     style={{
-                      background: `linear-gradient(to right, #00dcaa 0%, #00dcaa ${formData.customerLikePercentage}%, #e5e7eb ${formData.customerLikePercentage}%, #e5e7eb 100%)`
+                      background: `linear-gradient(to right, #00dcaa 0%, #00dcaa ${formData.customerLikePercentage}%, ${document.documentElement.classList.contains('dark') ? '#374151' : '#e5e7eb'} ${formData.customerLikePercentage}%, ${document.documentElement.classList.contains('dark') ? '#374151' : '#e5e7eb'} 100%)`
                     }}
                   />
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                       Select Button to Display
                     </label>
                     <select
                       name="buttonToDisplay"
                       value={formData.buttonToDisplay}
                       onChange={handleInputChange}
-                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00dcaa] focus:border-transparent"
+                      className="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 backdrop-blur-sm border-0 focus:ring-2 focus:ring-[#00dcaa]/50 text-gray-900 dark:text-gray-100 transition-all"
                     >
                       <option value="">Choose button type</option>
                       <option value="buy-now">Buy Now</option>
@@ -657,7 +657,7 @@ const ConfigureCampaign = () => {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                       Button Link (Optional)
                     </label>
                     <input
@@ -666,19 +666,19 @@ const ConfigureCampaign = () => {
                       value={formData.buttonLink}
                       onChange={handleInputChange}
                       placeholder="https://example.com"
-                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00dcaa] focus:border-transparent"
+                      className="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 backdrop-blur-sm border-0 focus:ring-2 focus:ring-[#00dcaa]/50 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                       Where to Display Ad?
                     </label>
                     <select
                       name="adDisplayLocation"
                       value={formData.adDisplayLocation}
                       onChange={handleInputChange}
-                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00dcaa] focus:border-transparent"
+                      className="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 backdrop-blur-sm border-0 focus:ring-2 focus:ring-[#00dcaa]/50 text-gray-900 dark:text-gray-100 transition-all"
                     >
                       <option value="">Choose display location</option>
                       <option value="feed">News Feed</option>
@@ -692,7 +692,7 @@ const ConfigureCampaign = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Transaction ID / GST Number
                   </label>
                   <input
@@ -701,18 +701,18 @@ const ConfigureCampaign = () => {
                     value={formData.transactionId}
                     onChange={handleInputChange}
                     placeholder="Enter transaction ID or GST number"
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00dcaa] focus:border-transparent"
+                    className="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 backdrop-blur-sm border-0 focus:ring-2 focus:ring-[#00dcaa]/50 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all"
                   />
                 </div>
               </div>
             </div>
 
             {/* Continue Button */}
-            <div className="flex justify-end pt-6 border-t border-gray-200">
+            <div className="flex justify-end pt-6 border-t border-gray-200 dark:border-gray-800">
               <button
                 type="button"
                 onClick={handleContinue}
-                className="bg-[#00dcaa] text-white px-8 py-3 rounded-lg text-lg font-semibold hover:bg-[#00b894] transition-colors shadow-lg"
+                className="bg-gradient-to-r from-[#00dcaa] to-[#00b894] hover:from-[#00b894] hover:to-[#00a085] text-white px-8 py-3 rounded-xl text-lg font-semibold transition-all duration-300 shadow-lg hover:shadow-xl"
               >
                 Continue to Upload Creative
               </button>
