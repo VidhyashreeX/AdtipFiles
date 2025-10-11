@@ -8,6 +8,7 @@ import OTPVerification from "./pages/OTPVerification";
 import Profile from "./pages/Profile";
 import EditProfile from "./pages/EditProfile";
 import TipTube from "./pages/TipTube";
+import WatchPage from "./pages/WatchPage";
 import TipShorts from "./pages/TipShorts";
 import NotFound from "./pages/NotFound";
 import Onboarding from "./pages/Onboarding";
@@ -112,8 +113,8 @@ const router = createBrowserRouter([
 },
 
 			{
-				path: "watch/:id?",
-				element: <TipTube />,
+				path: "watch/:id",
+				element: <WatchPage />,
 			},
 			{
 				path: "short/:id?",
