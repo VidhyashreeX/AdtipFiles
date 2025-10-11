@@ -85,13 +85,20 @@ const TiptubePlayer: React.FC<TiptubePlayerProps> = ({
 
   // Base API URL
   const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-  const DISABLE_ADS = import.meta.env.VITE_DISABLE_ADS === 'true' || false;
+  // Disable ads if explicitly set to true, or if not in production
+  const DISABLE_ADS = import.meta.env.VITE_DISABLE_ADS === 'true' || import.meta.env.VITE_DISABLE_ADS === true || true;
 
   /**
    * Fetch mid-roll cue points on component mount
    */
   useEffect(() => {
     const fetchCuePoints = async () => {
+      // Skip fetching cue points if ads are disabled
+      if (DISABLE_ADS) {
+        console.log('[TiptubePlayer] Ads disabled, skipping cue points fetch');
+        return;
+      }
+
       try {
         const response = await axios.get(
           `${API_BASE_URL}/api/v1/video-ads/cue-points/${videoId}`
@@ -103,11 +110,12 @@ const TiptubePlayer: React.FC<TiptubePlayerProps> = ({
         }
       } catch (error) {
         console.error('[TiptubePlayer] Error fetching cue points:', error);
+        // Don't fail the entire player if cue points can't be fetched
       }
     };
 
     fetchCuePoints();
-  }, [videoId, API_BASE_URL]);
+  }, [videoId, API_BASE_URL, DISABLE_ADS]);
 
   /**
    * Request an ad from the backend
@@ -147,13 +155,13 @@ const TiptubePlayer: React.FC<TiptubePlayerProps> = ({
   };
 
   /**
-   * Play pre-roll ad before main content
+   * Initialize video player - handle ads or skip to content
    */
   useEffect(() => {
-    const playPreRoll = async () => {
+    const initializePlayer = async () => {
       if (preRollComplete || isAdPlaying) return;
 
-      // Skip ads entirely if disabled
+      // Skip ads entirely if disabled (default behavior for development)
       if (DISABLE_ADS) {
         console.log('[TiptubePlayer] Ads disabled, starting main content immediately');
         setPreRollComplete(true);
@@ -161,12 +169,12 @@ const TiptubePlayer: React.FC<TiptubePlayerProps> = ({
       }
 
       try {
-        // Set a timeout to prevent indefinite waiting
+        // Set a very short timeout to prevent any delays
         const timeoutPromise = new Promise<null>((resolve) => {
           setTimeout(() => {
             console.log('[TiptubePlayer] Ad request timeout, starting main content');
             resolve(null);
-          }, 3000); // 3 second timeout for better UX
+          }, 1000); // 1 second timeout for immediate fallback
         });
 
         const adData = await Promise.race([requestAd('pre-roll'), timeoutPromise]);
@@ -183,17 +191,31 @@ const TiptubePlayer: React.FC<TiptubePlayerProps> = ({
           setPreRollComplete(true);
         }
       } catch (error) {
-        // If ad request fails, fallback to main content
+        // If ad request fails, fallback to main content immediately
         console.error('[TiptubePlayer] Pre-roll ad request failed, starting main content:', error);
         setPreRollComplete(true);
       }
     };
 
-    // Only play pre-roll on initial load
+    // Initialize immediately
     if (!preRollComplete) {
-      playPreRoll();
+      initializePlayer();
     }
   }, [preRollComplete, isAdPlaying, DISABLE_ADS]);
+
+  /**
+   * Emergency fallback - ensure video always plays within 2 seconds
+   */
+  useEffect(() => {
+    const emergencyTimeout = setTimeout(() => {
+      if (!preRollComplete && !isAdPlaying) {
+        console.log('[TiptubePlayer] Emergency fallback - forcing video playback');
+        setPreRollComplete(true);
+      }
+    }, 2000);
+
+    return () => clearTimeout(emergencyTimeout);
+  }, [preRollComplete, isAdPlaying]);
 
   /**
    * Monitor main video progress for mid-roll insertion
@@ -348,10 +370,18 @@ const TiptubePlayer: React.FC<TiptubePlayerProps> = ({
           url={videoUrl}
           width="100%"
           height="100%"
-          playing={autoplay || preRollComplete}
+          playing={false}
           controls
-          onReady={handleVideoReady}
-          onDuration={handleVideoDuration}
+          onReady={() => {
+            handleVideoReady();
+            // Get duration when player is ready
+            if (playerRef.current) {
+              const duration = playerRef.current.getDuration();
+              if (duration) {
+                handleVideoDuration(duration);
+              }
+            }
+          }}
           onProgress={handleVideoProgress}
           onEnded={handleVideoEnd}
           onPlay={onVideoPlay}
