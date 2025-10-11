@@ -85,6 +85,7 @@ const TiptubePlayer: React.FC<TiptubePlayerProps> = ({
 
   // Base API URL
   const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+  const DISABLE_ADS = import.meta.env.VITE_DISABLE_ADS === 'true' || false;
 
   /**
    * Fetch mid-roll cue points on component mount
@@ -113,6 +114,12 @@ const TiptubePlayer: React.FC<TiptubePlayerProps> = ({
    */
   const requestAd = async (placement: 'pre-roll' | 'mid-roll' | 'post-roll', videoPosition = 0): Promise<AdData | null> => {
     try {
+      // Skip ads if disabled in development
+      if (DISABLE_ADS) {
+        console.log(`[TiptubePlayer] Ads disabled, skipping ${placement} ad`);
+        return null;
+      }
+
       console.log(`[TiptubePlayer] Requesting ${placement} ad for video ${videoId}`);
       
       const params = {
@@ -146,16 +153,38 @@ const TiptubePlayer: React.FC<TiptubePlayerProps> = ({
     const playPreRoll = async () => {
       if (preRollComplete || isAdPlaying) return;
 
-      const adData = await requestAd('pre-roll');
-      
-      if (adData) {
-        setCurrentAdData(adData);
-        setIsAdPlaying(true);
+      // Skip ads entirely if disabled
+      if (DISABLE_ADS) {
+        console.log('[TiptubePlayer] Ads disabled, starting main content immediately');
+        setPreRollComplete(true);
+        return;
+      }
+
+      try {
+        // Set a timeout to prevent indefinite waiting
+        const timeoutPromise = new Promise<null>((resolve) => {
+          setTimeout(() => {
+            console.log('[TiptubePlayer] Ad request timeout, starting main content');
+            resolve(null);
+          }, 3000); // 3 second timeout for better UX
+        });
+
+        const adData = await Promise.race([requestAd('pre-roll'), timeoutPromise]);
         
-        // Track impression
-        await trackAdEvent(adData.trackingUrls.impression);
-      } else {
-        // No pre-roll available, start main content
+        if (adData) {
+          setCurrentAdData(adData);
+          setIsAdPlaying(true);
+          
+          // Track impression
+          await trackAdEvent(adData.trackingUrls.impression);
+        } else {
+          // No pre-roll available or timeout, start main content immediately
+          console.log('[TiptubePlayer] No pre-roll ad or timeout, starting main content');
+          setPreRollComplete(true);
+        }
+      } catch (error) {
+        // If ad request fails, fallback to main content
+        console.error('[TiptubePlayer] Pre-roll ad request failed, starting main content:', error);
         setPreRollComplete(true);
       }
     };
@@ -164,7 +193,7 @@ const TiptubePlayer: React.FC<TiptubePlayerProps> = ({
     if (!preRollComplete) {
       playPreRoll();
     }
-  }, [preRollComplete, isAdPlaying]);
+  }, [preRollComplete, isAdPlaying, DISABLE_ADS]);
 
   /**
    * Monitor main video progress for mid-roll insertion
