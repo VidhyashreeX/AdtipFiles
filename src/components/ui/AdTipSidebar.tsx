@@ -14,7 +14,7 @@ import {
   PlusCircle, Gift, MessageSquare, FileText,
   ShoppingCart, BarChart3, Wallet, Store,
   User, Package, Heart, BadgeDollarSign,
-  Layout, Crown, Building2
+  Layout, Crown, Building2, Radio
 } from "lucide-react";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -133,7 +133,7 @@ const AdTipSidebar = () => {
     { to: "/home", label: "Home", icon: <Home className="h-5 w-5" /> },
     { to: "/watch", label: "TipTube", icon: <Play className="h-5 w-5" /> },
     { to: "/short", label: "TipShorts", icon: <Video className="h-5 w-5" /> },
-    { to: "/livestream", label: "LiveStream", icon: <Video className="h-5 w-5" /> },
+    { to: "/livestream", label: "LiveStream", icon: <Radio className="h-5 w-5" /> },
   ];
 
   const [mainNavItems, setMainNavItems] = React.useState(baseNavItems);
