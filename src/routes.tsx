@@ -111,7 +111,10 @@ const router = createBrowserRouter([
     path: "channel/",
     element: <ChannelPage />,
 },
-
+			{
+				path: "watch",
+				element: <TipTube />,
+			},
 			{
 				path: "watch/:id",
 				element: <WatchPage />,
