@@ -663,12 +663,64 @@ const ConfigureCampaign = () => {
                                 '& .MuiOutlinedInput-root': {
                                   borderRadius: '12px',
                                   backgroundColor: isDarkMode ? 'rgba(31, 41, 55, 0.5)' : 'rgba(249, 250, 251, 1)',
+                                  color: isDarkMode ? 'rgb(243, 244, 246)' : 'rgb(17, 24, 39)',
+                                  '& fieldset': {
+                                    borderColor: isDarkMode ? 'rgba(75, 85, 99, 1)' : 'rgba(209, 213, 219, 1)',
+                                  },
                                   '&:hover fieldset': {
                                     borderColor: '#00dcaa',
                                   },
                                   '&.Mui-focused fieldset': {
                                     borderColor: '#00dcaa',
                                   },
+                                  '& input': {
+                                    color: isDarkMode ? 'rgb(243, 244, 246)' : 'rgb(17, 24, 39)',
+                                  },
+                                  '& .MuiSvgIcon-root': {
+                                    color: isDarkMode ? 'rgb(156, 163, 175)' : 'rgb(107, 114, 128)',
+                                  },
+                                },
+                              },
+                            },
+                            popper: {
+                              sx: {
+                                '& .MuiPaper-root': {
+                                  backgroundColor: isDarkMode ? 'rgb(31, 41, 55)' : 'white',
+                                  color: isDarkMode ? 'rgb(243, 244, 246)' : 'rgb(17, 24, 39)',
+                                },
+                                '& .MuiPickersDay-root': {
+                                  color: isDarkMode ? 'rgb(243, 244, 246)' : 'rgb(17, 24, 39)',
+                                  '&:hover': {
+                                    backgroundColor: isDarkMode ? 'rgba(0, 220, 170, 0.2)' : 'rgba(0, 220, 170, 0.1)',
+                                  },
+                                  '&.Mui-selected': {
+                                    backgroundColor: '#00dcaa',
+                                    '&:hover': {
+                                      backgroundColor: '#00b894',
+                                    },
+                                  },
+                                },
+                                '& .MuiPickersCalendarHeader-label': {
+                                  color: isDarkMode ? 'rgb(243, 244, 246)' : 'rgb(17, 24, 39)',
+                                },
+                                '& .MuiPickersCalendarHeader-switchViewButton': {
+                                  color: isDarkMode ? 'rgb(156, 163, 175)' : 'rgb(107, 114, 128)',
+                                },
+                                '& .MuiPickersArrowSwitcher-button': {
+                                  color: isDarkMode ? 'rgb(156, 163, 175)' : 'rgb(107, 114, 128)',
+                                },
+                                '& .MuiClock-root': {
+                                  backgroundColor: isDarkMode ? 'rgb(31, 41, 55)' : 'white',
+                                },
+                                '& .MuiClockNumber-root': {
+                                  color: isDarkMode ? 'rgb(243, 244, 246)' : 'rgb(17, 24, 39)',
+                                },
+                                '& .MuiClockPointer-root': {
+                                  backgroundColor: '#00dcaa',
+                                },
+                                '& .MuiClockPointer-thumb': {
+                                  backgroundColor: '#00dcaa',
+                                  borderColor: '#00dcaa',
                                 },
                               },
                             },
@@ -679,7 +731,7 @@ const ConfigureCampaign = () => {
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        End Date & Time <span className="text-xs text-gray-500">(Auto-calculated)</span>
+                        End Date & Time <span className="text-xs text-gray-500 dark:text-gray-400">(Auto-calculated)</span>
                       </label>
                       <div className="mui-date-picker-wrapper">
                         <DateTimePicker
@@ -693,6 +745,16 @@ const ConfigureCampaign = () => {
                                 '& .MuiOutlinedInput-root': {
                                   borderRadius: '12px',
                                   backgroundColor: isDarkMode ? 'rgba(31, 41, 55, 0.3)' : 'rgba(243, 244, 246, 1)',
+                                  color: isDarkMode ? 'rgb(156, 163, 175)' : 'rgb(107, 114, 128)',
+                                  '& fieldset': {
+                                    borderColor: isDarkMode ? 'rgba(75, 85, 99, 0.5)' : 'rgba(209, 213, 219, 1)',
+                                  },
+                                  '& input': {
+                                    color: isDarkMode ? 'rgb(156, 163, 175)' : 'rgb(107, 114, 128)',
+                                  },
+                                  '& .MuiSvgIcon-root': {
+                                    color: isDarkMode ? 'rgb(107, 114, 128)' : 'rgb(156, 163, 175)',
+                                  },
                                 },
                               },
                             },

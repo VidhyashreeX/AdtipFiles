@@ -1570,3 +1570,33 @@ export const apiSaveCelebrationAdView = async (data: { adId: string | number, us
     }
   });
 };
+
+// Razorpay payment integration
+export const apiCreateRazorpayOrder = async (data: { amount: number, currency?: string, user_id: string | number }) => {
+  const token = localStorage.getItem('UserLoggedIn');
+  return axios.post(`${BASE_URL}/api/razorpay-order`, data, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    }
+  });
+};
+
+export const apiVerifyRazorpayPayment = async (data: { 
+  order_id: string, 
+  razorpay_payment_id: string, 
+  razorpay_signature: string,
+  amount: number,
+  currency?: string,
+  user_id: string | number,
+  payment_status: string,
+  transaction_for: string
+}) => {
+  const token = localStorage.getItem('UserLoggedIn');
+  return axios.post(`${BASE_URL}/api/razorpay-details`, data, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    }
+  });
+};

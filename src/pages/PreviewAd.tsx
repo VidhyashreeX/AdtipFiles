@@ -183,16 +183,16 @@ const PreviewAd = () => {
               <div className="space-y-6">
                 
                 {/* Ad Preview */}
-                <div className="bg-gradient-to-br from-gray-50 to-blue-50 p-6 rounded-xl">
-                  <h3 className="text-xl font-bold text-gray-900 mb-4">Ad Preview</h3>
+                <div className="bg-gradient-to-br from-gray-50 to-blue-50 dark:from-gray-800 dark:to-gray-700 p-6 rounded-xl">
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-4">Ad Preview</h3>
                   
                   {/* Device-Specific Ad Display */}
-                  <div className={`bg-white rounded-lg border border-gray-200 overflow-hidden transition-all ${
+                  <div className={`bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600 overflow-hidden transition-all ${
                     activePreviewDevice === 'mobile' ? 'max-w-sm mx-auto' :
                     activePreviewDevice === 'tablet' ? 'max-w-md mx-auto' :
                     activePreviewDevice === 'tv' ? 'w-full' : 'w-full'
                   }`}>
-                    <div className="flex items-center justify-between p-2 bg-gray-100 text-xs text-gray-600">
+                    <div className="flex items-center justify-between p-2 bg-gray-100 dark:bg-gray-700 text-xs text-gray-600 dark:text-gray-300">
                       <span>Preview: {activePreviewDevice.charAt(0).toUpperCase() + activePreviewDevice.slice(1)}</span>
                       <span>{selectedModel?.title || 'Ad Model'}</span>
                     </div>
@@ -230,13 +230,13 @@ const PreviewAd = () => {
                     </div>
                     
                     <div className={`p-4 ${activePreviewDevice === 'mobile' ? 'p-3' : 'p-4'}`}>
-                      <h4 className={`font-bold text-gray-900 mb-2 ${
+                      <h4 className={`font-bold text-gray-900 dark:text-gray-100 mb-2 ${
                         activePreviewDevice === 'mobile' ? 'text-sm' :
                         activePreviewDevice === 'tv' ? 'text-lg' : 'text-base'
                       }`}>
                         {contentData?.adTitle || 'Discover the Future of Technology'}
                       </h4>
-                      <p className={`text-gray-600 mb-4 ${
+                      <p className={`text-gray-600 dark:text-gray-300 mb-4 ${
                         activePreviewDevice === 'mobile' ? 'text-xs' :
                         activePreviewDevice === 'tv' ? 'text-base' : 'text-sm'
                       }`}>
@@ -253,53 +253,53 @@ const PreviewAd = () => {
                 </div>
 
                 {/* Display Platforms */}
-                <div className="bg-gradient-to-br from-purple-50 to-pink-50 p-6 rounded-xl">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Display Platforms</h3>
+                <div className="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/30 dark:to-pink-900/30 p-6 rounded-xl">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Display Platforms</h3>
                   
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <button
                       onClick={() => setActivePreviewDevice('desktop')}
                       className={`text-center p-4 rounded-lg border transition-all ${
                         activePreviewDevice === 'desktop' 
-                          ? 'bg-blue-100 border-blue-500 ring-2 ring-blue-200' 
-                          : 'bg-white border-purple-200 hover:bg-gray-50'
+                          ? 'bg-blue-100 dark:bg-blue-900/50 border-blue-500 ring-2 ring-blue-200 dark:ring-blue-800' 
+                          : 'bg-white dark:bg-gray-800 border-purple-200 dark:border-purple-700 hover:bg-gray-50 dark:hover:bg-gray-700'
                       }`}
                     >
-                      <Monitor className="w-8 h-8 text-blue-600 mx-auto mb-2" />
-                      <span className="text-sm font-medium">Web Platforms</span>
+                      <Monitor className="w-8 h-8 text-blue-600 dark:text-blue-400 mx-auto mb-2" />
+                      <span className="text-sm font-medium text-gray-900 dark:text-gray-100">Web Platforms</span>
                     </button>
                     <button
                       onClick={() => setActivePreviewDevice('mobile')}
                       className={`text-center p-4 rounded-lg border transition-all ${
                         activePreviewDevice === 'mobile' 
-                          ? 'bg-green-100 border-green-500 ring-2 ring-green-200' 
-                          : 'bg-white border-purple-200 hover:bg-gray-50'
+                          ? 'bg-green-100 dark:bg-green-900/50 border-green-500 ring-2 ring-green-200 dark:ring-green-800' 
+                          : 'bg-white dark:bg-gray-800 border-purple-200 dark:border-purple-700 hover:bg-gray-50 dark:hover:bg-gray-700'
                       }`}
                     >
-                      <Smartphone className="w-8 h-8 text-green-600 mx-auto mb-2" />
-                      <span className="text-sm font-medium">Mobile Apps</span>
+                      <Smartphone className="w-8 h-8 text-green-600 dark:text-green-400 mx-auto mb-2" />
+                      <span className="text-sm font-medium text-gray-900 dark:text-gray-100">Mobile Apps</span>
                     </button>
                     <button
                       onClick={() => setActivePreviewDevice('tablet')}
                       className={`text-center p-4 rounded-lg border transition-all ${
                         activePreviewDevice === 'tablet' 
-                          ? 'bg-orange-100 border-orange-500 ring-2 ring-orange-200' 
-                          : 'bg-white border-purple-200 hover:bg-gray-50'
+                          ? 'bg-orange-100 dark:bg-orange-900/50 border-orange-500 ring-2 ring-orange-200 dark:ring-orange-800' 
+                          : 'bg-white dark:bg-gray-800 border-purple-200 dark:border-purple-700 hover:bg-gray-50 dark:hover:bg-gray-700'
                       }`}
                     >
-                      <Tablet className="w-8 h-8 text-orange-600 mx-auto mb-2" />
-                      <span className="text-sm font-medium">Tablet View</span>
+                      <Tablet className="w-8 h-8 text-orange-600 dark:text-orange-400 mx-auto mb-2" />
+                      <span className="text-sm font-medium text-gray-900 dark:text-gray-100">Tablet View</span>
                     </button>
                     <button
                       onClick={() => setActivePreviewDevice('tv')}
                       className={`text-center p-4 rounded-lg border transition-all ${
                         activePreviewDevice === 'tv' 
-                          ? 'bg-purple-100 border-purple-500 ring-2 ring-purple-200' 
-                          : 'bg-white border-purple-200 hover:bg-gray-50'
+                          ? 'bg-purple-100 dark:bg-purple-900/50 border-purple-500 ring-2 ring-purple-200 dark:ring-purple-800' 
+                          : 'bg-white dark:bg-gray-800 border-purple-200 dark:border-purple-700 hover:bg-gray-50 dark:hover:bg-gray-700'
                       }`}
                     >
-                      <Tv className="w-8 h-8 text-purple-600 mx-auto mb-2" />
-                      <span className="text-sm font-medium">Connected TV</span>
+                      <Tv className="w-8 h-8 text-purple-600 dark:text-purple-400 mx-auto mb-2" />
+                      <span className="text-sm font-medium text-gray-900 dark:text-gray-100">Connected TV</span>
                     </button>
                   </div>
                 </div>
@@ -309,47 +309,47 @@ const PreviewAd = () => {
               <div className="space-y-6">
                 
                 {/* Campaign Details */}
-                <div className="bg-gradient-to-br from-blue-50 to-cyan-50 p-6 rounded-xl">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                <div className="bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-900/30 dark:to-cyan-900/30 p-6 rounded-xl">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center">
                     <Target className="w-5 h-5 mr-2 text-[#00dcaa]" />
                     Campaign Details
                   </h3>
                   
                   <div className="space-y-3 text-sm">
                     <div className="flex justify-between">
-                      <span className="text-gray-600">Campaign Name:</span>
-                      <span className="font-medium text-gray-900">{campaignData?.campaignName || 'Tech Innovation Campaign'}</span>
+                      <span className="text-gray-600 dark:text-gray-400">Campaign Name:</span>
+                      <span className="font-medium text-gray-900 dark:text-gray-100">{campaignData?.campaignName || 'Tech Innovation Campaign'}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-600">Ad Type:</span>
-                      <span className="font-medium text-gray-900">{selectedModel?.title || 'Skip Video Ad'}</span>
+                      <span className="text-gray-600 dark:text-gray-400">Ad Type:</span>
+                      <span className="font-medium text-gray-900 dark:text-gray-100">{selectedModel?.title || 'Skip Video Ad'}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-600">Budget:</span>
-                      <span className="font-medium text-gray-900">₹30,000</span>
+                      <span className="text-gray-600 dark:text-gray-400">Budget:</span>
+                      <span className="font-medium text-gray-900 dark:text-gray-100">₹{campaignData?.estimatedTotalAmount?.toFixed(2) || '30,000'}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-600">Target Age:</span>
-                      <span className="font-medium text-gray-900">18-45 years</span>
+                      <span className="text-gray-600 dark:text-gray-400">Target Age:</span>
+                      <span className="font-medium text-gray-900 dark:text-gray-100">{campaignData?.targetAge || '18-45'} years</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-600">Target Devices:</span>
-                      <span className="font-medium text-gray-900">Mobile, Desktop, Tablet</span>
+                      <span className="text-gray-600 dark:text-gray-400">Target Devices:</span>
+                      <span className="font-medium text-gray-900 dark:text-gray-100">Mobile, Desktop, Tablet</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-600">Target Region:</span>
-                      <span className="font-medium text-gray-900">Global</span>
+                      <span className="text-gray-600 dark:text-gray-400">Target Region:</span>
+                      <span className="font-medium text-gray-900 dark:text-gray-100">{campaignData?.customLocation || Object.entries(campaignData?.targetAreas || {}).filter(([_, v]) => v).map(([k]) => k).join(', ') || 'Global'}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-600">Campaign Duration:</span>
-                      <span className="font-medium text-gray-900">{campaignData?.campaignDurationDays || '30'} days</span>
+                      <span className="text-gray-600 dark:text-gray-400">Campaign Duration:</span>
+                      <span className="font-medium text-gray-900 dark:text-gray-100">{campaignData?.campaignDuration || '30'} days</span>
                     </div>
                   </div>
                 </div>
 
                 {/* Conversion Tracking */}
-                <div className="bg-gradient-to-br from-green-50 to-emerald-50 p-6 rounded-xl">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                <div className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/30 dark:to-emerald-900/30 p-6 rounded-xl">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center">
                     <BarChart3 className="w-5 h-5 mr-2 text-[#00dcaa]" />
                     Conversion Tracking
                   </h3>
@@ -358,11 +358,11 @@ const PreviewAd = () => {
                     {/* Conversion Goal */}
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">Conversion Goal</label>
+                        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Conversion Goal</label>
                         <select 
                           value={conversionGoal}
                           onChange={(e) => setConversionGoal(e.target.value)}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#00dcaa] focus:border-transparent"
+                          className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#00dcaa] focus:border-transparent bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
                           title="Select conversion goal"
                           aria-label="Select conversion goal"
                         >
@@ -374,47 +374,47 @@ const PreviewAd = () => {
                         </select>
                       </div>
                       <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">Average value of each conversion</label>
+                        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Average value of each conversion</label>
                         <input 
                           type="number"
                           value={conversionValue}
                           onChange={(e) => handleInputChange('conversionValue', e.target.value)}
                           placeholder="0"
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#00dcaa] focus:border-transparent"
+                          className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#00dcaa] focus:border-transparent bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
                         />
                       </div>
                     </div>
 
                     {/* Landing Page URL */}
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">Landing Page URL</label>
+                      <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Landing Page URL</label>
                       <input 
                         type="url"
                         value={landingPageUrl}
                         onChange={(e) => handleInputChange('landingPageUrl', e.target.value)}
                         placeholder="https://yourwebsite.com/landing-page"
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#00dcaa] focus:border-transparent"
+                        className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#00dcaa] focus:border-transparent bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
                       />
                     </div>
 
                     {/* Conversion Value & Facebook Pixel */}
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">Facebook Pixel ID (Optional)</label>
+                      <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Facebook Pixel ID (Optional)</label>
                       <input 
                         type="text"
                         value={facebookPixelId}
                         onChange={(e) => handleInputChange('facebookPixelId', e.target.value)}
                         placeholder="Your Facebook Pixel ID"
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#00dcaa] focus:border-transparent"
+                        className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#00dcaa] focus:border-transparent bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
                       />
-                      <p className="text-xs text-gray-500 mt-1">For enhanced tracking and retargeting</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">For enhanced tracking and retargeting</p>
                     </div>
                   </div>
                 </div>
 
                 {/* UTM Parameters */}
-                <div className="bg-gradient-to-br from-yellow-50 to-orange-50 p-6 rounded-xl">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                <div className="bg-gradient-to-br from-yellow-50 to-orange-50 dark:from-yellow-900/30 dark:to-orange-900/30 p-6 rounded-xl">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center">
                     <ExternalLink className="w-5 h-5 mr-2 text-[#00dcaa]" />
                     UTM Parameters (Auto-generated)
                   </h3>
@@ -422,70 +422,70 @@ const PreviewAd = () => {
                   <div className="space-y-3">
                     <div className="grid grid-cols-3 gap-3">
                       <div>
-                        <label className="block text-xs font-medium text-gray-600 mb-1">utm_source</label>
+                        <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">utm_source</label>
                         <input 
                           type="text"
                           value={utmParameters.source}
                           readOnly
-                          className="w-full border border-gray-300 rounded px-2 py-1 text-xs bg-gray-100 text-gray-700"
+                          className="w-full border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-gray-600 mb-1">utm_medium</label>
+                        <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">utm_medium</label>
                         <input 
                           type="text"
                           value={utmParameters.medium}
                           readOnly
-                          className="w-full border border-gray-300 rounded px-2 py-1 text-xs bg-gray-100 text-gray-700"
+                          className="w-full border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-gray-600 mb-1">utm_campaign</label>
+                        <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">utm_campaign</label>
                         <input 
                           type="text"
                           value={utmParameters.campaign}
                           readOnly
-                          className="w-full border border-gray-300 rounded px-2 py-1 text-xs bg-gray-100 text-gray-700"
+                          className="w-full border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
                         />
                       </div>
                     </div>
-                    <p className="text-xs text-gray-500">UTM parameters help track campaign performance in Google Analytics</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">UTM parameters help track campaign performance in Google Analytics</p>
                   </div>
                 </div>
 
                 {/* Estimated Performance */}
-                <div className="bg-gradient-to-br from-cyan-50 to-blue-50 p-6 rounded-xl">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Estimated Performance</h3>
+                <div className="bg-gradient-to-br from-cyan-50 to-blue-50 dark:from-cyan-900/30 dark:to-blue-900/30 p-6 rounded-xl">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Estimated Performance</h3>
                   
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="text-center p-3 bg-white rounded-lg border border-cyan-200">
+                    <div className="text-center p-3 bg-white dark:bg-gray-800 rounded-lg border border-cyan-200 dark:border-cyan-800">
                       <div className="text-lg font-bold text-[#00dcaa]">₹2.50</div>
-                      <p className="text-xs text-gray-600">Expected cost per click</p>
+                      <p className="text-xs text-gray-600 dark:text-gray-400">Expected cost per click</p>
                     </div>
-                    <div className="text-center p-3 bg-white rounded-lg border border-cyan-200">
+                    <div className="text-center p-3 bg-white dark:bg-gray-800 rounded-lg border border-cyan-200 dark:border-cyan-800">
                       <div className="text-lg font-bold text-[#00dcaa]">3.2%</div>
-                      <p className="text-xs text-gray-600">Expected CTR</p>
+                      <p className="text-xs text-gray-600 dark:text-gray-400">Expected CTR</p>
                     </div>
-                    <div className="text-center p-3 bg-white rounded-lg border border-cyan-200">
+                    <div className="text-center p-3 bg-white dark:bg-gray-800 rounded-lg border border-cyan-200 dark:border-cyan-800">
                       <div className="text-lg font-bold text-[#00dcaa]">45K</div>
-                      <p className="text-xs text-gray-600">Estimated reach</p>
+                      <p className="text-xs text-gray-600 dark:text-gray-400">Estimated reach</p>
                     </div>
-                    <div className="text-center p-3 bg-white rounded-lg border border-cyan-200">
+                    <div className="text-center p-3 bg-white dark:bg-gray-800 rounded-lg border border-cyan-200 dark:border-cyan-800">
                       <div className="text-lg font-bold text-[#00dcaa]">2.1%</div>
-                      <p className="text-xs text-gray-600">Expected conversion rate</p>
+                      <p className="text-xs text-gray-600 dark:text-gray-400">Expected conversion rate</p>
                     </div>
                   </div>
                 </div>
 
                 {/* Conversion Tracking Ready */}
-                <div className="bg-gradient-to-br from-emerald-50 to-green-50 p-4 rounded-lg border border-emerald-200">
+                <div className="bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-900/30 dark:to-green-900/30 p-4 rounded-lg border border-emerald-200 dark:border-emerald-800">
                   <div className="flex items-center space-x-3">
                     <div className="w-8 h-8 bg-emerald-500 rounded-full flex items-center justify-center">
                       <span className="text-white text-sm">✓</span>
                     </div>
                     <div>
-                      <h4 className="font-semibold text-emerald-900">Conversion Tracking Ready</h4>
-                      <p className="text-sm text-emerald-700">
+                      <h4 className="font-semibold text-emerald-900 dark:text-emerald-100">Conversion Tracking Ready</h4>
+                      <p className="text-sm text-emerald-700 dark:text-emerald-300">
                         Your conversion tracking is configured and ready to measure campaign performance.
                       </p>
                     </div>
