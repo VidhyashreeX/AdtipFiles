@@ -59,17 +59,45 @@ const PreviewAd = () => {
       // Get user data
       const userData = JSON.parse(localStorage.getItem('UserData') || '{}');
       
-      // Prepare data for third page API call
+      // Calculate pricing
+      // Extract base price from selected model
+      const modelPrice = selectedModel?.price ? parseFloat(selectedModel.price.replace('₹', '').replace(',', '')) : 0.20;
+      
+      // Calculate total based on campaign duration or use model price
+      const campaignDuration = campaignData?.campaignDuration ? parseInt(campaignData.campaignDuration) : 1;
+      const baseOrderValue = modelPrice * campaignDuration;
+      
+      // Calculate tax (18% GST)
+      const taxRate = 0.18;
+      const taxAmount = baseOrderValue * taxRate;
+      const totalAmount = baseOrderValue + taxAmount;
+      
+      // Prepare data for third page API call matching backend requirements
       const thirdPageData = {
-        adId: adId,
-        landingUrl: landingPageUrl || 'https://theadtip.in',
-        conversionValue: parseFloat(conversionValue) || 0,
-        conversionGoal: conversionGoal,
-        facebookPixelId: facebookPixelId || '',
-        utmSource: utmParameters.source,
-        utmMedium: utmParameters.medium,
-        utmCampaign: utmParameters.campaign,
-        createdby: userData.id || '1'
+        id: adId,
+        userId: userData.id || '1',
+        adDescription: contentData?.text || campaignData?.campaignDescription || `${selectedModel?.title || 'Ad'} Campaign`,
+        adWebsiteLink: landingPageUrl || 'https://theadtip.in',
+        adWebsite: landingPageUrl ? new URL(landingPageUrl).hostname : 'theadtip.in',
+        adCompanyLocation: campaignData?.location || userData.location || 'India',
+        adTaxNumber: userData.gstNumber || userData.taxNumber || '',
+        adPlaceApp: campaignData?.targetPlatform || 'mobile',
+        adRefferal: userData.referralCode || '',
+        adPaymendMode: 'online',
+        adOrderValue: baseOrderValue.toFixed(2),
+        adChargesValue: '0.00',
+        adTax: taxAmount.toFixed(2),
+        adTotal: totalAmount.toFixed(2),
+        adCoupan: campaignData?.couponCode || '',
+        // Store tracking data in JSON format for future use
+        trackingData: JSON.stringify({
+          conversionGoal,
+          conversionValue: parseFloat(conversionValue) || 0,
+          facebookPixelId: facebookPixelId || '',
+          utmSource: utmParameters.source,
+          utmMedium: utmParameters.medium,
+          utmCampaign: utmParameters.campaign
+        })
       };
 
       console.log('Sending third page data:', thirdPageData);
@@ -92,7 +120,12 @@ const PreviewAd = () => {
               uploadedFileUrl,
               contentData,
               adId,
-              apiData
+              apiData,
+              pricing: {
+                orderValue: baseOrderValue,
+                tax: taxAmount,
+                total: totalAmount
+              }
             },
             conversionGoal,
             conversionValue,

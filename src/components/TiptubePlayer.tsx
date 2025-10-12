@@ -8,6 +8,7 @@
  * - Full ad analytics tracking
  */
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import ReactPlayer from 'react-player';
 import AdOverlay from './AdOverlay';
@@ -24,6 +25,13 @@ interface TiptubePlayerProps {
   height?: string;
   onVideoEnd?: () => void;
   onVideoPlay?: () => void;
+}
+
+interface PlayerProgressState {
+  played: number;
+  playedSeconds: number;
+  loaded: number;
+  loadedSeconds: number;
 }
 
 interface AdData {
@@ -79,15 +87,15 @@ const TiptubePlayer: React.FC<TiptubePlayerProps> = ({
   const [currentVideoTime, setCurrentVideoTime] = useState(0);
   
   // Refs
-  const playerRef = useRef<ReactPlayer>(null);
-  const adPlayerRef = useRef<ReactPlayer>(null);
+  const playerRef = useRef<any>(null);
+  const adPlayerRef = useRef<any>(null);
   const lastQuartileTracked = useRef<string | null>(null);
 
   // Base API URL
   const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
   // Disable ads if explicitly set to true, or if not in production
-  const DISABLE_ADS = import.meta.env.VITE_DISABLE_ADS === 'true' || import.meta.env.VITE_DISABLE_ADS === true || true;
-
+  //const DISABLE_ADS = import.meta.env.VITE_DISABLE_ADS === 'true' || import.meta.env.VITE_DISABLE_ADS === true || true;
+  const DISABLE_ADS=false
   /**
    * Fetch mid-roll cue points on component mount
    */
@@ -149,6 +157,12 @@ const TiptubePlayer: React.FC<TiptubePlayerProps> = ({
         return null;
       }
     } catch (error) {
+      // 404 is a valid response when no ads are available
+      if (axios.isAxiosError(error) && error.response?.status === 404) {
+        console.log('[TiptubePlayer] No ads available (404)');
+        return null;
+      }
+      
       console.error('[TiptubePlayer] Error requesting ad:', error);
       return null;
     }
@@ -293,7 +307,7 @@ const TiptubePlayer: React.FC<TiptubePlayerProps> = ({
   /**
    * Handle ad progress for quartile tracking
    */
-  const handleAdProgress = useCallback(async (state: { played: number; playedSeconds: number }) => {
+  const handleAdProgress = useCallback(async (state: PlayerProgressState) => {
     if (!currentAdData) return;
 
     const progress = state.played * 100; // Percentage
@@ -320,33 +334,33 @@ const TiptubePlayer: React.FC<TiptubePlayerProps> = ({
   /**
    * Handle main video ready
    */
-  const handleVideoReady = () => {
+  const handleVideoReady = useCallback(() => {
     setMainVideoReady(true);
     console.log('[TiptubePlayer] Main video ready');
-  };
+  }, []);
 
   /**
    * Handle main video duration
    */
-  const handleVideoDuration = (duration: number) => {
+  const handleVideoDuration = useCallback((duration: number) => {
     setVideoDuration(duration);
     console.log('[TiptubePlayer] Video duration:', duration);
-  };
+  }, []);
 
   /**
    * Handle main video progress
    */
-  const handleVideoProgress = (state: { played: number; playedSeconds: number }) => {
+  const handleVideoProgress = useCallback((state: PlayerProgressState) => {
     setCurrentVideoTime(state.playedSeconds);
-  };
+  }, []);
 
   /**
    * Handle main video end
    */
-  const handleVideoEnd = () => {
+  const handleVideoEnd = useCallback(() => {
     console.log('[TiptubePlayer] Main video ended');
     onVideoEnd?.();
-  };
+  }, [onVideoEnd]);
 
   /**
    * Handle ad click
@@ -367,10 +381,10 @@ const TiptubePlayer: React.FC<TiptubePlayerProps> = ({
       {!isAdPlaying && preRollComplete && (
         <ReactPlayer
           ref={playerRef}
-          url={videoUrl}
+          src={videoUrl}
           width="100%"
           height="100%"
-          playing={false}
+          playing={autoplay}
           controls
           onReady={() => {
             handleVideoReady();
@@ -382,17 +396,9 @@ const TiptubePlayer: React.FC<TiptubePlayerProps> = ({
               }
             }
           }}
-          onProgress={handleVideoProgress}
+          onProgress={handleVideoProgress as any}
           onEnded={handleVideoEnd}
           onPlay={onVideoPlay}
-          config={{
-            file: {
-              attributes: {
-                controlsList: 'nodownload',
-                disablePictureInPicture: false,
-              }
-            }
-          }}
         />
       )}
 
@@ -401,15 +407,15 @@ const TiptubePlayer: React.FC<TiptubePlayerProps> = ({
         <div className="ad-player-wrapper relative w-full h-full">
           <ReactPlayer
             ref={adPlayerRef}
-            url={currentAdData.creative.url}
+            src={currentAdData.creative.url}
             width="100%"
             height="100%"
             playing
             controls={false}
             volume={0.8}
-            onProgress={handleAdProgress}
+            onProgress={handleAdProgress as any}
             onEnded={() => handleAdEnd(false)}
-            onError={(error) => {
+            onError={(error: any) => {
               console.error('[TiptubePlayer] Ad playback error:', error);
               trackAdEvent(currentAdData.trackingUrls.error);
               handleAdEnd(false); // Skip to content on error

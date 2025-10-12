@@ -1,22 +1,89 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Plus, Upload, CheckCircle, Loader2 } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from '@/hooks/use-toast';
+import Select from 'react-select';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { 
   apiSaveFirstPageAdModel, 
-  apiSaveSecondPageAdModel, 
-  apiSaveThirdPageAdModel,
   apiGetTargetAreas,
   apiGetTargetProfessions,
-  apiGetButtons
+  apiGetButtons,
+  apiGetCompanyList
 } from '@/api';
+
+// Custom styles for react-select with dark mode
+const getSelectStyles = (isDark: boolean) => ({
+  control: (base: any) => ({
+    ...base,
+    minHeight: '48px',
+    borderRadius: '12px',
+    border: 'none',
+    boxShadow: 'none',
+    background: isDark 
+      ? 'linear-gradient(to right, rgba(31, 41, 55, 0.5), rgba(31, 41, 55, 0.7))' 
+      : 'linear-gradient(to right, rgb(249, 250, 251), rgb(243, 244, 246))',
+    '&:hover': {
+      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+    },
+  }),
+  menu: (base: any) => ({
+    ...base,
+    borderRadius: '12px',
+    overflow: 'hidden',
+    backgroundColor: isDark ? 'rgb(31, 41, 55)' : 'white',
+    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+  }),
+  option: (base: any, state: any) => ({
+    ...base,
+    backgroundColor: state.isFocused 
+      ? (isDark ? 'rgba(0, 220, 170, 0.2)' : 'rgba(0, 220, 170, 0.1)')
+      : 'transparent',
+    color: isDark ? 'rgb(243, 244, 246)' : 'rgb(17, 24, 39)',
+    cursor: 'pointer',
+    '&:active': {
+      backgroundColor: isDark ? 'rgba(0, 220, 170, 0.3)' : 'rgba(0, 220, 170, 0.2)',
+    },
+  }),
+  singleValue: (base: any) => ({
+    ...base,
+    color: isDark ? 'rgb(243, 244, 246)' : 'rgb(17, 24, 39)',
+  }),
+  placeholder: (base: any) => ({
+    ...base,
+    color: isDark ? 'rgb(156, 163, 175)' : 'rgb(107, 114, 128)',
+  }),
+  input: (base: any) => ({
+    ...base,
+    color: isDark ? 'rgb(243, 244, 246)' : 'rgb(17, 24, 39)',
+  }),
+});
 
 const ConfigureCampaign = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const selectedModel = location.state?.selectedModel;
+  
+  // Detect dark mode
+  const [isDarkMode, setIsDarkMode] = useState(false);
 
-  // Extract price from selectedModel (remove ₹ symbol and convert to number)
+  useEffect(() => {
+    // Check for dark mode
+    const checkDarkMode = () => {
+      setIsDarkMode(document.documentElement.classList.contains('dark'));
+    };
+    checkDarkMode();
+    
+    // Watch for changes
+    const observer = new MutationObserver(checkDarkMode);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    
+    return () => observer.disconnect();
+  }, []);
+
+  // Extract price from selectedModel
   const modelPrice = selectedModel?.price ? parseFloat(selectedModel.price.replace('₹', '')) : 0.20;
 
   // State for API data and loading
@@ -24,23 +91,18 @@ const ConfigureCampaign = () => {
   const [targetAreas, setTargetAreas] = useState<any[]>([]);
   const [targetProfessions, setTargetProfessions] = useState<any[]>([]);
   const [buttons, setButtons] = useState<any[]>([]);
+  const [companies, setCompanies] = useState<any[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const [formData, setFormData] = useState({
-    // Basic Information
     campaignName: '',
     campaignDescription: '',
-    
-    // Company Selection
     selectedCompany: '',
-    
-    // Target Demographics
+    companyId: '',
     targetGender: '',
     targetAge: '',
     targetMaritalStatus: '',
     targetProfession: '',
-    
-    // Target Areas
     targetAreas: {
       delhi: false,
       mumbai: false,
@@ -50,18 +112,14 @@ const ConfigureCampaign = () => {
       kolkata: false
     },
     customLocation: '',
-    
-    // Engagement Details
     watchesPerCustomerPerDay: '',
     amountPerCustomer: '',
     customersPerDay: '',
     amountPerDay: '',
     campaignDuration: '',
     estimatedTotalAmount: 0,
-    startDateTime: '',
-    endDateTime: '',
-    
-    // Customer Conversion & Button Setup
+    startDateTime: null as Date | null,
+    endDateTime: null as Date | null,
     customerViewPercentage: 50,
     customerLikePercentage: 30,
     buttonToDisplay: '',
@@ -71,7 +129,7 @@ const ConfigureCampaign = () => {
     transactionId: ''
   });
 
-  // Calculate estimated amount whenever relevant fields change
+  // Calculate estimated amount
   useEffect(() => {
     const { amountPerCustomer, customersPerDay, campaignDuration } = formData;
     
@@ -87,7 +145,67 @@ const ConfigureCampaign = () => {
     }
   }, [formData.amountPerCustomer, formData.customersPerDay, formData.campaignDuration]);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+  // Auto-calculate end date
+  useEffect(() => {
+    if (formData.startDateTime && formData.campaignDuration) {
+      const startDate = new Date(formData.startDateTime);
+      const duration = parseInt(formData.campaignDuration);
+      
+      if (!isNaN(startDate.getTime()) && duration > 0) {
+        const endDate = new Date(startDate);
+        endDate.setDate(endDate.getDate() + duration);
+        
+        setFormData(prev => ({
+          ...prev,
+          endDateTime: endDate
+        }));
+      }
+    }
+  }, [formData.startDateTime, formData.campaignDuration]);
+
+  // Load API data
+  useEffect(() => {
+    const loadApiData = async () => {
+      try {
+        const userData = JSON.parse(localStorage.getItem('user') || '{}');
+        const userId = userData.id || localStorage.getItem('userId') || '1';
+        
+        const [areasRes, professionsRes, buttonsRes, companiesRes] = await Promise.all([
+          apiGetTargetAreas(),
+          apiGetTargetProfessions(),
+          apiGetButtons(),
+          apiGetCompanyList(userId)
+        ]);
+        
+        if (areasRes.data?.status === 200) setTargetAreas(areasRes.data.data || []);
+        if (professionsRes.data?.status === 200) setTargetProfessions(professionsRes.data.data || []);
+        if (buttonsRes.data?.status === 200) setButtons(buttonsRes.data.data || []);
+        if (companiesRes.data?.status === 200) {
+          const companiesList = companiesRes.data.data || [];
+          setCompanies(companiesList);
+          
+          if (companiesList.length > 0 && !formData.selectedCompany) {
+            setFormData(prev => ({
+              ...prev,
+              selectedCompany: companiesList[0].name || '',
+              companyId: companiesList[0].id?.toString() || ''
+            }));
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load API data:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load campaign options. Please refresh the page.",
+          variant: "destructive",
+        });
+      }
+    };
+    
+    loadApiData();
+  }, []);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
@@ -112,44 +230,6 @@ const ConfigureCampaign = () => {
     }));
   };
 
-  // Load API data on component mount
-  useEffect(() => {
-    const loadApiData = async () => {
-      try {
-        const [areasRes, professionsRes, buttonsRes] = await Promise.all([
-          apiGetTargetAreas(),
-          apiGetTargetProfessions(),
-          apiGetButtons()
-        ]);
-        
-        if (areasRes.data?.status === 200) setTargetAreas(areasRes.data.data || []);
-        if (professionsRes.data?.status === 200) setTargetProfessions(professionsRes.data.data || []);
-        if (buttonsRes.data?.status === 200) setButtons(buttonsRes.data.data || []);
-      } catch (error) {
-        console.error('Failed to load API data:', error);
-        toast({
-          title: "Error",
-          description: "Failed to load campaign options. Please refresh the page.",
-          variant: "destructive",
-        });
-      }
-    };
-    
-    loadApiData();
-  }, []);
-
-  // Load company data from localStorage
-  useEffect(() => {
-    const companyData = JSON.parse(localStorage.getItem('selectedCompany') || '{}');
-    if (companyData && companyData.id) {
-      setFormData(prev => ({
-        ...prev,
-        selectedCompany: companyData.name || '',
-        companyId: companyData.id.toString()
-      }));
-    }
-  }, []);
-
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
     
@@ -158,7 +238,6 @@ const ConfigureCampaign = () => {
     if (!formData.targetMaritalStatus) newErrors.targetMaritalStatus = 'Marital status is required';
     if (!formData.targetProfession) newErrors.targetProfession = 'Target profession is required';
     
-    // Check if at least one target area is selected
     const hasTargetArea = Object.values(formData.targetAreas).some(Boolean) || formData.customLocation.trim();
     if (!hasTargetArea) newErrors.targetAreas = 'Select at least one target area';
     
@@ -172,7 +251,6 @@ const ConfigureCampaign = () => {
       newErrors.campaignDuration = 'Campaign duration must be greater than 0';
     }
     if (!formData.startDateTime) newErrors.startDateTime = 'Start date is required';
-    if (!formData.endDateTime) newErrors.endDateTime = 'End date is required';
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -191,15 +269,17 @@ const ConfigureCampaign = () => {
     setIsLoading(true);
     
     try {
-      // Get user data
       const userData = JSON.parse(localStorage.getItem('UserData') || '{}');
       const companyData = JSON.parse(localStorage.getItem('selectedCompany') || '{}');
       
-      // Prepare data for first page API call
+      // Format dates
+      const startDate = formData.startDateTime ? new Date(formData.startDateTime).toISOString().slice(0, 19).replace('T', ' ') : '';
+      const endDate = formData.endDateTime ? new Date(formData.endDateTime).toISOString().slice(0, 19).replace('T', ' ') : '';
+      
       const campaignApiData = {
         campaignName: formData.campaignName,
         companyName: companyData.name || formData.selectedCompany,
-        companyId: companyData.id || '1',
+        companyId: companyData.id || formData.companyId || '1',
         adModelId: selectedModel?.id || 1,
         targetGender: formData.targetGender,
         maritalStatus: formData.targetMaritalStatus,
@@ -214,10 +294,10 @@ const ConfigureCampaign = () => {
         adwatchPerDay: parseInt(formData.watchesPerCustomerPerDay || '1'),
         adPerdayPay: parseFloat(formData.amountPerCustomer || '0'),
         adSpendPerDay: parseFloat(formData.amountPerDay || '0'),
-        adStartDate: formData.startDateTime,
-        adEndDate: formData.endDateTime,
-        adTime: '09:00',
-        adEndTime: '18:00',
+        adStartDate: startDate,
+        adEndDate: endDate,
+        adTime: formData.startDateTime ? new Date(formData.startDateTime).toTimeString().slice(0, 5) : '09:00',
+        adEndTime: formData.endDateTime ? new Date(formData.endDateTime).toTimeString().slice(0, 5) : '18:00',
         adCustomerTargetPerDay: parseInt(formData.customersPerDay || '0'),
         modelTypeName: selectedModel?.title || 'Skip Video Ad',
         createdby: userData.id || '1'
@@ -235,7 +315,6 @@ const ConfigureCampaign = () => {
           description: "Campaign details saved successfully!",
         });
         
-        // Navigate to upload creative with the ad ID
         navigate('/seller/upload-creative', { 
           state: { 
             selectedModel, 
@@ -262,465 +341,384 @@ const ConfigureCampaign = () => {
     }
   };
 
+  // Options for react-select
+  const genderOptions = [
+    { value: 'male', label: 'Male' },
+    { value: 'female', label: 'Female' },
+    { value: 'all', label: 'All' }
+  ];
+
+  const maritalStatusOptions = [
+    { value: 'single', label: 'Single' },
+    { value: 'married', label: 'Married' },
+    { value: 'divorced', label: 'Divorced' },
+    { value: 'widowed', label: 'Widowed' },
+    { value: 'all', label: 'All' }
+  ];
+
+  const ageOptions = [
+    { value: 'all', label: 'All Ages' },
+    { value: '18-25', label: '18-25' },
+    { value: '26-35', label: '26-35' },
+    { value: '36-45', label: '36-45' },
+    { value: '46-55', label: '46-55' },
+    { value: '56-65', label: '56-65' },
+    { value: '65+', label: '65+' }
+  ];
+
+  const professionOptions = [
+    { value: 'student', label: 'Student' },
+    { value: 'employed', label: 'Employed' },
+    { value: 'business', label: 'Business Owner' },
+    { value: 'professional', label: 'Professional' },
+    { value: 'retired', label: 'Retired' },
+    { value: 'unemployed', label: 'Unemployed' },
+    { value: 'housewife', label: 'Housewife' },
+    { value: 'other', label: 'Other' }
+  ];
+
+  const companyOptions = companies.map(company => ({
+    value: company.id,
+    label: company.name
+  }));
+
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
-      {/* Main Content */}
-      <div className="max-w-5xl mx-auto px-6 py-8">
-        <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl rounded-2xl shadow-2xl overflow-hidden">
-          
-          {/* Header */}
-          <div className="bg-gradient-to-r from-[#00dcaa] to-[#00b894] p-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-4">
-                <button 
-                  className="p-2 hover:bg-white/20 rounded-lg transition-all duration-300" 
-                  onClick={() => navigate('/post-ads')}
-                  title="Back to Ad Models"
-                  aria-label="Back to Ad Models"
-                >
-                  <ArrowLeft className="w-5 h-5 text-white" />
-                </button>
-                <div>
-                  <h1 className="text-2xl font-bold text-white">Campaign Setup</h1>
-                  <p className="text-white/90">Configure your {selectedModel?.title || 'Ad'} campaign</p>
+    <LocalizationProvider dateAdapter={AdapterDateFns}>
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
+          <div className="max-w-5xl mx-auto px-6 py-8">
+            <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl rounded-2xl shadow-2xl overflow-hidden">
+              
+              {/* Header */}
+              <div className="bg-gradient-to-r from-[#00dcaa] to-[#00b894] p-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-4">
+                    <button 
+                      className="p-2 hover:bg-white/20 rounded-lg transition-all duration-300" 
+                      onClick={() => navigate('/post-ads')}
+                    >
+                      <ArrowLeft className="w-5 h-5 text-white" />
+                    </button>
+                    <div>
+                      <h1 className="text-2xl font-bold text-white">Campaign Setup</h1>
+                      <p className="text-white/90">Configure your {selectedModel?.title || 'Ad'} campaign</p>
+                    </div>
+                  </div>
+                  <div className="bg-white/20 backdrop-blur-sm rounded-xl px-4 py-2">
+                    <span className="text-white font-bold text-lg">₹{modelPrice.toFixed(2)}</span>
+                  </div>
                 </div>
               </div>
-              <div className="bg-white/20 backdrop-blur-sm rounded-xl px-4 py-2">
-                <span className="text-white font-bold text-lg">₹{modelPrice.toFixed(2)}</span>
-              </div>
+
+              <form className="p-8">
+                
+                {/* Basic Information */}
+                <div className="mb-8">
+                  <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">Basic Information</h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Campaign Name
+                      </label>
+                      <input
+                        type="text"
+                        name="campaignName"
+                        value={formData.campaignName}
+                        onChange={handleInputChange}
+                        placeholder="Enter campaign name"
+                        className="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 backdrop-blur-sm border-0 focus:ring-2 focus:ring-[#00dcaa]/50 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Campaign Description
+                      </label>
+                      <textarea
+                        name="campaignDescription"
+                        value={formData.campaignDescription}
+                        onChange={handleInputChange}
+                        placeholder="Describe your campaign"
+                        className="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 backdrop-blur-sm border-0 focus:ring-2 focus:ring-[#00dcaa]/50 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all"
+                        rows={3}
+                      />
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Company & Demographics */}
+                <div className="mb-8">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Select Company
+                      </label>
+                      <Select
+                        options={companyOptions}
+                        styles={getSelectStyles(isDarkMode)}
+                        placeholder="Choose company"
+                        value={companyOptions.find(opt => opt.value === formData.companyId)}
+                        onChange={(selected) => {
+                          const company = companies.find(c => c.id === selected?.value);
+                          setFormData(prev => ({
+                            ...prev,
+                            selectedCompany: company?.name || '',
+                            companyId: company?.id?.toString() || ''
+                          }));
+                        }}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Target Gender
+                      </label>
+                      <Select
+                        options={genderOptions}
+                        styles={getSelectStyles(isDarkMode)}
+                        placeholder="Select gender"
+                        value={genderOptions.find(opt => opt.value === formData.targetGender)}
+                        onChange={(selected) => setFormData(prev => ({ ...prev, targetGender: selected?.value || '' }))}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Marital Status & Age */}
+                <div className="mb-8">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Target Marital Status
+                      </label>
+                      <Select
+                        options={maritalStatusOptions}
+                        styles={getSelectStyles(isDarkMode)}
+                        placeholder="Select marital status"
+                        value={maritalStatusOptions.find(opt => opt.value === formData.targetMaritalStatus)}
+                        onChange={(selected) => setFormData(prev => ({ ...prev, targetMaritalStatus: selected?.value || '' }))}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Target Age
+                      </label>
+                      <Select
+                        options={ageOptions}
+                        styles={getSelectStyles(isDarkMode)}
+                        placeholder="Select age range"
+                        value={ageOptions.find(opt => opt.value === formData.targetAge)}
+                        onChange={(selected) => setFormData(prev => ({ ...prev, targetAge: selected?.value || '' }))}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Profession */}
+                <div className="mb-8">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Target Profession
+                  </label>
+                  <Select
+                    options={professionOptions}
+                    styles={getSelectStyles(isDarkMode)}
+                    placeholder="Select profession"
+                    value={professionOptions.find(opt => opt.value === formData.targetProfession)}
+                    onChange={(selected) => setFormData(prev => ({ ...prev, targetProfession: selected?.value || '' }))}
+                  />
+                </div>
+
+                {/* Target Areas */}
+                <div className="mb-8">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">
+                    Target Areas
+                  </label>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
+                    {[
+                      { id: 'delhi', label: 'Delhi' },
+                      { id: 'mumbai', label: 'Mumbai' },
+                      { id: 'chennai', label: 'Chennai' },
+                      { id: 'bangalore', label: 'Bangalore' },
+                      { id: 'hyderabad', label: 'Hyderabad' },
+                      { id: 'kolkata', label: 'Kolkata' }
+                    ].map((area) => (
+                      <label key={area.id} className="flex items-center space-x-3 cursor-pointer p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800/70 transition-all">
+                        <input
+                          type="checkbox"
+                          checked={formData.targetAreas[area.id as keyof typeof formData.targetAreas]}
+                          onChange={(e) => handleTargetAreaChange(area.id, e.target.checked)}
+                          className="w-4 h-4 text-[#00dcaa] bg-gray-100 dark:bg-gray-700 border-0 rounded focus:ring-2 focus:ring-[#00dcaa]/50"
+                        />
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{area.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                  
+                  <input
+                    type="text"
+                    name="customLocation"
+                    value={formData.customLocation}
+                    onChange={handleInputChange}
+                    placeholder="Add custom location"
+                    className="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 backdrop-blur-sm border-0 focus:ring-2 focus:ring-[#00dcaa]/50 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all"
+                  />
+                </div>
+
+                {/* Engagement Details */}
+                <div className="mb-8">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Engagement Details</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Watches per customer per day
+                      </label>
+                      <input
+                        type="number"
+                        name="watchesPerCustomerPerDay"
+                        value={formData.watchesPerCustomerPerDay}
+                        onChange={handleInputChange}
+                        placeholder="Enter number"
+                        className="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 backdrop-blur-sm border-0 focus:ring-2 focus:ring-[#00dcaa]/50 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Amount per customer (₹)
+                      </label>
+                      <input
+                        type="number"
+                        name="amountPerCustomer"
+                        value={formData.amountPerCustomer}
+                        onChange={handleInputChange}
+                        placeholder="Enter amount"
+                        className="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 backdrop-blur-sm border-0 focus:ring-2 focus:ring-[#00dcaa]/50 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Customers per day
+                      </label>
+                      <input
+                        type="number"
+                        name="customersPerDay"
+                        value={formData.customersPerDay}
+                        onChange={handleInputChange}
+                        placeholder="Enter number"
+                        className="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 backdrop-blur-sm border-0 focus:ring-2 focus:ring-[#00dcaa]/50 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Amount per day (₹)
+                      </label>
+                      <input
+                        type="number"
+                        name="amountPerDay"
+                        value={formData.amountPerDay}
+                        readOnly
+                        className="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 backdrop-blur-sm border-0 text-gray-900 dark:text-gray-100 cursor-not-allowed"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Campaign duration (days)
+                      </label>
+                      <input
+                        type="number"
+                        name="campaignDuration"
+                        value={formData.campaignDuration}
+                        onChange={handleInputChange}
+                        placeholder="Enter number of days"
+                        className="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 backdrop-blur-sm border-0 focus:ring-2 focus:ring-[#00dcaa]/50 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Estimated Total Amount
+                      </label>
+                      <div className="bg-gradient-to-r from-[#00dcaa]/20 to-[#00b894]/20 dark:from-[#00dcaa]/30 dark:to-[#00b894]/30 backdrop-blur-sm rounded-xl p-3 font-bold text-[#00dcaa] dark:text-[#00dcaa]">
+                        ₹{formData.estimatedTotalAmount.toFixed(2)}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Start Date & Time
+                      </label>
+                      <div className="mui-date-picker-wrapper">
+                        <DateTimePicker
+                          value={formData.startDateTime}
+                          onChange={(newValue) => setFormData(prev => ({ ...prev, startDateTime: newValue }))}
+                          slotProps={{
+                            textField: {
+                              fullWidth: true,
+                              sx: {
+                                '& .MuiOutlinedInput-root': {
+                                  borderRadius: '12px',
+                                  backgroundColor: isDarkMode ? 'rgba(31, 41, 55, 0.5)' : 'rgba(249, 250, 251, 1)',
+                                  '&:hover fieldset': {
+                                    borderColor: '#00dcaa',
+                                  },
+                                  '&.Mui-focused fieldset': {
+                                    borderColor: '#00dcaa',
+                                  },
+                                },
+                              },
+                            },
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        End Date & Time <span className="text-xs text-gray-500">(Auto-calculated)</span>
+                      </label>
+                      <div className="mui-date-picker-wrapper">
+                        <DateTimePicker
+                          value={formData.endDateTime}
+                          onChange={() => {}} // Read-only
+                          disabled
+                          slotProps={{
+                            textField: {
+                              fullWidth: true,
+                              sx: {
+                                '& .MuiOutlinedInput-root': {
+                                  borderRadius: '12px',
+                                  backgroundColor: isDarkMode ? 'rgba(31, 41, 55, 0.3)' : 'rgba(243, 244, 246, 1)',
+                                },
+                              },
+                            },
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Continue Button */}
+                <div className="flex justify-end pt-6 border-t border-gray-200 dark:border-gray-800">
+                  <button
+                    type="button"
+                    onClick={handleContinue}
+                    disabled={isLoading}
+                    className="bg-gradient-to-r from-[#00dcaa] to-[#00b894] hover:from-[#00b894] hover:to-[#00a085] text-white px-8 py-3 rounded-xl text-lg font-semibold transition-all duration-300 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isLoading ? 'Saving...' : 'Continue to Upload Creative'}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
-
-          <form className="p-8">
-            
-            {/* Basic Information */}
-            <div className="mb-8">
-              <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">Basic Information</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Campaign Name
-                  </label>
-                  <input
-                    type="text"
-                    name="campaignName"
-                    value={formData.campaignName}
-                    onChange={handleInputChange}
-                    placeholder="Enter campaign name"
-                    className="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 backdrop-blur-sm border-0 focus:ring-2 focus:ring-[#00dcaa]/50 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Campaign Description
-                  </label>
-                  <textarea
-                    name="campaignDescription"
-                    value={formData.campaignDescription}
-                    onChange={handleInputChange}
-                    placeholder="Describe your campaign"
-                    className="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 backdrop-blur-sm border-0 focus:ring-2 focus:ring-[#00dcaa]/50 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all"
-                    rows={3}
-                  />
-                </div>
-              </div>
-            </div>
-            
-            {/* Select Company & Target Gender */}
-            <div className="mb-8">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Select Company
-                  </label>
-                  <select
-                    name="selectedCompany"
-                    value={formData.selectedCompany}
-                    onChange={handleInputChange}
-                    className="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 backdrop-blur-sm border-0 focus:ring-2 focus:ring-[#00dcaa]/50 text-gray-900 dark:text-gray-100 transition-all"
-                  >
-                    <option value="">Choose company</option>
-                    <option value="company1">Company 1</option>
-                    <option value="company2">Company 2</option>
-                    <option value="company3">Company 3</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Target Gender
-                  </label>
-                  <select
-                    name="targetGender"
-                    value={formData.targetGender}
-                    onChange={handleInputChange}
-                    className="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 backdrop-blur-sm border-0 focus:ring-2 focus:ring-[#00dcaa]/50 text-gray-900 dark:text-gray-100 transition-all"
-                  >
-                    <option value="">Select gender</option>
-                    <option value="male">Male</option>
-                    <option value="female">Female</option>
-                    <option value="all">All</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-
-            {/* Target Marital Status & Target Age */}
-            <div className="mb-8">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Target Marital Status
-                  </label>
-                  <select
-                    name="targetMaritalStatus"
-                    value={formData.targetMaritalStatus}
-                    onChange={handleInputChange}
-                    className="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 backdrop-blur-sm border-0 focus:ring-2 focus:ring-[#00dcaa]/50 text-gray-900 dark:text-gray-100 transition-all"
-                  >
-                    <option value="">Select marital status</option>
-                    <option value="single">Single</option>
-                    <option value="married">Married</option>
-                    <option value="divorced">Divorced</option>
-                    <option value="widowed">Widowed</option>
-                    <option value="all">All</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Target Age
-                  </label>
-                  <select
-                    name="targetAge"
-                    value={formData.targetAge}
-                    onChange={handleInputChange}
-                    className="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 backdrop-blur-sm border-0 focus:ring-2 focus:ring-[#00dcaa]/50 text-gray-900 dark:text-gray-100 transition-all"
-                  >
-                    <option value="">Select age range</option>
-                    <option value="all">All Ages</option>
-                    <option value="18-25">18-25</option>
-                    <option value="26-35">26-35</option>
-                    <option value="36-45">36-45</option>
-                    <option value="46-55">46-55</option>
-                    <option value="56-65">56-65</option>
-                    <option value="65+">65+</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-
-            {/* Target Profession */}
-            <div className="mb-8">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Target Profession
-              </label>
-              <select
-                name="targetProfession"
-                value={formData.targetProfession}
-                onChange={handleInputChange}
-                className="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 backdrop-blur-sm border-0 focus:ring-2 focus:ring-[#00dcaa]/50 text-gray-900 dark:text-gray-100 transition-all"
-              >
-                <option value="">Select profession</option>
-                <option value="student">Student</option>
-                <option value="employed">Employed</option>
-                <option value="business">Business Owner</option>
-                <option value="professional">Professional</option>
-                <option value="retired">Retired</option>
-                <option value="unemployed">Unemployed</option>
-                <option value="housewife">Housewife</option>
-                <option value="other">Other</option>
-              </select>
-            </div>
-
-            {/* Target Areas */}
-            <div className="mb-8">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">
-                Target Areas
-              </label>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
-                {[
-                  { id: 'delhi', label: 'Delhi' },
-                  { id: 'mumbai', label: 'Mumbai' },
-                  { id: 'chennai', label: 'Chennai' },
-                  { id: 'bangalore', label: 'Bangalore' },
-                  { id: 'hyderabad', label: 'Hyderabad' },
-                  { id: 'kolkata', label: 'Kolkata' }
-                ].map((area) => (
-                  <label key={area.id} className="flex items-center space-x-3 cursor-pointer p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800/70 transition-all">
-                    <input
-                      type="checkbox"
-                      checked={formData.targetAreas[area.id as keyof typeof formData.targetAreas]}
-                      onChange={(e) => handleTargetAreaChange(area.id, e.target.checked)}
-                      className="w-4 h-4 text-[#00dcaa] bg-gray-100 dark:bg-gray-700 border-0 rounded focus:ring-2 focus:ring-[#00dcaa]/50"
-                    />
-                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{area.label}</span>
-                  </label>
-                ))}
-              </div>
-              
-              <div className="flex items-center space-x-3">
-                <input
-                  type="text"
-                  name="customLocation"
-                  value={formData.customLocation}
-                  onChange={handleInputChange}
-                  placeholder="Add custom location"
-                  className="flex-1 p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 backdrop-blur-sm border-0 focus:ring-2 focus:ring-[#00dcaa]/50 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all"
-                />
-                <button
-                  type="button"
-                  className="bg-gradient-to-r from-[#00dcaa] to-[#00b894] text-white px-4 py-3 rounded-xl font-medium hover:shadow-lg transition-all duration-300 flex items-center space-x-2"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Add</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Engagement Details Section */}
-            <div className="mb-8">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Engagement Details</h3>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">Configure your campaign engagement and budget settings</p>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Watches per customer per day
-                  </label>
-                  <input
-                    type="number"
-                    name="watchesPerCustomerPerDay"
-                    value={formData.watchesPerCustomerPerDay}
-                    onChange={handleInputChange}
-                    placeholder="Enter number"
-                    className="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 backdrop-blur-sm border-0 focus:ring-2 focus:ring-[#00dcaa]/50 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Amount per customer (₹)
-                  </label>
-                  <input
-                    type="number"
-                    name="amountPerCustomer"
-                    value={formData.amountPerCustomer}
-                    onChange={handleInputChange}
-                    placeholder="Enter amount"
-                    className="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 backdrop-blur-sm border-0 focus:ring-2 focus:ring-[#00dcaa]/50 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Customers per day
-                  </label>
-                  <input
-                    type="number"
-                    name="customersPerDay"
-                    value={formData.customersPerDay}
-                    onChange={handleInputChange}
-                    placeholder="Enter number"
-                    className="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 backdrop-blur-sm border-0 focus:ring-2 focus:ring-[#00dcaa]/50 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Amount per day (₹)
-                  </label>
-                  <input
-                    type="number"
-                    name="amountPerDay"
-                    value={formData.amountPerDay}
-                    onChange={handleInputChange}
-                    placeholder="Enter amount"
-                    className="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 backdrop-blur-sm border-0 text-gray-900 dark:text-gray-100 cursor-not-allowed"
-                    readOnly
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Campaign duration (days)
-                  </label>
-                  <input
-                    type="number"
-                    name="campaignDuration"
-                    value={formData.campaignDuration}
-                    onChange={handleInputChange}
-                    placeholder="Enter number of days"
-                    className="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 backdrop-blur-sm border-0 focus:ring-2 focus:ring-[#00dcaa]/50 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Estimated Total Amount
-                  </label>
-                  <div className="bg-gradient-to-r from-[#00dcaa]/20 to-[#00b894]/20 dark:from-[#00dcaa]/30 dark:to-[#00b894]/30 backdrop-blur-sm rounded-xl p-3 font-bold text-[#00dcaa] dark:text-[#00dcaa]">
-                    ₹{formData.estimatedTotalAmount.toFixed(2)}
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Start Date & Time
-                  </label>
-                  <input
-                    type="datetime-local"
-                    name="startDateTime"
-                    value={formData.startDateTime}
-                    onChange={handleInputChange}
-                    className="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 backdrop-blur-sm border-0 focus:ring-2 focus:ring-[#00dcaa]/50 text-gray-900 dark:text-gray-100 transition-all"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    End Date & Time
-                  </label>
-                  <input
-                    type="datetime-local"
-                    name="endDateTime"
-                    value={formData.endDateTime}
-                    onChange={handleInputChange}
-                    className="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 backdrop-blur-sm border-0 focus:ring-2 focus:ring-[#00dcaa]/50 text-gray-900 dark:text-gray-100 transition-all"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Customer Conversion & Button Setup */}
-            <div className="mb-8">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Customer Conversion & Button Setup</h3>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">Configure conversion rates and call-to-action buttons</p>
-
-              <div className="space-y-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-                    Customer per view percentage: {formData.customerViewPercentage}%
-                  </label>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={formData.customerViewPercentage}
-                    onChange={(e) => handleRangeChange('customerViewPercentage', parseInt(e.target.value))}
-                    className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer slider"
-                    style={{
-                      background: `linear-gradient(to right, #00dcaa 0%, #00dcaa ${formData.customerViewPercentage}%, ${document.documentElement.classList.contains('dark') ? '#374151' : '#e5e7eb'} ${formData.customerViewPercentage}%, ${document.documentElement.classList.contains('dark') ? '#374151' : '#e5e7eb'} 100%)`
-                    }}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-                    Customer per like percentage: {formData.customerLikePercentage}%
-                  </label>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={formData.customerLikePercentage}
-                    onChange={(e) => handleRangeChange('customerLikePercentage', parseInt(e.target.value))}
-                    className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer slider"
-                    style={{
-                      background: `linear-gradient(to right, #00dcaa 0%, #00dcaa ${formData.customerLikePercentage}%, ${document.documentElement.classList.contains('dark') ? '#374151' : '#e5e7eb'} ${formData.customerLikePercentage}%, ${document.documentElement.classList.contains('dark') ? '#374151' : '#e5e7eb'} 100%)`
-                    }}
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Select Button to Display
-                    </label>
-                    <select
-                      name="buttonToDisplay"
-                      value={formData.buttonToDisplay}
-                      onChange={handleInputChange}
-                      className="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 backdrop-blur-sm border-0 focus:ring-2 focus:ring-[#00dcaa]/50 text-gray-900 dark:text-gray-100 transition-all"
-                    >
-                      <option value="">Choose button type</option>
-                      <option value="buy-now">Buy Now</option>
-                      <option value="learn-more">Learn More</option>
-                      <option value="sign-up">Sign Up</option>
-                      <option value="download">Download</option>
-                      <option value="call-now">Call Now</option>
-                      <option value="visit-website">Visit Website</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Button Link (Optional)
-                    </label>
-                    <input
-                      type="url"
-                      name="buttonLink"
-                      value={formData.buttonLink}
-                      onChange={handleInputChange}
-                      placeholder="https://example.com"
-                      className="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 backdrop-blur-sm border-0 focus:ring-2 focus:ring-[#00dcaa]/50 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Where to Display Ad?
-                    </label>
-                    <select
-                      name="adDisplayLocation"
-                      value={formData.adDisplayLocation}
-                      onChange={handleInputChange}
-                      className="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 backdrop-blur-sm border-0 focus:ring-2 focus:ring-[#00dcaa]/50 text-gray-900 dark:text-gray-100 transition-all"
-                    >
-                      <option value="">Choose display location</option>
-                      <option value="feed">News Feed</option>
-                      <option value="stories">Stories</option>
-                      <option value="sidebar">Sidebar</option>
-                      <option value="banner">Banner</option>
-                      <option value="video-ads">Video Ads</option>
-                      <option value="search-results">Search Results</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Transaction ID / GST Number
-                  </label>
-                  <input
-                    type="text"
-                    name="transactionId"
-                    value={formData.transactionId}
-                    onChange={handleInputChange}
-                    placeholder="Enter transaction ID or GST number"
-                    className="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 backdrop-blur-sm border-0 focus:ring-2 focus:ring-[#00dcaa]/50 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Continue Button */}
-            <div className="flex justify-end pt-6 border-t border-gray-200 dark:border-gray-800">
-              <button
-                type="button"
-                onClick={handleContinue}
-                className="bg-gradient-to-r from-[#00dcaa] to-[#00b894] hover:from-[#00b894] hover:to-[#00a085] text-white px-8 py-3 rounded-xl text-lg font-semibold transition-all duration-300 shadow-lg hover:shadow-xl"
-              >
-                Continue to Upload Creative
-              </button>
-            </div>
-          </form>
         </div>
-      </div>
-    </div>
+    </LocalizationProvider>
   );
 };
 
