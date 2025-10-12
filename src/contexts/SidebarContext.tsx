@@ -25,10 +25,18 @@ export const useSidebar = () => {
 export const SidebarProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isMobile = useIsMobile();
   const [state, setState] = useState<'expanded' | 'collapsed'>(() => {
-    const stored = localStorage.getItem('sidebarState');
-    return isMobile ? 'collapsed' : stored === 'collapsed' ? 'collapsed' : 'expanded';
+    // Respect previously stored preference. If none exists, default to
+    // 'collapsed' on desktop (first visit should show sidebar closed).
+    try {
+      const stored = localStorage.getItem('sidebarState');
+      if (isMobile) return 'collapsed';
+      if (stored === 'expanded' || stored === 'collapsed') return stored as 'expanded' | 'collapsed';
+      return 'collapsed';
+    } catch (e) {
+      return isMobile ? 'collapsed' : 'collapsed';
+    }
   });
-  const [open, setOpen] = useState(!isMobile);
+  const [open, setOpen] = useState(() => !isMobile && state === 'expanded');
   const [openMobile, setOpenMobile] = useState(false);
 
   useEffect(() => {

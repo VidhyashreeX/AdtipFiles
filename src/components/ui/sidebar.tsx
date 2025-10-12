@@ -55,7 +55,10 @@ const SidebarProvider = React.forwardRef<
 >(
   (
     {
-      defaultOpen = true,
+      // Default to closed for first-time visitors (desktop). If a saved
+      // preference exists in cookies we will honor it when initializing
+      // internal state below.
+      defaultOpen = false,
       open: openProp,
       onOpenChange: setOpenProp,
       className,
@@ -70,7 +73,31 @@ const SidebarProvider = React.forwardRef<
 
     // This is the internal state of the sidebar.
     // We use openProp and setOpenProp for control from outside the component.
-    const [_open, _setOpen] = React.useState(defaultOpen)
+    // Initialize from cookie (if present) so we respect a previously saved
+    // user preference. If no cookie is present, fall back to defaultOpen.
+    const [_open, _setOpen] = React.useState<boolean>(() => {
+      try {
+        if (typeof document !== "undefined") {
+          const name = `${SIDEBAR_COOKIE_NAME}=`
+          const cookie = document.cookie
+            .split("; ")
+            .find((c) => c.startsWith(name))
+
+          if (cookie) {
+            const raw = cookie.slice(name.length)
+            // Accept 'true'|'false' or '1'|'0'
+            if (raw === "true") return true
+            if (raw === "false") return false
+            if (raw === "1") return true
+            if (raw === "0") return false
+          }
+        }
+      } catch (e) {
+        // Ignore and fall back to defaultOpen
+      }
+
+      return defaultOpen
+    })
     const open = openProp ?? _open
     const setOpen = React.useCallback(
       (value: boolean | ((value: boolean) => boolean)) => {
