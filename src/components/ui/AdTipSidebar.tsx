@@ -14,7 +14,7 @@ import {
   PlusCircle, Gift, MessageSquare, FileText,
   ShoppingCart, BarChart3, Wallet, Store,
   User, Package, Heart, BadgeDollarSign,
-  Layout, Crown, Building2, Radio
+  Layout, Crown, Building2, Radio, Newspaper
 } from "lucide-react";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -292,6 +292,8 @@ const AdTipSidebar = () => {
       : []),
     { to: "/become-seller", label: "Become Advertiser", icon: <Store className="h-5 w-5" />, external: true },
     { to: "/post-ads", label: "Post Advertisements", icon: <BadgeDollarSign className="h-5 w-5" /> },
+    { to: "/publisher", label: "Publisher", icon: <Newspaper className="h-5 w-5" /> },
+    { to: "/publisher-dashboard", label: "Publisher Dashboard", icon: <Layout className="h-5 w-5" /> },
     { to: "/chooseplan", state: { openCreatorPacks: true }, label: "Premium Upgrade", icon: <Crown className="h-5 w-5" /> },
     { to: "/seller/ad-orders", label: "My Ad Orders", icon: <Package className="h-5 w-5" /> },
     { to: "/seller/ads-cart", label: "Cart", icon: <ShoppingCart className="h-5 w-5" /> },

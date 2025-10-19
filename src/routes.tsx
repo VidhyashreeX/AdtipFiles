@@ -73,6 +73,8 @@ import SellerRegistration from "./components/SellerRegistration";
 import EditSellerInfo from "./components/EditSellerInfo";
 import BecomeAdvertiserRedirect from "./components/BecomeAdvertiserRedirect";
 import BecomeAdvertiserLanding from "./pages/BecomeAdvertiserLanding";
+import Publisher from "./pages/Publisher";
+import PublisherDashboard from "./pages/PublisherDashboard";
 
 const router = createBrowserRouter([
 	{
@@ -180,6 +182,14 @@ const router = createBrowserRouter([
 			{
 				path: "become-advertiser-landing",
 				element: <BecomeAdvertiserLanding />,
+			},
+			{
+				path: "publisher",
+				element: <Publisher />,
+			},
+			{
+				path: "publisher-dashboard",
+				element: <PublisherDashboard />,
 			},
 			{
 				path: "product/:id",
