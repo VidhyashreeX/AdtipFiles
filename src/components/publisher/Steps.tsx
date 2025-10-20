@@ -40,7 +40,7 @@ const Steps = () => {
       <div className="container mx-auto px-4">
         <div className="text-center mb-16 space-y-4">
           <h2 className="text-4xl md:text-5xl font-bold">
-            Your 5-Step <span className="text-accent">Earning Journey</span>
+            Your 5-Step <span className="text-green-600 dark:text-green-400">Earning Journey</span>
           </h2>
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
             Get up and running in minutes with our simple integration process

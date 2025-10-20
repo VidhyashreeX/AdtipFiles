@@ -1,5 +1,5 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Video, Clock, MessageSquare, HelpCircle, Gift, LayoutGrid, Newspaper } from "lucide-react";
+import { Video, PlayCircle, MessageSquare, MessageCircleQuestion, Gift, RectangleHorizontal, Newspaper } from "lucide-react";
 
 const AdFormats = () => {
   const formats = [
@@ -10,10 +10,10 @@ const AdFormats = () => {
       color: "text-primary",
     },
     {
-      icon: Clock,
+      icon: PlayCircle,
       title: "Non-Skip Ad Model",
       description: "Full-view ads with higher payout",
-      color: "text-accent",
+      color: "text-primary",
     },
     {
       icon: MessageSquare,
@@ -22,10 +22,10 @@ const AdFormats = () => {
       color: "text-primary",
     },
     {
-      icon: HelpCircle,
+      icon: MessageCircleQuestion,
       title: "Non-Skip + Question",
       description: "Interactive ads with quick user response",
-      color: "text-accent",
+      color: "text-primary",
     },
     {
       icon: Gift,
@@ -34,10 +34,10 @@ const AdFormats = () => {
       color: "text-primary",
     },
     {
-      icon: LayoutGrid,
+      icon: RectangleHorizontal,
       title: "Banner React",
       description: "Lightweight banners for high-frequency impressions",
-      color: "text-accent",
+      color: "text-primary",
     },
     {
       icon: Newspaper,

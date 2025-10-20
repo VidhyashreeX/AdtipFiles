@@ -296,22 +296,19 @@ const Navbar = () => {
 
   return (
     <>
-    <nav className="fixed top-0 z-50 w-full h-20 backdrop-blur-xl shadow-lg border-b border-gray-200/50 dark:border-gray-800/50">
-      {/* Enhanced glassmorphism background */}
-      <div className="absolute inset-0 bg-white/70 dark:bg-gray-900/80" style={{
-        backdropFilter: 'blur(24px) saturate(180%)',
-        WebkitBackdropFilter: 'blur(24px) saturate(180%)',
-      }} />
-
-      <div className="relative max-w-screen-2xl mx-auto h-full flex items-center justify-between px-3 sm:px-4 md:px-6">
-        {/* Left: Hamburger and Logo */}
-        <div className="flex items-center gap-2 sm:gap-4">
+    <nav className="fixed top-0 z-50 w-full h-20">
+      <div className="relative max-w-screen-2xl mx-auto h-full flex items-center justify-between px-3 sm:px-4 md:px-6 gap-2 sm:gap-3">
+        {/* Left: Hamburger and Logo - Liquid Glass Island */}
+        <div className="flex items-center gap-2 sm:gap-3 bg-white/60 dark:bg-gray-900/60 backdrop-blur-xl rounded-full px-3 sm:px-4 py-2 shadow-lg border border-white/20 dark:border-gray-700/30" style={{
+          backdropFilter: 'blur(20px) saturate(180%)',
+          WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+        }}>
           <button
             onClick={toggleSidebar}
-            className="p-1 sm:p-1.5 hover:bg-muted rounded-lg transition-colors"
+            className="p-1 hover:bg-white/40 dark:hover:bg-gray-800/40 rounded-lg transition-colors"
             aria-label="Toggle sidebar"
           >
-            <Menu className="h-5 w-5 sm:h-6 sm:w-6 text-muted-foreground" />
+            <Menu className="h-5 w-5 sm:h-6 sm:w-6 text-foreground" />
           </button>
           <Link to="/home" className="flex items-center">
             <img src="/logo.png" alt="AdTip Logo" className="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8" />
@@ -319,28 +316,36 @@ const Navbar = () => {
           </Link>
         </div>
 
-        {/* Center: Search Bar - Hidden on mobile */}
+        {/* Center: Search Bar - Hidden on mobile - Liquid Glass Island */}
         <div className="hidden md:flex flex-1 max-w-3xl mx-2 sm:mx-4">
           <form onSubmit={handleSearchSubmit} className="relative w-full">
-            <input
-              type="text"
-              placeholder="Search users or content..."
-              className="w-full px-3 sm:px-4 md:px-5 py-2 sm:py-2.5 pr-8 text-sm md:text-base rounded-full bg-muted/50 dark:bg-gray-800/50 backdrop-blur-sm border-0 focus:outline-none focus:ring-2 focus:ring-adtip-teal/50 transition-all text-foreground placeholder:text-muted-foreground"
-              value={searchQuery}
-              onChange={handleSearchInputChange}
-              onBlur={handleSearchInputBlur}
-              onFocus={() => setShowSearchSuggestions(searchQuery.length > 0)}
-            />
-            <button type="submit" className="absolute right-3 sm:right-4 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-adtip-teal transition-colors">
-              <Search className="h-4 w-4 sm:h-5 sm:w-5" />
-            </button>
+            <div className="relative bg-white/60 dark:bg-gray-900/60 backdrop-blur-xl rounded-full shadow-lg border border-white/20 dark:border-gray-700/30" style={{
+              backdropFilter: 'blur(20px) saturate(180%)',
+              WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+            }}>
+              <input
+                type="text"
+                placeholder="Search users or content..."
+                className="w-full px-3 sm:px-4 md:px-5 py-2 sm:py-2.5 pr-10 text-sm md:text-base rounded-full bg-transparent border-0 focus:outline-none focus:ring-2 focus:ring-adtip-teal/50 transition-all text-foreground placeholder:text-muted-foreground"
+                value={searchQuery}
+                onChange={handleSearchInputChange}
+                onBlur={handleSearchInputBlur}
+                onFocus={() => setShowSearchSuggestions(searchQuery.length > 0)}
+              />
+              <button type="submit" className="absolute right-3 sm:right-4 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-adtip-teal transition-colors">
+                <Search className="h-4 w-4 sm:h-5 sm:w-5" />
+              </button>
+            </div>
             
             {/* Search Suggestions */}
             {showSearchSuggestions && searchQuery && (
-              <div className="absolute top-full left-0 right-0 mt-2 bg-card/95 dark:bg-gray-800/95 backdrop-blur-xl rounded-2xl shadow-2xl z-50 max-h-60 overflow-y-auto border-0">
+              <div className="absolute top-full left-0 right-0 mt-2 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl rounded-2xl shadow-2xl z-50 max-h-60 overflow-y-auto border border-white/20 dark:border-gray-700/30" style={{
+                backdropFilter: 'blur(20px) saturate(180%)',
+                WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+              }}>
                 <div className="p-2">
                   <div 
-                    className="px-3 py-2 hover:bg-muted/80 dark:hover:bg-gray-700/80 rounded-xl cursor-pointer flex items-center gap-2 transition-colors"
+                    className="px-3 py-2 hover:bg-white/60 dark:hover:bg-gray-800/60 rounded-xl cursor-pointer flex items-center gap-2 transition-colors"
                     onClick={() => {
                       navigate(`/search?q=${encodeURIComponent(searchQuery)}`);
                       setShowSearchSuggestions(false);
@@ -355,56 +360,71 @@ const Navbar = () => {
           </form>
         </div>
 
-      {/* Right: Icons, Toggle, and Profile */}
-<div className="flex items-center gap-2 sm:gap-3 md:gap-4">
-  {/* Toggle Button */}
-  <button
-    onClick={() => {
-      if (!user) {
-        navigate("/login");
-      } else if (!hasContentPremium) {
-        // Non-content-premium user trying to turn on - show premium required dialog
-        setShowPremiumRequiredDialog(true);
-      } else if (hasContentPremium) {
-        // Content-premium user trying to turn off - show cancel dialog
-        setShowCancelPremiumDialog(true);
-      } else {
-        // This should not happen as non-premium users are handled above
-        // But if it does, ensure toggle stays off
-        setIsToggleOn(false);
-      }
-    }}
-    className="flex items-center bg-muted border border-border rounded-full p-1 sm:p-1.5 transition-colors hover:bg-accent"
-            aria-label="Toggle premium status"
-  >
-    {(user && hasContentPremium) ? (
-      <ToggleRight className="h-8 w-8 sm:h-9 sm:w-9 md:h-10 md:w-10 text-adtip-teal" />
-    ) : (
-      <ToggleLeft className="h-8 w-8 sm:h-9 sm:w-9 md:h-10 md:w-10 text-muted-foreground" />
-    )}
-  </button>
+      {/* Right: Icons, Toggle, and Profile - Individual Liquid Glass Islands */}
+      <div className="flex items-center gap-2 sm:gap-3">
+        {/* Premium Toggle - Liquid Glass Island */}
+        <button
+          onClick={() => {
+            if (!user) {
+              navigate("/login");
+            } else if (!hasContentPremium) {
+              setShowPremiumRequiredDialog(true);
+            } else if (hasContentPremium) {
+              setShowCancelPremiumDialog(true);
+            } else {
+              setIsToggleOn(false);
+            }
+          }}
+          className="flex items-center bg-white/60 dark:bg-gray-900/60 backdrop-blur-xl rounded-full p-2 sm:p-2.5 shadow-lg border border-white/20 dark:border-gray-700/30 transition-all hover:scale-105"
+          style={{
+            backdropFilter: 'blur(20px) saturate(180%)',
+            WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+          }}
+          aria-label="Toggle premium status"
+        >
+          {(user && hasContentPremium) ? (
+            <ToggleRight className="h-6 w-6 sm:h-7 sm:w-7 text-adtip-teal" />
+          ) : (
+            <ToggleLeft className="h-6 w-6 sm:h-7 sm:w-7 text-muted-foreground" />
+          )}
+        </button>
 
-  <Link
-    to={user ? "/wallet" : "/login"}
-    className="flex items-center text-foreground hover:text-adtip-teal transition-all bg-muted/50 dark:bg-gray-800/50 backdrop-blur-sm rounded-full px-3 py-1 mr-1 hover:bg-muted/80 dark:hover:bg-gray-800/80"
-    style={{ minWidth: 70 }}
-  >
-    <Wallet className="h-5 w-5 sm:h-6 sm:w-6 mr-1" />
-    <span className="text-sm sm:text-base font-medium tabular-nums">
-      {isLoading
-        ? "..."
-        : balanceData && typeof balanceData.availableBalance === "string"
-        ? `₹${parseFloat(balanceData.availableBalance).toFixed(2)}`
-        : "₹0.00"}
-    </span>
-  </Link>
+        {/* Wallet - Liquid Glass Island */}
+        <Link
+          to={user ? "/wallet" : "/login"}
+          className="flex items-center text-foreground hover:text-adtip-teal transition-all bg-white/60 dark:bg-gray-900/60 backdrop-blur-xl rounded-full px-3 sm:px-4 py-2 shadow-lg border border-white/20 dark:border-gray-700/30 hover:scale-105"
+          style={{
+            backdropFilter: 'blur(20px) saturate(180%)',
+            WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+            minWidth: 70
+          }}
+        >
+          <Wallet className="h-5 w-5 sm:h-6 sm:w-6 mr-1.5" />
+          <span className="text-sm sm:text-base font-medium tabular-nums">
+            {isLoading
+              ? "..."
+              : balanceData && typeof balanceData.availableBalance === "string"
+              ? `₹${parseFloat(balanceData.availableBalance).toFixed(2)}`
+              : "₹0.00"}
+          </span>
+        </Link>
 
-  <ThemeToggle />
+        {/* Theme Toggle - Liquid Glass Island */}
+        <div className="bg-white/60 dark:bg-gray-900/60 backdrop-blur-xl rounded-full p-2 shadow-lg border border-white/20 dark:border-gray-700/30 hover:scale-105 transition-all" style={{
+          backdropFilter: 'blur(20px) saturate(180%)',
+          WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+        }}>
+          <ThemeToggle />
+        </div>
 
-  <Link to="/profile" className="hidden md:flex items-center ml-1 sm:ml-2">
-    <UserAvatar user={user} />
-  </Link>
-</div>
+        {/* Profile Avatar - Liquid Glass Island */}
+        <Link to="/profile" className="hidden md:flex items-center bg-white/60 dark:bg-gray-900/60 backdrop-blur-xl rounded-full p-1 shadow-lg border border-white/20 dark:border-gray-700/30 hover:scale-105 transition-all" style={{
+          backdropFilter: 'blur(20px) saturate(180%)',
+          WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+        }}>
+          <UserAvatar user={user} />
+        </Link>
+      </div>
       </div>
 
 
