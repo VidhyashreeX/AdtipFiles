@@ -6,7 +6,8 @@ import { useNavigate } from "react-router-dom";
 import { useParams } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useSidebar } from "../contexts/SidebarContext";
-import ShareModal from "@/components/ShareModal"; // Adjust path if needed
+import ShareModal from "@/components/ShareModal";
+import { useAuthModal } from "../contexts/AuthModalContext";
 
 
 interface TipShort {
@@ -40,6 +41,7 @@ const MAX_SHORT_WIDTH = 420; // px, typical phone width for shorts
 const NAVBAR_HEIGHT = 72; // px, assumed navbar height for non-fullscreen state
 
 const TipShorts = () => {
+  const { openLoginModal } = useAuthModal();
   const [shorts, setShorts] = useState<TipShort[]>([]);
   const { id: shortIdParam } = useParams(); 
   const [page, setPage] = useState(1);
@@ -755,7 +757,7 @@ onClick={() => {
       <p className="mb-2">You earned ₹1 for watching this video</p>
       <p className="mb-4 text-muted-foreground">Credit added to your wallet</p>
       <button
-        onClick={() => window.location.href = "/login"}
+        onClick={openLoginModal}
         className="bg-blue-500 text-white px-4 py-2 rounded mb-2 w-full"
       >
         Login Now

@@ -7,8 +7,10 @@ import { toast } from "sonner";
 import { InputOTP } from "@/components/ui/input-otp";
 import { authAPI } from "../services/api";
 import { cn } from "@/lib/utils";
+import { useAuthModal } from "../contexts/AuthModalContext";
 
 const OTPVerification = () => {
+  const { openLoginModal } = useAuthModal();
   const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
@@ -32,7 +34,7 @@ const OTPVerification = () => {
 
     if (!tempUserId || (!storedMobile && !storedEmail)) {
       toast.error("Please login first");
-      navigate("/login");
+      openLoginModal();
       return;
     }
 
@@ -160,7 +162,7 @@ const OTPVerification = () => {
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/30">
       <div className="container max-w-md mx-auto px-4 py-8">
         <button
-          onClick={() => navigate("/login")}
+          onClick={() => openLoginModal()}
           className="mb-8 text-muted-foreground hover:text-foreground transition-colors inline-flex items-center"
         >
           <ArrowLeft size={20} className="mr-2" />

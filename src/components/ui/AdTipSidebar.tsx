@@ -27,6 +27,8 @@ import {
   SidebarGroupContent,
 } from "./sidebar-components";
 import SubmissionForm from "./SubmissionForm";
+import { useAuthModal } from "../../contexts/AuthModalContext";
+import { triggerLoginModal } from "../../utils/authRedirect";
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:7082';
 
@@ -57,7 +59,7 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       localStorage.removeItem('UserLoggedIn');
       localStorage.removeItem('user');
-      window.location.href = '/login';
+      triggerLoginModal();
     }
     return Promise.reject(error);
   }
@@ -78,6 +80,7 @@ const AdTipSidebar = () => {
   const location = useLocation();
   const { user, updateUser } = useAuth();
   const { isCollapsed, toggleSidebar, isMobile, openMobile, setOpenMobile } = useSidebar();
+  const { openLoginModal } = useAuthModal();
   
   // --- FIX 1: Add a new ref for the scrolling container ---
   const sidebarRef = React.useRef<HTMLDivElement>(null);
@@ -123,7 +126,7 @@ const AdTipSidebar = () => {
       localStorage.removeItem("age");
       localStorage.removeItem("channels");
       logout();
-      navigate("/login");
+      openLoginModal();
     }
   };
 
@@ -280,7 +283,13 @@ const AdTipSidebar = () => {
       ? [{ to: `/analytics`, label: "Analysis", icon: <BarChart3 className="h-5 w-5" /> }]
       : []),
     { to: "/follow", label: "Follow", icon: <Users className="h-5 w-5" /> },
-    { to: user ? "/wallet" : "/login", label: "My Wallet", icon: <Wallet className="h-5 w-5" /> },
+    { 
+      to: user ? "/wallet" : "#", 
+      label: "My Wallet", 
+      icon: <Wallet className="h-5 w-5" />,
+      onClick: user ? undefined : () => openLoginModal(),
+      special: !user
+    },
     ...(hasCompanies !== null
       ? [{
         to: hasCompanies ? "/seller/dashboard" : "#",
@@ -451,7 +460,10 @@ const AdTipSidebar = () => {
               <Link
                 key={item.to}
                 to={item.to}
-                onClick={() => isMobile && setOpenMobile(false)}
+                onClick={() => {
+                  if (isMobile) setOpenMobile(false);
+                  if (!isMobile && !isCollapsed) toggleSidebar();
+                }}
                 className={cn(
                   "flex items-center gap-3 rounded-xl px-3 py-3 text-gray-700 dark:text-gray-300 transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-800/60 group",
                   isActive(item.to) && "bg-gradient-to-r from-[#00dcaa]/10 to-[#00b894]/10 text-[#00dcaa] dark:text-[#00dcaa] font-semibold shadow-sm"
@@ -481,6 +493,7 @@ const AdTipSidebar = () => {
                     onClick={() => {
                       item.onClick!();
                       if (isMobile) setOpenMobile(false);
+                      if (!isMobile && !isCollapsed) toggleSidebar();
                     }}
                     className={cn(
                       "flex items-center gap-3 rounded-xl px-3 py-3 text-gray-700 dark:text-gray-300 transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-800/60 w-full text-left group"
@@ -498,6 +511,7 @@ const AdTipSidebar = () => {
                     onClick={() => {
                       navigate(item.to, { state: item.state });
                       if (isMobile) setOpenMobile(false);
+                      if (!isMobile && !isCollapsed) toggleSidebar();
                     }}
                     className={cn(
                       "flex items-center gap-3 rounded-xl px-3 py-3 text-gray-700 dark:text-gray-300 transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-800/60 w-full text-left group",
@@ -518,7 +532,10 @@ const AdTipSidebar = () => {
                 <Link
                   key={item.to}
                   to={item.to}
-                  onClick={() => isMobile && setOpenMobile(false)}
+                  onClick={() => {
+                    if (isMobile) setOpenMobile(false);
+                    if (!isMobile && !isCollapsed) toggleSidebar();
+                  }}
                   className={cn(
                     "flex items-center gap-3 rounded-xl px-3 py-3 text-gray-700 dark:text-gray-300 transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-800/60 group",
                     isActive(item.to) && "bg-gradient-to-r from-[#00dcaa]/10 to-[#00b894]/10 text-[#00dcaa] dark:text-[#00dcaa] font-semibold shadow-sm"
@@ -546,7 +563,10 @@ const AdTipSidebar = () => {
                 <Link
                   key={item.to}
                   to={item.to}
-                  onClick={() => isMobile && setOpenMobile(false)}
+                  onClick={() => {
+                    if (isMobile) setOpenMobile(false);
+                    if (!isMobile && !isCollapsed) toggleSidebar();
+                  }}
                   className={cn(
                     "flex items-center gap-3 rounded-xl px-3 py-3 text-gray-700 dark:text-gray-300 transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-800/60 group",
                     isActive(item.to) && "bg-gradient-to-r from-[#00dcaa]/10 to-[#00b894]/10 text-[#00dcaa] dark:text-[#00dcaa] font-semibold shadow-sm"

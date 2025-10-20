@@ -14,6 +14,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import TiptubePlayer from "../components/TiptubePlayer";
 import ShareModal from "@/components/ShareModal";
+import { useAuthModal } from "../contexts/AuthModalContext";
 import { 
   ThumbsUp, 
   ThumbsDown, 
@@ -90,6 +91,7 @@ const WatchPage = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { openLoginModal } = useAuthModal();
   const [currentVideo, setCurrentVideo] = useState<Video | null>(null);
   const [relatedVideos, setRelatedVideos] = useState<Video[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
@@ -500,7 +502,7 @@ const WatchPage = () => {
                 <div className="glass-inner rounded-xl p-4 mb-6 text-center">
                   <p className="text-muted-foreground mb-3">Sign in to leave a comment</p>
                   <button
-                    onClick={() => navigate('/login')}
+                    onClick={openLoginModal}
                     className="px-6 py-2 bg-adtip-teal text-white rounded-full hover:bg-opacity-90 transition-all"
                   >
                     Sign In

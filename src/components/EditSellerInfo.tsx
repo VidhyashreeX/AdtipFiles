@@ -21,6 +21,7 @@ import {
 import { toast } from '@/hooks/use-toast';
 import { apiUpdateCompany, apiGetCompanyList } from '@/api';
 import { uploadToR2, UPLOAD_FOLDERS, UploadProgress } from '@/services/r2UploadService';
+import { useAuthModal } from '../contexts/AuthModalContext';
 
 interface SellerInfo {
   id?: number;
@@ -42,6 +43,7 @@ const categories = ['Products', 'Services', 'Both'];
 const buttonOptions = ['Book Now', 'Visit Page', 'Know More', 'Buy Now', 'Reserve'];
 
 const EditSellerInfo = () => {
+  const { openLoginModal } = useAuthModal();
   const navigate = useNavigate();
   const location = useLocation();
   
@@ -78,7 +80,7 @@ const EditSellerInfo = () => {
             description: "User not found. Please log in again.",
             variant: "destructive"
           });
-          navigate('/login');
+          openLoginModal();
           return;
         }
 

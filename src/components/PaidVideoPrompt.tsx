@@ -4,6 +4,7 @@ import { X } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
+import { useAuthModal } from "../contexts/AuthModalContext";
 
 interface PaidVideoPromptProps {
   onClose: () => void;
@@ -24,6 +25,7 @@ const PaidVideoPrompt = ({
 }: PaidVideoPromptProps) => {
   const navigate = useNavigate();
   const { user, isAuthenticated, updateUserProfile } = useAuth();
+  const { openLoginModal } = useAuthModal();
   const { toast } = useToast();
   const [isProcessing, setIsProcessing] = useState(false);
   
@@ -33,7 +35,7 @@ const PaidVideoPrompt = ({
   
   const handleContinue = () => {
     if (!isAuthenticated) {
-      navigate("/login");
+      openLoginModal();
       return;
     }
     

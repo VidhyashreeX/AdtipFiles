@@ -6,6 +6,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import axios from "axios";
 import { toast } from "sonner";
+import { useAuthModal } from "../contexts/AuthModalContext";
 
 const BASE_URL = import.meta.env.VITE_API_URL?.endsWith("/api")
   ? import.meta.env.VITE_API_URL
@@ -14,6 +15,7 @@ const BASE_URL = import.meta.env.VITE_API_URL?.endsWith("/api")
 const Wallet = () => {
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
+  const { openLoginModal } = useAuthModal();
   const [withdrawAmount, setWithdrawAmount] = useState("");
   const [selectedMethod, setSelectedMethod] = useState<string | null>(null);
   const [balance, setBalance] = useState<number>(0);
@@ -33,9 +35,9 @@ const Wallet = () => {
     setAuthLoading(false);
     if (!userId || !token) {
       setError("Please sign in to view your wallet.");
-      navigate("/login");
+      openLoginModal();
     }
-  }, [user, isAuthenticated, userId, token, navigate]);
+  }, [user, isAuthenticated, userId, token, openLoginModal]);
 
   // Fetch wallet balance and premium status
   useEffect(() => {
@@ -74,7 +76,7 @@ const Wallet = () => {
         console.error("Wallet data error:", err.response?.data || err.message);
         if (err.response?.status === 401) {
           setError("Unauthorized. Please sign in again.");
-          navigate("/login");
+          openLoginModal();
         } else {
           setError(err.response?.data?.message || "Error fetching wallet data");
         }
@@ -85,13 +87,13 @@ const Wallet = () => {
     if (!authLoading) {
       fetchWalletData();
     }
-  }, [userId, token, navigate, authLoading]);
+  }, [userId, token, openLoginModal, authLoading]);
 
   // Handle withdrawal
   const handleWithdraw = () => {
     if (!userId || !token) {
       setError("Please sign in to withdraw funds.");
-      navigate("/login");
+      openLoginModal();
       return;
     }
     if (Number(withdrawAmount) > balance) {

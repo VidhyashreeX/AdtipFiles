@@ -5,8 +5,10 @@ import { apiSavePost, apiGetCompanyList } from '@/api';
 import { toast } from '@/hooks/use-toast';
 import { uploadToR2, UPLOAD_FOLDERS } from '@/services/r2UploadService';
 import { checkServerConnectivity, retryApiCall } from '@/utils/networkUtils';
+import { useAuthModal } from '../contexts/AuthModalContext';
 
 const AddPost = () => {
+  const { openLoginModal } = useAuthModal();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [selectedCompany, setSelectedCompany] = useState<any>(null);
@@ -40,7 +42,7 @@ const AddPost = () => {
             description: "User not found. Please log in again.",
             variant: "destructive"
           });
-          navigate('/login');
+          openLoginModal();
           return;
         }
 

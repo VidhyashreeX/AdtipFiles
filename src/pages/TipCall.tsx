@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "../contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { useAuthModal } from "../contexts/AuthModalContext";
 
 const BASE_URL = import.meta.env.VITE_API_URL?.endsWith("/api")
   ? import.meta.env.VITE_API_URL
@@ -56,6 +57,7 @@ interface UserData {
 }
 
 export default function TipCall() {
+  const { openLoginModal } = useAuthModal();
   const { toast } = useToast();
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();  const userData = user as UserData;
@@ -93,7 +95,7 @@ export default function TipCall() {
 
   const handleCallRequest = (expert: Expert) => {
     if (!isAuthenticated) {
-      navigate("/login");
+      openLoginModal();
       return;
     }
 
@@ -160,7 +162,7 @@ export default function TipCall() {
     const abortController = new AbortController();
     let didCancel = false;    const fetchExperts = async () => {
       if (!isAuthenticated && !localStorage.getItem("UserLoggedIn")) {
-        navigate("/login");
+        openLoginModal();
         return;
       }
 

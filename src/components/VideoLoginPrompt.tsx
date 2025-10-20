@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { X } from "lucide-react";
+import { useAuthModal } from "../contexts/AuthModalContext";
 
 interface VideoLoginPromptProps {
   onClose: () => void;
@@ -10,6 +11,7 @@ interface VideoLoginPromptProps {
 
 const VideoLoginPrompt = ({ onClose }: VideoLoginPromptProps) => {
   const navigate = useNavigate();
+  const { openLoginModal } = useAuthModal();
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
@@ -32,14 +34,14 @@ const VideoLoginPrompt = ({ onClose }: VideoLoginPromptProps) => {
         
         <div className="space-y-4">
           <Button 
-            onClick={() => navigate("/login")}
+            onClick={openLoginModal}
             className="teal-button w-full"
           >
             Log In
           </Button>
           
           <Button 
-            onClick={() => navigate("/login")}
+            onClick={openLoginModal}
             variant="outline"
             className="w-full border-adtip-teal text-adtip-teal hover:bg-adtip-teal/10"
           >

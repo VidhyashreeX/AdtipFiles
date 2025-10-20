@@ -15,6 +15,7 @@ import {
 } from '@/api';
 import { toast } from '@/hooks/use-toast';
 import { normalizeProduct, formatCurrency } from '@/utils/product';
+import { useAuthModal } from '../contexts/AuthModalContext';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:7082';
 
@@ -100,6 +101,7 @@ const normalizePostRecord = (raw: any): NormalizedPost => {
 };
 
 const SellerDashboard = () => {
+  const { openLoginModal } = useAuthModal();
   const navigate = useNavigate();
   const location = useLocation();
   const [showEditModal, setShowEditModal] = useState(false);
@@ -148,7 +150,7 @@ const SellerDashboard = () => {
             description: "User not found. Please log in again.",
             variant: "destructive"
           });
-          navigate('/login');
+          openLoginModal();
           return;
         }
 

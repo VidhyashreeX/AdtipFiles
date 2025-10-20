@@ -41,7 +41,7 @@ const BASE_URL = import.meta.env.VITE_API_URL?.endsWith("/api")
   }
 };
 
-
+import { useAuthModal } from "../../contexts/AuthModalContext";
 
 
 const generateMockData = (numPoints: number) => {
@@ -117,6 +117,7 @@ const ChannelAnalytics: React.FC<ChannelAnalyticsProps> = ({ data }) => {
 };
 
 const Analysis = () => {
+  const { openLoginModal } = useAuthModal();
   const { channelId } = useParams();
 const [loading, setLoading] = useState<boolean>(true);
 const [error, setError] = useState<string | null>(null);
@@ -133,7 +134,7 @@ useEffect(() => {
   setAuthLoading(false);
   if (!userId || !token) {
     setError("Please sign in to view your wallet.");
-    navigate("/login");
+    openLoginModal();
   }
 }, [user, isAuthenticated, userId, token, navigate]);
 

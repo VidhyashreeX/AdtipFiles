@@ -8,8 +8,10 @@ import {
   apiSaveAdPauseContinueStatus 
 } from '@/api';
 import { toast } from '@/hooks/use-toast';
+import { useAuthModal } from '../contexts/AuthModalContext';
 
 const AdOrders = () => {
+  const { openLoginModal } = useAuthModal();
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('all');
@@ -36,7 +38,7 @@ const AdOrders = () => {
           description: "Please log in to view your ad campaigns.",
           variant: "destructive",
         });
-        navigate('/login');
+        openLoginModal();
         return;
       }
 

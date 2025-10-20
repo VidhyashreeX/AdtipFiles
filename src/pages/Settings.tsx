@@ -16,6 +16,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
+import { useAuthModal } from "../contexts/AuthModalContext";
 import {
   Dialog,
   DialogContent,
@@ -29,6 +30,7 @@ import axios from "axios";
 const Settings = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const { openLoginModal } = useAuthModal();
   const { toast } = useToast();
   const [notificationsEnabled, setNotificationsEnabled] = React.useState(true);
   const [darkModeEnabled, setDarkModeEnabled] = React.useState(false);
@@ -65,8 +67,8 @@ const Settings = () => {
        localStorage.removeItem("channels");
       // Call AuthContext logout to clear context state
       logout();
-      // Redirect to login
-      navigate("/login");
+      // Open login modal
+      openLoginModal();
     }
   };
 

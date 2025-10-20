@@ -26,10 +26,14 @@ import axios from "axios";
 import { useSidebar } from "../contexts/SidebarContext";
 import { userAPI } from "../services/api";
 import usePremiumStatus from "../hooks/usePremiumStatus";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { useAuthModal } from "../contexts/AuthModalContext";
 
 const Navbar = () => {
   const { user, updateUserProfile } = useAuth();
-  const { toggleSidebar, openMobile, setOpenMobile } = useSidebar();
+  const { toggleSidebar, openMobile, setOpenMobile, isCollapsed } = useSidebar();
+  const isMobile = useIsMobile();
+  const { openLoginModal } = useAuthModal();
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearchSuggestions, setShowSearchSuggestions] = useState(false);
   const [isToggleOn, setIsToggleOn] = useState(false);
@@ -296,7 +300,10 @@ const Navbar = () => {
 
   return (
     <>
-    <nav className="fixed top-0 z-50 w-full h-20">
+    <nav className={`fixed top-0 z-50 w-full h-20 transition-all duration-300 ${(openMobile || (!isCollapsed && !isMobile)) ? 'bg-white/70 dark:bg-gray-900/80 backdrop-blur-xl shadow-lg' : ''}`} style={(openMobile || (!isCollapsed && !isMobile)) ? {
+      backdropFilter: 'blur(24px) saturate(180%)',
+      WebkitBackdropFilter: 'blur(24px) saturate(180%)',
+    } : {}}>
       <div className="relative max-w-screen-2xl mx-auto h-full flex items-center justify-between px-3 sm:px-4 md:px-6 gap-2 sm:gap-3">
         {/* Left: Hamburger and Logo - Liquid Glass Island */}
         <div className="flex items-center gap-2 sm:gap-3 bg-white/60 dark:bg-gray-900/60 backdrop-blur-xl rounded-full px-3 sm:px-4 py-2 shadow-lg border border-white/20 dark:border-gray-700/30" style={{
@@ -362,11 +369,11 @@ const Navbar = () => {
 
       {/* Right: Icons, Toggle, and Profile - Individual Liquid Glass Islands */}
       <div className="flex items-center gap-2 sm:gap-3">
-        {/* Premium Toggle - Liquid Glass Island */}
+        {/* Premium Toggle - Liquid Glass Island - Standardized Height */}
         <button
           onClick={() => {
             if (!user) {
-              navigate("/login");
+              openLoginModal();
             } else if (!hasContentPremium) {
               setShowPremiumRequiredDialog(true);
             } else if (hasContentPremium) {
@@ -375,7 +382,7 @@ const Navbar = () => {
               setIsToggleOn(false);
             }
           }}
-          className="flex items-center bg-white/60 dark:bg-gray-900/60 backdrop-blur-xl rounded-full p-2 sm:p-2.5 shadow-lg border border-white/20 dark:border-gray-700/30 transition-all hover:scale-105"
+          className="flex items-center justify-center bg-white/60 dark:bg-gray-900/60 backdrop-blur-xl rounded-full shadow-lg border border-white/20 dark:border-gray-700/30 transition-all hover:scale-105 h-10 w-10 sm:h-11 sm:w-11"
           style={{
             backdropFilter: 'blur(20px) saturate(180%)',
             WebkitBackdropFilter: 'blur(20px) saturate(180%)',
@@ -383,42 +390,57 @@ const Navbar = () => {
           aria-label="Toggle premium status"
         >
           {(user && hasContentPremium) ? (
-            <ToggleRight className="h-6 w-6 sm:h-7 sm:w-7 text-adtip-teal" />
+            <ToggleRight className="h-5 w-5 sm:h-6 sm:w-6 text-adtip-teal" />
           ) : (
-            <ToggleLeft className="h-6 w-6 sm:h-7 sm:w-7 text-muted-foreground" />
+            <ToggleLeft className="h-5 w-5 sm:h-6 sm:w-6 text-muted-foreground" />
           )}
         </button>
 
-        {/* Wallet - Liquid Glass Island */}
-        <Link
-          to={user ? "/wallet" : "/login"}
-          className="flex items-center text-foreground hover:text-adtip-teal transition-all bg-white/60 dark:bg-gray-900/60 backdrop-blur-xl rounded-full px-3 sm:px-4 py-2 shadow-lg border border-white/20 dark:border-gray-700/30 hover:scale-105"
-          style={{
-            backdropFilter: 'blur(20px) saturate(180%)',
-            WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-            minWidth: 70
-          }}
-        >
-          <Wallet className="h-5 w-5 sm:h-6 sm:w-6 mr-1.5" />
-          <span className="text-sm sm:text-base font-medium tabular-nums">
-            {isLoading
-              ? "..."
+        {/* Wallet - Liquid Glass Island - Standardized Height */}
+        {user ? (
+          <Link
+            to="/wallet"
+            className="flex items-center text-foreground hover:text-adtip-teal transition-all bg-white/60 dark:bg-gray-900/60 backdrop-blur-xl rounded-full px-3 sm:px-4 shadow-lg border border-white/20 dark:border-gray-700/30 hover:scale-105 h-10 sm:h-11"
+            style={{
+              backdropFilter: 'blur(20px) saturate(180%)',
+              WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+              minWidth: 70
+            }}
+          >
+            <Wallet className="h-5 w-5 sm:h-6 sm:w-6 mr-1.5" />
+            <span className="text-sm sm:text-base font-medium tabular-nums">
+              {isLoading
+                ? "..."
               : balanceData && typeof balanceData.availableBalance === "string"
               ? `₹${parseFloat(balanceData.availableBalance).toFixed(2)}`
               : "₹0.00"}
           </span>
         </Link>
+        ) : (
+          <button
+            onClick={openLoginModal}
+            className="flex items-center text-foreground hover:text-adtip-teal transition-all bg-white/60 dark:bg-gray-900/60 backdrop-blur-xl rounded-full px-3 sm:px-4 shadow-lg border border-white/20 dark:border-gray-700/30 hover:scale-105 h-10 sm:h-11"
+            style={{
+              backdropFilter: 'blur(20px) saturate(180%)',
+              WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+              minWidth: 70
+            }}
+          >
+            <Wallet className="h-5 w-5 sm:h-6 sm:w-6 mr-1.5" />
+            <span className="text-sm sm:text-base font-medium">Login</span>
+          </button>
+        )}
 
-        {/* Theme Toggle - Liquid Glass Island */}
-        <div className="bg-white/60 dark:bg-gray-900/60 backdrop-blur-xl rounded-full p-2 shadow-lg border border-white/20 dark:border-gray-700/30 hover:scale-105 transition-all" style={{
+        {/* Theme Toggle - Liquid Glass Island - Standardized Height */}
+        <div className="flex items-center justify-center bg-white/60 dark:bg-gray-900/60 backdrop-blur-xl rounded-full shadow-lg border border-white/20 dark:border-gray-700/30 hover:scale-105 transition-all h-10 w-10 sm:h-11 sm:w-11" style={{
           backdropFilter: 'blur(20px) saturate(180%)',
           WebkitBackdropFilter: 'blur(20px) saturate(180%)',
         }}>
           <ThemeToggle />
         </div>
 
-        {/* Profile Avatar - Liquid Glass Island */}
-        <Link to="/profile" className="hidden md:flex items-center bg-white/60 dark:bg-gray-900/60 backdrop-blur-xl rounded-full p-1 shadow-lg border border-white/20 dark:border-gray-700/30 hover:scale-105 transition-all" style={{
+        {/* Profile Avatar - Liquid Glass Island - Standardized Height */}
+        <Link to="/profile" className="hidden md:flex items-center justify-center bg-white/60 dark:bg-gray-900/60 backdrop-blur-xl rounded-full shadow-lg border border-white/20 dark:border-gray-700/30 hover:scale-105 transition-all h-10 w-10 sm:h-11 sm:w-11" style={{
           backdropFilter: 'blur(20px) saturate(180%)',
           WebkitBackdropFilter: 'blur(20px) saturate(180%)',
         }}>

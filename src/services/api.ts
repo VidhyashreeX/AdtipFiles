@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { triggerLoginModal } from '../utils/authRedirect';
 
 // Use environment variable for API base URL
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:7082';
@@ -30,14 +31,14 @@ api.interceptors.response.use(
     
     // Only redirect on actual 401 (unauthorized) errors
     if (error.response?.status === 401) {
-      console.log('🚫 401 Unauthorized - clearing auth data and redirecting');
+      console.log('🚫 401 Unauthorized - clearing auth data and opening login modal');
       localStorage.removeItem('UserLoggedIn');
       localStorage.removeItem('user');
       localStorage.removeItem('UserId');
       
-      // Only redirect if we're not already on the login page
+      // Only trigger login modal if we're not already on the login page
       if (window.location.pathname !== '/login') {
-        window.location.href = '/login';
+        triggerLoginModal();
       }
     }
     return Promise.reject(error);

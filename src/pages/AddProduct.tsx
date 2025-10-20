@@ -6,6 +6,7 @@ import { toast } from '@/hooks/use-toast';
 import { uploadToR2, UPLOAD_FOLDERS, UploadResult } from '@/services/r2UploadService';
 import { validateProductData, getSelectedCompanyId } from '@/utils/apiValidation';
 import { checkServerConnectivity, retryApiCall } from '@/utils/networkUtils';
+import { useAuthModal } from '../contexts/AuthModalContext';
 
 type Company = {
   id: number;
@@ -40,6 +41,7 @@ const CATEGORY_MAP: Record<string, number> = {
 };
 
 const AddProduct = () => {
+  const { openLoginModal } = useAuthModal();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
@@ -77,7 +79,7 @@ const AddProduct = () => {
             description: "User not found. Please log in again.",
             variant: "destructive"
           });
-          navigate('/login');
+          openLoginModal();
           return;
         }
 

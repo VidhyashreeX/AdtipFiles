@@ -11,6 +11,7 @@ import RandomAvatar, { getRandomAvatar } from "../components/RandomAvatar";
 import ShareModal from "@/components/ShareModal";
 import { getSafeImageUrl, handleImageError, createPlaceholderImage } from "../utils/imageUtils";
 import { contentAPI, userAPI } from "../services/api";
+import { useAuthModal } from "../contexts/AuthModalContext";
 
 // Define TypeScript interfaces
 interface User {
@@ -116,7 +117,7 @@ const bannerData = [
     if (isAuthenticated && userId) {
       window.open(`https://wow.pubscale.com/?app_id=39604779&user_id=${userId}`, "_blank");
     } else {
-      window.location.href = "/login";
+      openLoginModal();
     }
   };
 
@@ -150,6 +151,7 @@ const bannerData = [
 };*/
 
 const Home = () => {
+  const { openLoginModal } = useAuthModal();
   const [activeTab, setActiveTab] = useState<"for-you" | "following">("for-you");
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
   const [showCopied, setShowCopied] = useState(false);
@@ -459,12 +461,12 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
   };
 
   return (
-    <div className="pb-20 md:pb-0 bg-background">
-      {/* Categories Bar - fixed below navbar, not scrollable, always visible */}
-      <div className="bg-card fixed left-0 right-0 z-30 py-3 px-4 overflow-x-auto flex justify-center whitespace-nowrap gap-3 no-scrollbar shadow-sm border-b border-border"
-        style={{ top: 'calc(var(--navbar-height, 56px) + 20px)' }}
+    <div className="pb-20 md:pb-0 bg-gray-50 dark:bg-gray-950 min-h-screen">
+      {/* Categories Bar - Floating Glassmorphic Chips */}
+      <div className="fixed left-0 right-0 z-30 py-4 overflow-x-auto no-scrollbar md:flex md:justify-center"
+        style={{ top: 'calc(var(--navbar-height, 56px) + 8px)', background: 'transparent' }}
       >
-        <div className="flex gap-3">
+        <div className="flex gap-2 px-4 min-w-max">
           {popularCategories.map((category) => (
             <button
               key={category.name}
@@ -474,11 +476,15 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
                 setFeedData([]);
                 setHasMore(true);
               }}
-              className={`px-4 py-1.5 rounded-full text-sm transition-all ${
+              className={`px-4 py-2 rounded-full text-sm font-medium transition-all backdrop-blur-xl border shadow-lg hover:scale-105 ${
                 selectedCategory === category.name
-                  ? "bg-adtip-teal text-white"
-                  : "bg-muted text-foreground hover:bg-accent"
+                  ? "bg-gradient-to-r from-[#00dcaa] to-[#00b894] text-white border-white/20"
+                  : "bg-white/70 dark:bg-gray-800/70 text-gray-700 dark:text-gray-200 border-white/30 dark:border-gray-700/30 hover:bg-white/90 dark:hover:bg-gray-800/90"
               }`}
+              style={{
+                backdropFilter: 'blur(16px) saturate(180%)',
+                WebkitBackdropFilter: 'blur(16px) saturate(180%)',
+              }}
             >
               {category.name}
             </button>
@@ -487,8 +493,8 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
       </div>
 
       {/* Main scrollable content below fixed bars */}
-      <div className="max-w-screen-md mx-auto px-4"
-        style={{ paddingTop: 'calc(var(--navbar-height, 56px) + 48px)' }}
+      <div className="max-w-[480px] lg:max-w-[640px] mx-auto px-0 md:px-4"
+        style={{ paddingTop: 'calc(var(--navbar-height, 56px) + 72px)' }}
       >
         <Tabs defaultValue="for-you" className="mb-6">
           <TabsList className="grid grid-cols-2 w-full">
@@ -543,21 +549,20 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
             )}
 
             {!error && feedData.length > 0 && (
-              <div className="space-y-6">
+              <div className="space-y-0">
                 {feedData.map((post) => (
                   <div
                     key={post.id}
-                    className="bg-card rounded-xl border border-border shadow-sm overflow-hidden cursor-pointer max-w-[420px] mx-auto"
-                    style={{ marginBottom: 24 }}
+                    className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 cursor-pointer mb-4 md:mb-6 md:rounded-lg md:border md:shadow-sm"
                     onClick={() => handlePostClick(post.id)}
                   >
                     {/* Header */}
-                    <div className="flex items-center px-3 py-2">
+                    <div className="flex items-center px-3 py-2.5">
                       {post.user_profile_image ? (
                         <img
                           src={getSafeImageUrl(post.user_profile_image)}
                           alt={post.user_name || "User"}
-                          className="w-8 h-8 rounded-full object-cover border border-border"
+                          className="w-9 h-9 rounded-full object-cover ring-2 ring-gray-100 dark:ring-gray-800"
                           onError={(e) => {
                             handleImageError(e);
                           }}
@@ -566,19 +571,27 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
                         <RandomAvatar
                           seed={post.user_id || post.user_name || post.id}
                           alt={post.user_name || "User"}
-                          className="w-8 h-8 rounded-full object-cover border border-border"
+                          className="w-9 h-9 rounded-full object-cover ring-2 ring-gray-100 dark:ring-gray-800"
                         />
                       )}
                       <div className="ml-3 flex-1">
-                        <div className="flex items-center gap-1">
-                          <span className="font-semibold text-sm text-foreground">{post.user_name}</span>
-                          {post.is_promoted ? (
-                            <span className="ml-1 text-xs text-adtip-teal font-medium">• Sponsored</span>
-                          ) : null}
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-semibold text-sm text-gray-900 dark:text-gray-100">{post.user_name}</span>
+                          {post.is_promoted && (
+                            <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">• Sponsored</span>
+                          )}
                         </div>
-                        <span className="text-xs text-muted-foreground">{post.address}</span>
+                        {post.address && (
+                          <span className="text-xs text-gray-500 dark:text-gray-400">{post.address}</span>
+                        )}
                       </div>
-                      <button className="ml-auto text-muted-foreground hover:text-foreground text-xl px-2">•••</button>
+                      <button className="ml-auto text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 p-2">
+                        <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                          <circle cx="12" cy="5" r="2"/>
+                          <circle cx="12" cy="12" r="2"/>
+                          <circle cx="12" cy="19" r="2"/>
+                        </svg>
+                      </button>
                     </div>
                     {/* Media */}
                     <div className="relative bg-black">
@@ -613,47 +626,94 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
                         </div>
                       )}
                     </div>
-                    {/* Content */}
-                    <div className="px-3 pt-2 pb-3">
-                      <h4 className="font-medium text-sm mb-1 text-foreground line-clamp-2">{post.title}</h4>
-                      <p className="text-xs text-muted-foreground mb-2 line-clamp-3">{post.content}</p>
-          {/* Action bar */}
-<div className="flex items-center gap-6 text-muted-foreground text-sm mt-2">
-  {/* Likes */}
-  <div className="flex items-center gap-1">
-    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5
-               2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09
-               C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5
-               c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
-    </svg>
-    <span className="text-xs">{post.likeCount}</span>
-  </div>
-
-  {/* Comments */}
-  <div className="flex items-center gap-1">
-    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5
-               a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10Z"/>
-    </svg>
-    <span className="text-xs">{post.commentCount}</span>
-  </div>
-
-  {/* Share */}
- <button
-  onClick={() => handlePostShare(post)}
-  className="flex items-center gap-1 hover:text-blue-500 transition-colors duration-200"
->
-  <FiShare2 className="w-5 h-5" />
-  <span className="text-xs">Share</span>
-</button>
-
-
-  {/* Views */}
-  <div className="ml-auto text-xs text-gray-400">{post.views || 0} views</div>
-</div>
-
-
+                    {/* Action bar - Instagram Style */}
+                    <div className="px-3 py-2">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-4">
+                          {/* Like Button */}
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              // Like functionality here
+                            }}
+                            className="hover:text-gray-500 dark:hover:text-gray-400 transition-colors"
+                          >
+                            <svg className="w-7 h-7" fill={post.is_liked ? "red" : "none"} stroke={post.is_liked ? "red" : "currentColor"} strokeWidth="2" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                            </svg>
+                          </button>
+                          
+                          {/* Comment Button */}
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              // Comment functionality here
+                            }}
+                            className="hover:text-gray-500 dark:hover:text-gray-400 transition-colors"
+                          >
+                            <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 12a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0zm0 0H8.25m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0zm0 0H12m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 0 1-2.555-.337A5.972 5.972 0 0 1 5.41 20.97a5.969 5.969 0 0 1-.474-.065 4.48 4.48 0 0 0 .978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z"/>
+                            </svg>
+                          </button>
+                          
+                          {/* Share Button */}
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handlePostShare(post);
+                            }}
+                            className="hover:text-gray-500 dark:hover:text-gray-400 transition-colors"
+                          >
+                            <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0 1 21.485 12 59.77 59.77 0 0 1 3.27 20.876L5.999 12zm0 0h7.5"/>
+                            </svg>
+                          </button>
+                        </div>
+                        
+                        {/* Bookmark */}
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            // Bookmark functionality here
+                          }}
+                          className="hover:text-gray-500 dark:hover:text-gray-400 transition-colors"
+                        >
+                          <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0 1 11.186 0z"/>
+                          </svg>
+                        </button>
+                      </div>
+                      
+                      {/* Likes count */}
+                      <div className="font-semibold text-sm text-gray-900 dark:text-gray-100 mb-1">
+                        {post.likeCount.toLocaleString()} likes
+                      </div>
+                      
+                      {/* Caption */}
+                      <div className="text-sm">
+                        <span className="font-semibold text-gray-900 dark:text-gray-100 mr-2">{post.user_name}</span>
+                        <span className="text-gray-900 dark:text-gray-100">{post.content}</span>
+                      </div>
+                      
+                      {/* View comments */}
+                      {post.commentCount > 0 && (
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            // View comments functionality
+                          }}
+                          className="text-sm text-gray-500 dark:text-gray-400 mt-1"
+                        >
+                          View all {post.commentCount} comments
+                        </button>
+                      )}
+                      
+                      {/* Views count */}
+                      {post.views && (
+                        <div className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                          {post.views.toLocaleString()} views
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}

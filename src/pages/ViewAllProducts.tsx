@@ -3,8 +3,10 @@ import { ArrowLeft, Package, Star, Eye, Heart, Plus, Edit, Trash2 } from 'lucide
 import { useNavigate } from 'react-router-dom';
 import { apiGetCompanyList, apiGetProductList, apiDeleteProduct } from '@/api';
 import { toast } from '@/hooks/use-toast';
+import { useAuthModal } from '../contexts/AuthModalContext';
 
 const ViewAllProducts = () => {
+  const { openLoginModal } = useAuthModal();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [products, setProducts] = useState<any[]>([]);
@@ -24,7 +26,7 @@ const ViewAllProducts = () => {
             description: "User not found. Please log in again.",
             variant: "destructive"
           });
-          navigate('/login');
+          openLoginModal();
           return;
         }
 

@@ -3,8 +3,10 @@ import { ArrowLeft, FileText, Eye, Heart, MessageSquare, Share2, Calendar, Plus,
 import { useNavigate } from 'react-router-dom';
 import { apiGetCompanyList, apiGetCompanyPost } from '@/api';
 import { toast } from '@/hooks/use-toast';
+import { useAuthModal } from '../contexts/AuthModalContext';
 
 const ViewAllPosts = () => {
+  const { openLoginModal } = useAuthModal();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [posts, setPosts] = useState<any[]>([]);
@@ -24,7 +26,7 @@ const ViewAllPosts = () => {
             description: "User not found. Please log in again.",
             variant: "destructive"
           });
-          navigate('/login');
+          openLoginModal();
           return;
         }
 

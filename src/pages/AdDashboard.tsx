@@ -21,8 +21,10 @@ import {
   apiGetUserAds, 
   apiGetGraphData
 } from '@/api';
+import { useAuthModal } from '../contexts/AuthModalContext';
 
 const AdDashboard: React.FC = () => {
+  const { openLoginModal } = useAuthModal();
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(true);
   const [campaigns, setCampaigns] = useState<any[]>([]);
@@ -54,7 +56,7 @@ const AdDashboard: React.FC = () => {
           description: "Please log in to view your dashboard.",
           variant: "destructive",
         });
-        navigate('/login');
+        openLoginModal();
         return;
       }
 

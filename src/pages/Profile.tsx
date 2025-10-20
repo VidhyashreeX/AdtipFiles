@@ -18,6 +18,7 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
+import { useAuthModal } from "../contexts/AuthModalContext";
 
 interface UserChannel {
   id: number;
@@ -30,6 +31,7 @@ interface UserChannel {
 }
 
 const Profile = () => {
+  const { openLoginModal } = useAuthModal();
   const navigate = useNavigate();
   const { user, isAuthenticated, logout } = useAuth();
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
@@ -142,7 +144,7 @@ const Profile = () => {
 
     if (!isAuthenticated || !user?.id || !token) {
       console.log("Auth check failed:", { isAuthenticated, userId: user?.id, token });
-      navigate("/login");
+      openLoginModal();
       return;
     }
 
@@ -249,7 +251,7 @@ const Profile = () => {
         console.error("Error fetching user data:", error);
         // If we get a 401 unauthorized error, redirect to login
         if (axios.isAxiosError(error) && error.response?.status === 401) {
-          navigate("/login");
+          openLoginModal();
         }
       }
     };
@@ -334,7 +336,7 @@ const Profile = () => {
       // Call AuthContext logout to clear context state
       logout();
       // Redirect to login
-      navigate("/login");
+      openLoginModal();
     }
   };
 

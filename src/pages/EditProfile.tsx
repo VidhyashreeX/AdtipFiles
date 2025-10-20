@@ -7,8 +7,10 @@ import { ArrowLeft, Upload, Wallet, Gift, ChevronRight, BarChart, Award, Setting
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { useAuthModal } from "../contexts/AuthModalContext";
 
 const EditProfile = () => {
+  const { openLoginModal } = useAuthModal();
   const navigate = useNavigate();
   const { user, isAuthenticated, updateUserProfile } = useAuth();
   const { toast } = useToast();
@@ -19,7 +21,7 @@ const EditProfile = () => {
   const [storyHighlight, setStoryHighlight] = useState("");
   
   if (!isAuthenticated) {
-    navigate("/login");
+    openLoginModal();
     return null;
   }
 

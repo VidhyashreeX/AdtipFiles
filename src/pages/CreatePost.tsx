@@ -10,8 +10,10 @@ import { ArrowLeft, Upload, Lock } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { useAuthModal } from "../contexts/AuthModalContext";
 
 const CreatePost = () => {
+  const { openLoginModal } = useAuthModal();
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
   const { toast } = useToast();
@@ -139,7 +141,7 @@ const CreatePost = () => {
           <CardFooter className="flex flex-col gap-4">
             <Button 
               className="w-full teal-button" 
-              onClick={() => navigate("/login", { state: { returnUrl: "/create" } })}
+              onClick={openLoginModal}
             >
               Log In
             </Button>

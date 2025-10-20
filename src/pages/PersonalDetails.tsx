@@ -12,7 +12,8 @@ import {
 import { useAuth } from "../contexts/AuthContext";
 import { ArrowLeft, User, Mail, Calendar, ChevronDown, Key, MapPin } from "lucide-react";
 import { apiSaveUserDetails } from "../api";
-import debounce from "lodash/debounce";
+import { debounce } from "lodash";
+import { useAuthModal } from "../contexts/AuthModalContext";
 
 const LANGUAGES = [
   { id: 1, name: "hindi" },
@@ -83,6 +84,7 @@ const INTERESTS = [
 ];
 
 const PersonalDetailsForm = () => {
+  const { openLoginModal } = useAuthModal();
   const [formData, setFormData] = useState({
     name: "",
     firstname: "",
@@ -229,7 +231,7 @@ const PersonalDetailsForm = () => {
       const userId = user?.id || localStorage.getItem("tempUserId");
       if (!userId) {
         setError("User ID is missing. Please log in again.");
-        navigate("/login");
+        openLoginModal();
         return;
       }
 
