@@ -208,9 +208,9 @@ class CloudflareUploadService {
 
         return bytes;
       }
-    } catch (error) {
+    } catch (error: any) {
       logError('CloudflareUpload', 'Error reading file', error);
-      throw new Error(`Failed to read file for upload: ${error.message}`);
+      throw new Error(`Failed to read file for upload: ${error?.message || 'Unknown error'}`);
     }
   }
 
@@ -717,12 +717,25 @@ class CloudflareUploadService {
       }
 
       // Extract the key (path without leading slash)
-      const key = url.pathname.startsWith('/') ? url.pathname.slice(1) : url.pathname;
+      let key = url.pathname.startsWith('/') ? url.pathname.slice(1) : url.pathname;
 
-      logDebug('CloudflareUpload', 'Extracted key from URL', {
-        originalUrl: cloudflareUrl,
-        extractedKey: key
-      });
+      // Remove bucket name prefix if it exists (to avoid double bucket name in path)
+      // URLs from database often include bucket name: /adtip/videos/file.mp4
+      // But S3 commands use: Bucket=adtip, Key=videos/file.mp4
+      const bucketPrefix = `${CLOUDFLARE_R2_CONFIG.bucketName}/`;
+      if (key.startsWith(bucketPrefix)) {
+        key = key.slice(bucketPrefix.length);
+        logDebug('CloudflareUpload', 'Removed bucket prefix from key', {
+          originalUrl: cloudflareUrl,
+          extractedKey: key,
+          removedPrefix: bucketPrefix
+        });
+      } else {
+        logDebug('CloudflareUpload', 'Extracted key from URL (no bucket prefix)', {
+          originalUrl: cloudflareUrl,
+          extractedKey: key
+        });
+      }
 
       return key || null;
     } catch (error) {

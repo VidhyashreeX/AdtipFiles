@@ -15,9 +15,9 @@ import { type ShortVideo } from '../../../hooks/useShortsQuery';
 import { Share2, Heart, MessageCircle, Play, Pause, VolumeX, Volume2 } from 'lucide-react-native';
 import shareService from '../../../services/ShareService';
 import VideoErrorBoundary from '../../../components/common/VideoErrorBoundary';
-import CloudflareStreamPlayer from '../../../components/CloudflareStreamPlayer';
+import Video from 'react-native-video';
 import {Logger} from '../../../utils/ProductionLogger';
-import VideoPlaybackService, { VideoMetadata } from '../../../services/VideoPlaybackService';
+import { getSecureMediaUrl } from '../../../utils/mediaUtils';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -44,7 +44,7 @@ interface EnhancedShortCardProps {
   onFollow?: (channelId: string) => void;
 }
 
-// Optimized Video Player Component with Memory Leak Prevention and Strict Pause Control
+// Simple Video Player Component - Basic react-native-video for smooth playback
 const OptimizedVideoPlayer = memo(({
   source,
   isActive,
@@ -53,7 +53,7 @@ const OptimizedVideoPlayer = memo(({
   onLoad,
   onProgress,
   style,
-  onVideoCompletion, // Add onVideoCompletion prop
+  onVideoCompletion,
 }: {
   source: { uri: string };
   isActive: boolean;
@@ -62,138 +62,40 @@ const OptimizedVideoPlayer = memo(({
   onLoad?: (data: any) => void;
   onProgress?: (data: any) => void;
   style?: any;
-  onVideoCompletion?: (videoId: string) => void; // Add onVideoCompletion prop
+  onVideoCompletion?: (videoId: string) => void;
 }) => {
-  const [isLoaded, setIsLoaded] = useState(false);
-  const [hasError, setHasError] = useState(false);
-  const isMountedRef = useRef(true);
   const videoRef = useRef<any>(null);
-
-  // Import Video component dynamically
-  const Video = require('react-native-video').default;
-
-  // Prevent state updates if component is unmounted
-  const safeSetIsLoaded = useCallback((loaded: boolean) => {
-    if (isMountedRef.current) {
-      setIsLoaded(loaded);
-    }
-  }, []);
-
-  const safeSetHasError = useCallback((error: boolean) => {
-    if (isMountedRef.current) {
-      setHasError(error);
-    }
-  }, []);
 
   // Validate source URI
   const isValidUri = source?.uri && typeof source.uri === 'string' && source.uri.trim().length > 0;
 
-  // Set error state if URI is invalid
-  useEffect(() => {
-    if (!isValidUri) {
-      console.warn('[OptimizedVideoPlayer] Invalid or missing video URI:', source?.uri);
-      safeSetHasError(true);
-      safeSetIsLoaded(false);
-    } else {
-      safeSetHasError(false);
-    }
-  }, [isValidUri, source?.uri, safeSetHasError, safeSetIsLoaded]);
-
-  // Throttled seeking to prevent excessive operations
-  const lastSeekTimeRef = useRef(0);
-  const SEEK_THROTTLE_MS = 500; // Minimum time between seek operations
-
-  const throttledSeek = useCallback((position: number) => {
-    const now = Date.now();
-    if (now - lastSeekTimeRef.current < SEEK_THROTTLE_MS) {
-      return; // Skip if too soon since last seek
-    }
-
-    if (videoRef.current && isMountedRef.current) {
-      try {
-        lastSeekTimeRef.current = now;
-        videoRef.current.seek(position);
-      } catch (error) {
-        Logger.warn('OptimizedVideoPlayer', 'Error during throttled seek:', error);
-      }
-    }
-  }, []);
-
-  // Consolidated cleanup on unmount to prevent memory leaks
-  useEffect(() => {
-    // Mark component as mounted
-    isMountedRef.current = true;
-
-    return () => {
-      // Mark component as unmounted
-      isMountedRef.current = false;
-
-      // Force cleanup video resources with error handling
-      if (videoRef.current) {
-        try {
-          // Stop video playback immediately
-          videoRef.current.paused = true;
-          // Reset to beginning for next use
-          throttledSeek(0);
-          Logger.debug('OptimizedVideoPlayer', 'Video cleanup completed');
-        } catch (error) {
-          Logger.warn('OptimizedVideoPlayer', 'Error during video cleanup:', error);
-        }
-      }
-
-      // Reset state to prevent memory leaks
-      setIsLoaded(false);
-      setHasError(false);
-    };
-  }, [throttledSeek]);
-
-  // Optimized pause control - only when necessary
-  useEffect(() => {
-    if (!isActive && videoRef.current && isMountedRef.current) {
-      // Only reset video if it was actually playing
-      if (!isPaused) {
-        throttledSeek(0);
-      }
-    }
-  }, [isActive, isPaused, throttledSeek]);
-
-  const shouldPlay = isActive && !isPaused && isLoaded && !hasError && isValidUri;
+  const shouldPlay = isActive && !isPaused && isValidUri;
 
   const handleLoad = useCallback((data: any) => {
-    if (!isMountedRef.current) return;
-
-    safeSetIsLoaded(true);
-    safeSetHasError(false);
     onLoad?.(data);
-  }, [onLoad, safeSetIsLoaded, safeSetHasError]);
+  }, [onLoad]);
 
   const handleError = useCallback((error: any) => {
-    if (!isMountedRef.current) return;
-
-    console.warn('[OptimizedVideoPlayer] Video Error:', error);
-    safeSetHasError(true);
-    safeSetIsLoaded(false);
-  }, [safeSetHasError, safeSetIsLoaded]);
+    console.warn('[VideoPlayer] Video Error:', error);
+  }, []);
 
   const handleProgress = useCallback((data: any) => {
-    if (!isMountedRef.current || !isActive) return;
-
-    onProgress?.(data);
+    if (isActive) {
+      onProgress?.(data);
+    }
   }, [isActive, onProgress]);
 
-  const handleCompletion = useCallback(() => {
-    if (!isMountedRef.current || !isActive || !onVideoCompletion || !isValidUri) return;
-
-    // Safely extract videoId from source.uri with proper validation
-    try {
-      const videoId = source.uri.split('/').pop() || '';
-      onVideoCompletion(videoId);
-    } catch (error) {
-      console.warn('[OptimizedVideoPlayer] Error extracting video ID:', error);
+  const handleEnd = useCallback(() => {
+    if (isActive && onVideoCompletion && isValidUri) {
+      try {
+        const videoId = source.uri.split('/').pop() || '';
+        onVideoCompletion(videoId);
+      } catch (error) {
+        console.warn('[VideoPlayer] Error extracting video ID:', error);
+      }
     }
   }, [isActive, onVideoCompletion, source.uri, isValidUri]);
 
-  // Return error placeholder if URI is invalid
   if (!isValidUri) {
     return (
       <View style={[StyleSheet.absoluteFill, style, { backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }]}>
@@ -201,31 +103,6 @@ const OptimizedVideoPlayer = memo(({
       </View>
     );
   }
-
-  // Device capability detection for adaptive video settings
-  const getOptimizedVideoSettings = useCallback(() => {
-    // Basic device capability detection
-    const isLowEndDevice = Platform.OS === 'android' &&
-      (Platform.constants?.Release < '8.0' || Platform.constants?.Model?.includes('Go'));
-
-    return {
-      maxBitRate: isLowEndDevice ? 1000000 : 2000000, // 1Mbps for low-end, 2Mbps for others
-      bufferConfig: isLowEndDevice ? {
-        minBufferMs: 1000,
-        maxBufferMs: 3000,
-        bufferForPlaybackMs: 500,
-        bufferForPlaybackAfterRebufferMs: 1000,
-      } : {
-        minBufferMs: 1500,
-        maxBufferMs: 5000,
-        bufferForPlaybackMs: 1000,
-        bufferForPlaybackAfterRebufferMs: 1500,
-      }
-    };
-  }, []);
-
-  // Get optimized settings based on device capabilities
-  const videoSettings = useMemo(() => getOptimizedVideoSettings(), [getOptimizedVideoSettings]);
 
   return (
     <Video
@@ -239,19 +116,10 @@ const OptimizedVideoPlayer = memo(({
       onLoad={handleLoad}
       onProgress={handleProgress}
       onError={handleError}
-      onEnd={handleCompletion}
-      bufferConfig={videoSettings.bufferConfig}
+      onEnd={handleEnd}
       ignoreSilentSwitch="ignore"
       playInBackground={false}
       playWhenInactive={false}
-      controls={false}
-      disableFocus={true}
-      fullscreen={false}
-      hideShutterView={true}
-      // Adaptive memory optimization settings
-      maxBitRate={videoSettings.maxBitRate}
-      reportBandwidth={false} // Disable bandwidth reporting to save memory
-      preventsDisplaySleepDuringVideoPlayback={false} // Allow display sleep to save battery
     />
   );
 });
@@ -447,36 +315,69 @@ const EnhancedShortCard: React.FC<EnhancedShortCardProps> = memo(({
 
 
 
-  // Prepare video metadata for hybrid playback
-  const videoMetadata: VideoMetadata = useMemo(() => ({
-    id: item.id,
-    video_link: item?.videoUrl || '',
-    stream_video_id: item?.stream_video_id,
-    stream_status: item?.stream_status,
-    adaptive_manifest_url: item?.adaptive_manifest_url,
-    stream_ready_at: item?.stream_ready_at,
-    isShot: true,
-  }), [item]);
+  // State for secure video URL
+  const [secureVideoUrl, setSecureVideoUrl] = React.useState<string | null>(null);
+  const [secureThumbnailUrl, setSecureThumbnailUrl] = React.useState<string | null>(null);
+  const [secureAvatarUrl, setSecureAvatarUrl] = React.useState<string | null>(null);
+  const [videoLoadError, setVideoLoadError] = React.useState(false);
 
-  // Get optimal playback configuration
-  const playbackConfig = useMemo(() => {
-    const service = VideoPlaybackService.getInstance();
+  // Load secure video URL
+  React.useEffect(() => {
+    const loadSecureUrl = async () => {
+      if (item?.videoUrl) {
+        try {
+          const url = await getSecureMediaUrl(item.videoUrl);
+          console.log('[EnhancedShortCard] Loaded secure video URL:', {
+            shortId: item.id,
+            originalUrl: item.videoUrl?.substring(0, 100) + '...',
+            secureUrl: url?.substring(0, 100) + '...',
+          });
+          setSecureVideoUrl(url || item.videoUrl);
+          setVideoLoadError(false);
+        } catch (error) {
+          console.warn('[EnhancedShortCard] Failed to load secure URL for short:', item.id, error);
+          setSecureVideoUrl(item.videoUrl);
+          setVideoLoadError(false);
+        }
+      }
+    };
+    loadSecureUrl();
+  }, [item?.videoUrl, item?.id]);
 
-    // Get debug info for troubleshooting
-    const debugInfo = service.getDebugInfo(videoMetadata);
-    console.log('[EnhancedShortCard] Video debug info:', debugInfo);
+  // Load secure thumbnail URL
+  React.useEffect(() => {
+    const loadSecureThumbnail = async () => {
+      if (item?.thumbnail) {
+        try {
+          const url = await getSecureMediaUrl(item.thumbnail);
+          setSecureThumbnailUrl(url || item.thumbnail);
+        } catch (error) {
+          console.warn('[EnhancedShortCard] Failed to load secure thumbnail, using original:', error);
+          setSecureThumbnailUrl(item.thumbnail);
+        }
+      }
+    };
+    loadSecureThumbnail();
+  }, [item?.thumbnail]);
 
-    return service.getPlaybackConfig(videoMetadata, {
-      preferStream: true,
-      quality: 'auto',
-      autoplay: isActive && isGloballyPlaying,
-      muted: isGloballyMuted,
-      controls: false,
-    });
-  }, [videoMetadata, isActive, isGloballyPlaying, isGloballyMuted]);
+  // Load secure avatar URL
+  React.useEffect(() => {
+    const loadSecureAvatar = async () => {
+      if (item?.channel?.avatar) {
+        try {
+          const url = await getSecureMediaUrl(item.channel.avatar);
+          setSecureAvatarUrl(url || item.channel.avatar);
+        } catch (error) {
+          console.warn('[EnhancedShortCard] Failed to load secure avatar, using original:', error);
+          setSecureAvatarUrl(item.channel.avatar);
+        }
+      }
+    };
+    loadSecureAvatar();
+  }, [item?.channel?.avatar]);
 
-  // Validate video sources
-  const hasValidSource = playbackConfig.streamVideoId || playbackConfig.videoUrl;
+  // Validate video source
+  const hasValidSource = secureVideoUrl && secureVideoUrl.trim().length > 0;
 
   return (
     <View style={styles.shortCardContainer}>
@@ -490,34 +391,18 @@ const EnhancedShortCard: React.FC<EnhancedShortCardProps> = memo(({
             }}
           >
             {hasValidSource ? (
-              <CloudflareStreamPlayer
-                streamVideoId={playbackConfig.streamVideoId}
-                streamStatus={videoMetadata.stream_status}
-                fallbackVideoUrl={playbackConfig.videoUrl}
-                width={SCREEN_WIDTH}
-                height={SCREEN_HEIGHT}
-                autoplay={isActive && isGloballyPlaying}
-                muted={isGloballyMuted}
-                controls={false}
-                paused={!isActive || !isGloballyPlaying} // Add proper paused control
-                useStreamPlayer={playbackConfig.useStreamPlayer}
-                style={styles.video}
-                isShort={true} // Mark as short video for proper aspect ratio handling
+              <OptimizedVideoPlayer
+                source={{ uri: secureVideoUrl }}
+                isActive={isActive}
+                isPaused={!isGloballyPlaying}
+                isMuted={isGloballyMuted}
                 onLoad={handleVideoLoadLocal}
                 onProgress={handleVideoProgress}
-                onEnd={() => {
+                style={styles.video}
+                onVideoCompletion={() => {
                   if (onVideoCompletion && item?.id) {
                     onVideoCompletion(item.id);
                   }
-                }}
-                onError={(error) => {
-                  console.error('[EnhancedShortCard] Video playback error:', {
-                    error,
-                    videoId: item.id,
-                    streamVideoId: playbackConfig.streamVideoId,
-                    streamStatus: videoMetadata.stream_status,
-                    fallbackUrl: playbackConfig.videoUrl
-                  });
                 }}
               />
             ) : (
@@ -528,9 +413,9 @@ const EnhancedShortCard: React.FC<EnhancedShortCardProps> = memo(({
           </VideoErrorBoundary>
 
           {/* Thumbnail overlay while loading */}
-          {showThumbnail && item.thumbnail && (
+          {showThumbnail && secureThumbnailUrl && (
             <Image
-              source={{ uri: item.thumbnail }}
+              source={{ uri: secureThumbnailUrl }}
               style={styles.thumbnailOverlay}
               resizeMode="cover"
             />
@@ -583,7 +468,7 @@ const EnhancedShortCard: React.FC<EnhancedShortCardProps> = memo(({
                 activeOpacity={0.8}
               >
                 <Image
-                  source={{ uri: item.channel.avatar }}
+                  source={{ uri: secureAvatarUrl || item.channel.avatar }}
                   style={styles.channelAvatar}
                 />
               </TouchableOpacity>

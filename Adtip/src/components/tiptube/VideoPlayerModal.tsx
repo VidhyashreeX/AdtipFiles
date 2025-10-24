@@ -1,4 +1,3 @@
-// src/components/tiptube/VideoPlayerModal.tsx
 import React, {useState, useRef, useEffect, useCallback} from 'react';
 import {
   View,
@@ -19,9 +18,7 @@ import {useTheme} from '../../contexts/ThemeContext';
 // Removing unused import
 // import ApiService from '../../services/ApiService';
 import VideoCard from '../../components/tiptube/VideoCard';
-import { createSecureVideoSource } from '../../utils/mediaUtils';
-import CloudflareStreamPlayer from '../CloudflareStreamPlayer';
-import VideoPlaybackService, { VideoMetadata } from '../../services/VideoPlaybackService';
+import { createSecureVideoSource, getSecureMediaUrl } from '../../utils/mediaUtils';
 
 interface VideoData {
   id: number;
@@ -206,71 +203,43 @@ const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
               isFullScreen && styles.fullScreenVideo,
             ]}
             onPress={handleVideoPress}>
-            {(() => {
-              // Prepare video metadata for hybrid playback
-              const videoMetadata: VideoMetadata = {
-                id: videoData.id,
-                video_link: videoData.video_url || '',
-                stream_video_id: videoData.stream_video_id,
-                stream_status: videoData.stream_status,
-                adaptive_manifest_url: videoData.adaptive_manifest_url,
-                stream_ready_at: videoData.stream_ready_at,
-                isShot: false, // TipTube videos are not shorts
-              };
-
-              // Get optimal playback configuration
-              const playbackService = VideoPlaybackService.getInstance();
-              const playbackConfig = playbackService.getPlaybackConfig(videoMetadata, {
-                preferStream: true,
-                quality: 'auto',
-                autoplay: isPlaying,
-                muted: isMuted,
-                controls: false,
-              });
-
-              // Check if we have valid sources
-              const hasValidSource = playbackConfig.streamVideoId || playbackConfig.videoUrl;
-
-              if (hasValidSource) {
-                return (
-                  <CloudflareStreamPlayer
-                    streamVideoId={playbackConfig.streamVideoId}
-                    fallbackVideoUrl={playbackConfig.videoUrl}
-                    autoplay={isPlaying}
-                    muted={isMuted}
-                    controls={false}
-                    useStreamPlayer={playbackConfig.useStreamPlayer}
-                    style={styles.video}
-                    resizeMode="contain"
-                    onLoad={(data) => {
-                      if (data && data.duration) {
-                        setDuration(data.duration);
-                      }
-                    }}
-                    onProgress={(data) => {
-                      if (data && data.currentTime) {
-                        setCurrentTime(data.currentTime);
-                      }
-                    }}
-                    onError={(error) => {
-                      console.error('[VideoPlayerModal] Video playback error:', error);
-                    }}
-                  />
-                );
-              } else {
-                return (
-                  <View
-                    style={[
-                      styles.videoPlaceholder,
-                      {backgroundColor: colors.gray[800]},
-                    ]}>
-                    <Text style={styles.videoPlaceholderText}>
-                      Video not available
-                    </Text>
-                  </View>
-                );
-              }
-            })()}
+            {secureVideoSource ? (
+              <Video
+                ref={videoRef}
+                source={secureVideoSource}
+                paused={!isPlaying}
+                muted={isMuted}
+                repeat={false}
+                resizeMode="contain"
+                style={styles.video}
+                onLoad={(data) => {
+                  if (data && data.duration) {
+                    setDuration(data.duration);
+                  }
+                }}
+                onProgress={(data) => {
+                  if (data && data.currentTime) {
+                    setCurrentTime(data.currentTime);
+                  }
+                }}
+                onError={(error) => {
+                  console.error('[VideoPlayerModal] Video playback error:', error);
+                }}
+                playInBackground={false}
+                playWhenInactive={false}
+                ignoreSilentSwitch="ignore"
+              />
+            ) : (
+              <View
+                style={[
+                  styles.videoPlaceholder,
+                  {backgroundColor: colors.gray[800]},
+                ]}>
+                <Text style={styles.videoPlaceholderText}>
+                  Video not available
+                </Text>
+              </View>
+            )}
 
             {isBuffering && (
               <View style={styles.bufferingContainer}>
