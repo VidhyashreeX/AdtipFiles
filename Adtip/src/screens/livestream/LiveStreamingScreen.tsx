@@ -36,6 +36,9 @@ import {
   Heart,
   Send,
   X,
+  ChevronDown,
+  User,
+  DollarSign,
 } from 'lucide-react-native';
 
 import { useTheme } from '../../contexts/ThemeContext';
@@ -559,6 +562,9 @@ interface HostModeProps {
   colors: any;
   streamTitle: string;
   streamType: string;
+  meetingId: string;
+  userId: number;
+  navigation: any;
   onToggleMic: () => Promise<void>;
   onToggleWebcam: () => Promise<void>;
   onEndStream: () => Promise<void>;
@@ -569,35 +575,163 @@ const HostMode: React.FC<HostModeProps> = ({
   colors,
   streamTitle,
   streamType,
+  meetingId,
+  userId,
+  navigation,
   onToggleMic,
   onToggleWebcam,
   onEndStream,
 }) => {
-  const { participants, localParticipant } = useMeeting();
-  const [viewerCount, setViewerCount] = useState(0);
-
-  // Track viewer count properly using participants Map
-  useEffect(() => {
-    if (participants && localParticipant) {
-      const participantsArray = Array.from(participants.values());
-      // Filter for actual viewers only, excluding the local participant (host)
-      const viewers = participantsArray.filter(
-        (p) => {
-          // Exclude local participant (the host)
-          const isLocalHost = p.id === localParticipant.id;
-          // Include only viewers (VIEWER or RECV_ONLY mode)
-          const isViewer = p.mode === Constants.modes.VIEWER || p.mode === 'RECV_ONLY';
-          return !isLocalHost && isViewer;
-        }
-      );
-      setViewerCount(viewers.length);
-      logInfo('LiveStreaming', `Viewer count updated: ${viewers.length}`, {
-        totalParticipants: participantsArray.length,
-        localParticipantId: localParticipant.id,
-        viewerIds: viewers.map(v => v.id)
+  const { participants, localParticipant, leave } = useMeeting({
+    onParticipantJoined: (participant) => {
+      console.log('[HostMode] 👤 Viewer joined:', {
+        id: participant.id,
+        displayName: participant.displayName
       });
+    },
+    onParticipantLeft: (participant) => {
+      console.log('[HostMode] 👋 Viewer left:', {
+        id: participant.id,
+        displayName: participant.displayName
+      });
+    },
+  });
+  
+  // Viewer list state for Bug #3
+  const [showViewerList, setShowViewerList] = useState(false);
+  
+  // Wallet balance states for Bug #5
+  const [walletBalance, setWalletBalance] = useState<number>(0);
+  const [warningShown, setWarningShown] = useState(false);
+  const checkBalanceIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const costPerMinute = 1; // Cost per minute for streaming
+
+  // Get viewers (exclude local/host participant) - Bug #3
+  const viewers = useMemo(() => {
+    return Array.from(participants.values()).filter(p => !p.local);
+  }, [participants]);
+
+  const viewerCount = viewers.length;
+
+  // Log participant updates - Bug #3
+  useEffect(() => {
+    console.log('[HostMode] Participants updated:', {
+      total: participants.size,
+      viewers: viewerCount,
+      participants: Array.from(participants.values()).map(p => ({
+        id: p.id,
+        displayName: p.displayName,
+        isLocal: p.local
+      }))
+    });
+  }, [participants, viewerCount]);
+
+  // Bug #5: Wallet balance monitoring functions
+  const showBalanceWarning = useCallback((remainingSeconds: number) => {
+    const minutes = Math.floor(remainingSeconds / 60);
+    const seconds = Math.floor(remainingSeconds % 60);
+
+    Alert.alert(
+      '⚠️ Low Balance Warning',
+      `Your livestream will end in ${minutes}:${seconds.toString().padStart(2, '0')} due to insufficient funds.`,
+      [
+        {
+          text: 'Add Funds',
+          onPress: () => {
+            navigation.navigate('AddFundsScreen');
+          }
+        },
+        {
+          text: 'Continue',
+          style: 'cancel'
+        }
+      ],
+      { cancelable: false }
+    );
+  }, [navigation]);
+
+  const handleEndStreamDueToInsufficientFunds = useCallback(async () => {
+    // Clear the balance check interval
+    if (checkBalanceIntervalRef.current) {
+      clearInterval(checkBalanceIntervalRef.current);
     }
-  }, [participants, localParticipant]);
+
+    Alert.alert(
+      'Stream Ended',
+      'Your livestream has ended due to insufficient wallet balance.',
+      [
+        {
+          text: 'Add Funds',
+          onPress: () => {
+            navigation.navigate('AddFundsScreen');
+          }
+        },
+        {
+          text: 'OK',
+          onPress: async () => {
+            try {
+              await ApiService.endLiveStream({
+                user_id: userId,
+                meeting_id: meetingId,
+              });
+            } catch (error) {
+              console.error('[HostMode] Error ending stream:', error);
+            } finally {
+              leave();
+              navigation.goBack();
+            }
+          }
+        }
+      ],
+      { cancelable: false }
+    );
+  }, [userId, meetingId, leave, navigation]);
+
+  // Bug #5: Check wallet balance periodically
+  useEffect(() => {
+    const checkBalance = async () => {
+      try {
+        const response = await ApiService.getWalletBalance(userId);
+        if (response.status === 1 && response.availableBalance) {
+          const balance = parseFloat(response.availableBalance || '0');
+          setWalletBalance(balance);
+
+          // Calculate remaining time
+          const remainingMinutes = balance / costPerMinute;
+          const remainingSeconds = remainingMinutes * 60;
+
+          console.log('[HostMode] Balance check:', {
+            balance,
+            costPerMinute,
+            remainingMinutes,
+            remainingSeconds
+          });
+
+          // Show warning if less than 2 minutes remaining
+          if (remainingSeconds <= 120 && remainingSeconds > 0 && !warningShown) {
+            showBalanceWarning(remainingSeconds);
+            setWarningShown(true);
+          } else if (balance <= 0) {
+            handleEndStreamDueToInsufficientFunds();
+          }
+        }
+      } catch (error) {
+        console.error('[HostMode] Error checking balance:', error);
+      }
+    };
+
+    // Check immediately
+    checkBalance();
+
+    // Then check every 30 seconds
+    checkBalanceIntervalRef.current = setInterval(checkBalance, 30000);
+
+    return () => {
+      if (checkBalanceIntervalRef.current) {
+        clearInterval(checkBalanceIntervalRef.current);
+      }
+    };
+  }, [userId, costPerMinute, warningShown, showBalanceWarning, handleEndStreamDueToInsufficientFunds]);
 
   if (!localParticipant) {
     return (
@@ -620,6 +754,39 @@ const HostMode: React.FC<HostModeProps> = ({
         <HostVideoView participantId={localParticipant.id} />
       </View>
 
+      {/* Balance Indicator - Bug #5 */}
+      <View style={[
+        styles.balanceIndicator, 
+        { 
+          backgroundColor: walletBalance / costPerMinute <= 2 
+            ? 'rgba(255, 152, 0, 0.9)' 
+            : 'rgba(0, 0, 0, 0.6)' 
+        }
+      ]}>
+        <DollarSign size={16} color="white" />
+        <Text style={styles.balanceText}>
+          ₹{walletBalance.toFixed(2)}
+        </Text>
+        <Text style={styles.timeText}>
+          (~{Math.floor(walletBalance / costPerMinute)} min)
+        </Text>
+      </View>
+
+      {/* Low Balance Warning Banner - Bug #5 */}
+      {walletBalance / costPerMinute <= 5 && walletBalance > 0 && (
+        <View style={styles.warningBanner}>
+          <Text style={styles.warningText}>
+            ⚠️ Low Balance! Add funds to continue streaming
+          </Text>
+          <TouchableOpacity
+            style={styles.addFundsButton}
+            onPress={() => navigation.navigate('AddFundsScreen')}
+          >
+            <Text style={styles.addFundsButtonText}>Add Funds</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* Stream Info */}
       <View style={styles.streamInfoOverlay}>
         <View style={[styles.streamBadge, { backgroundColor: 'rgba(255, 0, 0, 0.8)' }]}>
@@ -631,13 +798,62 @@ const HostMode: React.FC<HostModeProps> = ({
         <Text style={[styles.streamTypeSubtitle, { color: colors.white }]} numberOfLines={1}>
           {streamTypeLabel}
         </Text>
-        <View style={[styles.viewerCount, { backgroundColor: 'rgba(0, 0, 0, 0.6)' }]}>
-          <Users size={16} color="white" />
-          <Text style={[styles.viewerCountText, { color: colors.white }]}>
-            {viewerCount} {viewerCount === 1 ? 'viewer' : 'viewers'}
-          </Text>
-        </View>
       </View>
+
+      {/* Viewer Count Badge with Click to View List - Bug #3 */}
+      <View style={styles.viewerCountBadge}>
+        <Users size={18} color="white" />
+        <Text style={styles.viewerCountTextNew}>
+          {viewerCount} {viewerCount === 1 ? 'viewer' : 'viewers'}
+        </Text>
+        <TouchableOpacity
+          style={styles.viewerListButton}
+          onPress={() => setShowViewerList(true)}
+        >
+          <ChevronDown size={16} color="white" />
+        </TouchableOpacity>
+      </View>
+
+      {/* Viewer List Modal - Bug #3 */}
+      <Modal
+        visible={showViewerList}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowViewerList(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.viewerListModal, { backgroundColor: colors.card }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.text.primary }]}>
+                Viewers ({viewerCount})
+              </Text>
+              <TouchableOpacity onPress={() => setShowViewerList(false)}>
+                <X size={24} color={colors.text.primary} />
+              </TouchableOpacity>
+            </View>
+
+            <FlatList
+              data={viewers}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => (
+                <View style={[styles.viewerItem, { borderBottomColor: colors.border || '#E0E0E0' }]}>
+                  <View style={styles.viewerAvatar}>
+                    <User size={20} color={colors.text.primary} />
+                  </View>
+                  <Text style={[styles.viewerName, { color: colors.text.primary }]}>
+                    {item.displayName || 'Anonymous Viewer'}
+                  </Text>
+                </View>
+              )}
+              ListEmptyComponent={
+                <Text style={[styles.emptyText, { color: colors.text.secondary }]}>
+                  No viewers yet
+                </Text>
+              }
+            />
+          </View>
+        </View>
+      </Modal>
 
       <HostControls
         participantId={localParticipant.id}
@@ -1159,6 +1375,9 @@ const LiveStreamContainer: React.FC<{
       colors={colors}
       streamTitle={streamTitle}
       streamType={streamType}
+      meetingId={meetingId}
+      userId={user?.id || 0}
+      navigation={navigation}
       onToggleMic={safeToggleMic}
       onToggleWebcam={safeToggleWebcam}
       onEndStream={handleHostEndStream}
@@ -1494,6 +1713,127 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  
+  // Bug #5: Wallet balance indicator styles
+  balanceIndicator: {
+    position: 'absolute',
+    top: 60,
+    left: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 6,
+    zIndex: 10,
+  },
+  balanceText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  timeText: {
+    color: 'white',
+    fontSize: 12,
+  },
+  warningBanner: {
+    position: 'absolute',
+    top: 100,
+    left: 16,
+    right: 16,
+    backgroundColor: '#FF9800',
+    padding: 12,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    zIndex: 10,
+  },
+  warningText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: 'bold',
+    flex: 1,
+  },
+  addFundsButton: {
+    backgroundColor: 'white',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  addFundsButtonText: {
+    color: '#FF9800',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  
+  // Bug #3: Viewer list modal styles
+  viewerCountBadge: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 6,
+    zIndex: 10,
+  },
+  viewerCountTextNew: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  viewerListButton: {
+    marginLeft: 4,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  viewerListModal: {
+    maxHeight: '70%',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  viewerItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+  },
+  viewerAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#E0E0E0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  viewerName: {
+    fontSize: 16,
+  },
+  emptyText: {
+    textAlign: 'center',
+    padding: 20,
   },
 });
 

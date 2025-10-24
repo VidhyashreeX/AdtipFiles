@@ -39,6 +39,7 @@ import Header from '../../components/common/Header';
 import VideoCardSkeleton from '../../components/skeletons/VideoCardSkeleton';
 import ScreenTransition from '../../components/common/ScreenTransition';
 import AnimatedVideoCard from './AnimatedVideoCard';
+import ContentCreatorSubscriptionScreen from './ContentCreatorSubscriptionScreen';
 
 import CategoryTabs from '../../components/tiptube/CategoryTabs';
 import YouTubeStyleVideoCard from '../../components/tiptube/YouTubeStyleVideoCard';
@@ -653,7 +654,7 @@ const TipTubeScreen = () => {
           ]}
           onPress={() => {
             if (!isUserPremium) {
-              navigation.navigate('PremiumSubscription');
+              navigation.navigate('ContentCreatorSubscriptionScreen');
             }
           }}
           activeOpacity={isUserPremium ? 1 : 0.7}
