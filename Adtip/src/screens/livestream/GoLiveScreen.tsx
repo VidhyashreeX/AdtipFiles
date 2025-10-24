@@ -26,7 +26,10 @@ import {
   Target, 
   Clock,
   X,
-  ChevronDown 
+  ChevronDown,
+  Crown,
+  CheckCircle,
+  Zap
 } from 'lucide-react-native';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -35,6 +38,144 @@ import Header from '../../components/common/Header';
 import ApiService from '../../services/ApiService';
 
 const { width: screenWidth } = Dimensions.get('window');
+
+// Premium Upgrade Modal Component
+interface PremiumUpgradeModalProps {
+  visible: boolean;
+  onClose: () => void;
+  onUpgrade: () => void;
+}
+
+const PremiumUpgradeModal: React.FC<PremiumUpgradeModalProps> = ({
+  visible,
+  onClose,
+  onUpgrade
+}) => {
+  const { colors } = useTheme();
+  
+  const premiumFeatures = [
+    {
+      icon: <DollarSign size={24} color="#FFD700" />,
+      title: 'Monetize Your Streams',
+      description: 'Earn money from every minute viewers watch your livestreams'
+    },
+    {
+      icon: <Target size={24} color="#FFD700" />,
+      title: 'Promotional Streams',
+      description: 'Create targeted promotional livestreams for businesses'
+    },
+    {
+      icon: <Users size={24} color="#FFD700" />,
+      title: 'Unlimited Audience',
+      description: 'Stream to unlimited viewers with no restrictions'
+    },
+    {
+      icon: <Zap size={24} color="#FFD700" />,
+      title: 'Priority Support',
+      description: 'Get priority support and exclusive creator features'
+    }
+  ];
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <View style={styles.premiumModalOverlay}>
+        <View style={[styles.premiumModalContainer, { backgroundColor: colors.background }]}>
+          {/* Header */}
+          <View style={styles.premiumModalHeader}>
+            <LinearGradient
+              colors={['#FFD700', '#FFA500']}
+              style={styles.premiumHeaderGradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <Crown size={48} color="white" />
+              <Text style={styles.premiumModalTitle}>Content Creator Premium</Text>
+              <Text style={styles.premiumModalSubtitle}>
+                Unlock professional livestreaming features
+              </Text>
+            </LinearGradient>
+          </View>
+
+          {/* Features List */}
+          <ScrollView 
+            style={styles.premiumFeaturesContainer}
+            showsVerticalScrollIndicator={false}
+          >
+            <Text style={[styles.premiumSectionTitle, { color: colors.text.primary }]}>
+              Why Upgrade to Premium?
+            </Text>
+            
+            {premiumFeatures.map((feature, index) => (
+              <View 
+                key={index} 
+                style={[styles.premiumFeatureItem, { backgroundColor: colors.surface }]}
+              >
+                <View style={styles.premiumFeatureIcon}>
+                  {feature.icon}
+                </View>
+                <View style={styles.premiumFeatureContent}>
+                  <Text style={[styles.premiumFeatureTitle, { color: colors.text.primary }]}>
+                    {feature.title}
+                  </Text>
+                  <Text style={[styles.premiumFeatureDescription, { color: colors.text.secondary }]}>
+                    {feature.description}
+                  </Text>
+                </View>
+                <CheckCircle size={20} color="#00C853" />
+              </View>
+            ))}
+
+            {/* Pricing Info */}
+            <View style={[styles.premiumPricingBox, { backgroundColor: colors.surface }]}>
+              <Text style={[styles.premiumPricingTitle, { color: colors.text.primary }]}>
+                💎 Special Launch Offer
+              </Text>
+              <Text style={[styles.premiumPricingText, { color: colors.text.secondary }]}>
+                Get Content Creator Premium and start earning from your livestreams today!
+              </Text>
+            </View>
+          </ScrollView>
+
+          {/* Action Buttons */}
+          <View style={[styles.premiumModalFooter, { borderTopColor: colors.border }]}>
+            <TouchableOpacity
+              style={[styles.premiumCancelButton, { borderColor: colors.border }]}
+              onPress={onClose}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.premiumCancelButtonText, { color: colors.text.secondary }]}>
+                Maybe Later
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.premiumUpgradeButton}
+              onPress={onUpgrade}
+              activeOpacity={0.8}
+            >
+              <LinearGradient
+                colors={['#FFD700', '#FFA500']}
+                style={styles.premiumUpgradeButtonGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+              >
+                <Crown size={20} color="white" />
+                <Text style={styles.premiumUpgradeButtonText}>
+                  Upgrade Now
+                </Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+};
 
 interface CreateStreamModalProps {
   visible: boolean;
@@ -307,6 +448,7 @@ const GoLiveScreen: React.FC = () => {
   const [showModal, setShowModal] = useState(false);
   const [selectedStreamType, setSelectedStreamType] = useState<'free' | 'influencer' | 'promotional' | null>(null);
   const [loading, setLoading] = useState(false);
+  const [showPremiumModal, setShowPremiumModal] = useState(false);
 
   // Handle initial stream type from navigation params
   React.useEffect(() => {
@@ -347,6 +489,16 @@ const GoLiveScreen: React.FC = () => {
   const handleStreamTypeSelect = useCallback((type: 'free' | 'influencer' | 'promotional') => {
     if (!user) {
       Alert.alert('Login Required', 'Please login to start live streaming.');
+      return;
+    }
+
+    // Check if user has content creator premium
+    // The user object from AuthContext has content_creator_plan_id field
+    const hasContentCreatorPremium = user.content_creator_plan_id > 0;
+    
+    if (!hasContentCreatorPremium) {
+      // Show premium upgrade modal
+      setShowPremiumModal(true);
       return;
     }
 
@@ -522,6 +674,16 @@ const GoLiveScreen: React.FC = () => {
       .finally(() => setLoading(false));
   };
 
+  const handleUpgradeToPremium = useCallback(() => {
+    setShowPremiumModal(false);
+    // Navigate to Content Creator Subscription screen
+    navigation.navigate('ContentCreatorSubscriptionScreen' as any);
+  }, [navigation]);
+
+  const handleClosePremiumModal = useCallback(() => {
+    setShowPremiumModal(false);
+  }, []);
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <Header title="Go Live" showSearch={false} />
@@ -612,6 +774,12 @@ const GoLiveScreen: React.FC = () => {
           </View>
         </View>
       </ScrollView>
+
+      <PremiumUpgradeModal
+        visible={showPremiumModal}
+        onClose={handleClosePremiumModal}
+        onUpgrade={handleUpgradeToPremium}
+      />
 
       <CreateStreamModal
         visible={showModal}
@@ -861,6 +1029,150 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   createButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: 'white',
+  },
+  
+  // Premium Modal Styles
+  premiumModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  premiumModalContainer: {
+    width: '100%',
+    maxWidth: 500,
+    maxHeight: '90%',
+    borderRadius: 24,
+    overflow: 'hidden',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  premiumModalHeader: {
+    overflow: 'hidden',
+  },
+  premiumHeaderGradient: {
+    paddingVertical: 40,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+  },
+  premiumModalTitle: {
+    fontSize: 26,
+    fontWeight: 'bold',
+    color: 'white',
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  premiumModalSubtitle: {
+    fontSize: 16,
+    color: 'rgba(255, 255, 255, 0.95)',
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  premiumFeaturesContainer: {
+    maxHeight: 400,
+    paddingHorizontal: 20,
+    paddingVertical: 24,
+  },
+  premiumSectionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 20,
+  },
+  premiumFeatureItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  premiumFeatureIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255, 215, 0, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  premiumFeatureContent: {
+    flex: 1,
+    marginRight: 12,
+  },
+  premiumFeatureTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  premiumFeatureDescription: {
+    fontSize: 14,
+    lineHeight: 18,
+  },
+  premiumPricingBox: {
+    padding: 20,
+    borderRadius: 12,
+    marginTop: 12,
+    marginBottom: 8,
+    borderWidth: 2,
+    borderColor: '#FFD700',
+  },
+  premiumPricingTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  premiumPricingText: {
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  premiumModalFooter: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderTopWidth: 1,
+    gap: 12,
+  },
+  premiumCancelButton: {
+    flex: 1,
+    borderWidth: 1.5,
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  premiumCancelButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  premiumUpgradeButton: {
+    flex: 2,
+    borderRadius: 12,
+    overflow: 'hidden',
+    elevation: 3,
+    shadowColor: '#FFD700',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+  },
+  premiumUpgradeButtonGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    gap: 8,
+  },
+  premiumUpgradeButtonText: {
     fontSize: 16,
     fontWeight: 'bold',
     color: 'white',
