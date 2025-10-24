@@ -53,28 +53,36 @@ const YouTubeStyleVideoCard: React.FC<YouTubeStyleVideoCardProps> = ({
   // State for secure media URLs
   const [thumbnailUrl, setThumbnailUrl] = useState<string>(getFallbackThumbnailUrl(video.id));
   const [avatarUrl, setAvatarUrl] = useState<string>(getFallbackAvatarUrl(video.channelId));
+  const [hasLoadedRef] = useState({ thumbnail: false, avatar: false }); // Prevent re-loading
 
-  // Load secure media URLs
+  // Load secure media URLs - memoize video properties to prevent unnecessary re-renders
+  const videoId = video.id;
+  const videoThumbnail = video.thumbnail;
+  const videoAvatar = video.avatar;
+  const channelId = video.channelId;
+
   useEffect(() => {
     const loadSecureUrls = async () => {
-      // Load thumbnail
-      if (video.thumbnail) {
+      // Load thumbnail only once
+      if (videoThumbnail && !hasLoadedRef.thumbnail) {
         try {
-          const secureThumbnail = await getSecureMediaUrl(video.thumbnail);
+          const secureThumbnail = await getSecureMediaUrl(videoThumbnail);
           if (secureThumbnail) {
             setThumbnailUrl(secureThumbnail);
+            hasLoadedRef.thumbnail = true;
           }
         } catch (error) {
           console.warn('[YouTubeStyleVideoCard] Failed to load thumbnail:', error);
         }
       }
 
-      // Load avatar
-      if (video.avatar) {
+      // Load avatar only once
+      if (videoAvatar && !hasLoadedRef.avatar) {
         try {
-          const secureAvatar = await getSecureMediaUrl(video.avatar);
+          const secureAvatar = await getSecureMediaUrl(videoAvatar);
           if (secureAvatar) {
             setAvatarUrl(secureAvatar);
+            hasLoadedRef.avatar = true;
           }
         } catch (error) {
           console.warn('[YouTubeStyleVideoCard] Failed to load avatar:', error);
@@ -83,7 +91,7 @@ const YouTubeStyleVideoCard: React.FC<YouTubeStyleVideoCardProps> = ({
     };
 
     loadSecureUrls();
-  }, [video.thumbnail, video.avatar, video.id, video.channelId]);
+  }, [videoId, videoThumbnail, videoAvatar, channelId]); // Use extracted values instead of video object properties
 
   // Format view count (e.g., 1.2k, 3.4M)
   const formatViewCount = (count: number): string => {
@@ -323,4 +331,4 @@ const createStyles = (colors: any, isDarkMode: boolean) =>
     },
   });
 
-export default YouTubeStyleVideoCard;
+export default React.memo(YouTubeStyleVideoCard);

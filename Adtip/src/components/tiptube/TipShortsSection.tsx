@@ -78,10 +78,13 @@ const TipShortsSection: React.FC<TipShortsSectionProps> = ({
     }
   };
 
-  const handleShortPress = (short: ShortVideo) => {
-    // Navigate to TipShorts with specific video
-    navigation.navigate('TipShorts' as never, { videoId: short.id });
-  };
+  const handleShortPress = React.useCallback((short: ShortVideo) => {
+    // Navigate to TipShorts with specific video using shortId parameter
+    // Ensure the ID is always a string
+    const shortIdString = String(short.id);
+    console.log('[TipShortsSection] Navigating to short:', { shortId: shortIdString, originalId: short.id });
+    navigation.navigate('TipShorts' as never, { shortId: shortIdString } as never);
+  }, [navigation]);
 
   // Separate component for short card to properly use hooks
   const ShortCard = React.memo(({ item, onPress }: { item: ShortVideo; onPress: (item: ShortVideo) => void }) => {
@@ -89,23 +92,35 @@ const TipShortsSection: React.FC<TipShortsSectionProps> = ({
     const fallbackUrl = React.useMemo(() => getFallbackThumbnailUrl(item.id), [item.id]);
     const [thumbnailUrl, setThumbnailUrl] = React.useState<string>(fallbackUrl);
     const [isLoading, setIsLoading] = React.useState<boolean>(true);
+    const hasLoadedRef = React.useRef(false); // Use useRef instead of useState for better stability
+    const itemIdRef = React.useRef(item.id); // Track item ID to detect changes
 
     React.useEffect(() => {
+      // Reset if item changed
+      if (itemIdRef.current !== item.id) {
+        hasLoadedRef.current = false;
+        itemIdRef.current = item.id;
+        setThumbnailUrl(fallbackUrl);
+      }
+
+      // Prevent re-loading if already loaded for this item
+      if (hasLoadedRef.current) {
+        return;
+      }
+
       const loadThumbnail = async () => {
         if (item.thumbnail) {
           try {
             setIsLoading(true);
             const secureUrl = await getSecureMediaUrl(item.thumbnail);
             if (secureUrl) {
-              console.log('[TipShortsSection] Loaded secure thumbnail URL for short:', item.id);
               setThumbnailUrl(secureUrl);
+              hasLoadedRef.current = true; // Mark as loaded
             } else {
-              console.warn('[TipShortsSection] No secure URL returned, using fallback');
               setThumbnailUrl(fallbackUrl);
             }
           } catch (error) {
             console.warn('[TipShortsSection] Failed to load thumbnail:', error);
-            // Reset to stable fallback URL
             setThumbnailUrl(fallbackUrl);
           } finally {
             setIsLoading(false);
@@ -116,7 +131,7 @@ const TipShortsSection: React.FC<TipShortsSectionProps> = ({
       };
 
       loadThumbnail();
-    }, [item.thumbnail, fallbackUrl]);
+    }, [item.id, item.thumbnail, fallbackUrl]); // Use item.id instead of fallbackUrl to prevent cascading
 
     return (
       <TouchableOpacity
@@ -150,7 +165,14 @@ const TipShortsSection: React.FC<TipShortsSectionProps> = ({
         </View>
       </TouchableOpacity>
     );
+  }, (prevProps, nextProps) => {
+    // Custom comparison function - only re-render if item.id or item.thumbnail changes
+    return prevProps.item.id === nextProps.item.id && 
+           prevProps.item.thumbnail === nextProps.item.thumbnail;
   });
+
+  // Add display name for debugging
+  ShortCard.displayName = 'ShortCard';
 
   const renderShortCard = ({ item }: { item: ShortVideo }) => (
     <ShortCard item={item} onPress={handleShortPress} />
@@ -283,4 +305,4 @@ const createStyles = (colors: any, isDarkMode: boolean) =>
     },
   });
 
-export default TipShortsSection;
+export default React.memo(TipShortsSection);

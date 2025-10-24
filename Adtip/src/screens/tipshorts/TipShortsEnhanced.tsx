@@ -638,6 +638,9 @@ const TipShortsEnhanced = () => {
   // Enhanced deep link handling with better timing
   useEffect(() => {
     if (shortId && shorts.length > 0) {
+      // Log the deep link attempt
+      TipShortsLogger.debug('Deep link shortId received:', { shortId, shortsCount: shorts.length, shortIds: shorts.map(s => s.id) });
+      
       // Check if the deep-linked short is in the list
       const shortIndex = shorts.findIndex(s => s.id === shortId);
 
@@ -654,6 +657,8 @@ const TipShortsEnhanced = () => {
         TipShortsLogger.debug('Still loading deep-linked short, waiting...');
       } else if (singleShortQuery.error) {
         TipShortsLogger.warn('Failed to load deep-linked short:', singleShortQuery.error);
+      } else {
+        TipShortsLogger.warn(`Deep-linked short ${shortId} not found in list of ${shorts.length} shorts`);
       }
     }
   }, [shortId, scrollToShort, shorts.length, shorts, singleShortQuery.isLoading, singleShortQuery.error]);
