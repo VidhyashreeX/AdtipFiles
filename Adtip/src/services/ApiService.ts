@@ -1356,6 +1356,21 @@ export default class ApiService {
     );
   }
 
+  /**
+   * Get comprehensive channel earnings and analytics
+   */
+  static async getChannelEarnings(channelId: string | number): Promise<any> {
+    try {
+      console.log('[ApiService] 💰 Getting channel earnings for:', channelId);
+      const response = await this.get(`/api/channel/${channelId}/earnings`);
+      console.log('[ApiService] 💰 Channel earnings response:', response);
+      return response;
+    } catch (error) {
+      console.error('[ApiService] ❌ Error getting channel earnings:', error);
+      throw this.handleError(error);
+    }
+  }
+
   // ===== TIP-SHORTS SERVICES =====
 
   /**

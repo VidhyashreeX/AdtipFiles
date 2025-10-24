@@ -18,7 +18,7 @@ import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/nativ
 import { useQueryClient } from '@tanstack/react-query';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import Icon from 'react-native-vector-icons/Feather';
-import { CirclePlay, Gamepad2, Search } from 'lucide-react-native';
+import { CirclePlay, Gamepad2, Search, Crown } from 'lucide-react-native';
 import RazorpayCheckout from 'react-native-razorpay';
 import debounce from 'lodash.debounce';
 
@@ -31,6 +31,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useDataContext } from '../../providers/DataProvider';
 import { useContentCreatorPremium } from '../../contexts/ContentCreatorPremiumContext';
 import { useUserPremiumStatus } from '../../contexts/UserDataContext';
+import { isPremiumUser } from '../../utils/userDataUtils';
 import { useVideos, useGuestVideos, useSearchVideos, useChannelData } from '../../hooks/useQueries';
 import { useNetInfo } from '@react-native-community/netinfo';
 import { useGuestGuard } from '../../hooks/useGuestGuard';
@@ -189,6 +190,9 @@ const TipTubeScreen = () => {
   const netInfo = useNetInfo();
   const route = useRoute();
   const videoId: string | undefined = (route.params && typeof route.params === 'object' && 'videoId' in route.params) ? String((route.params as any).videoId) : undefined;
+
+  // Check USER premium status (not content creator premium)
+  const isUserPremium = user && (user.is_premium === 1 || user.is_premium === true);
 
   // UI state management (decoupled from navigation)
   const [selectedCategory, setSelectedCategory] = useState("All");
@@ -637,6 +641,27 @@ const TipTubeScreen = () => {
           activeOpacity={0.8}
         >
           <Search size={20} color={colors.text.secondary} />
+        </TouchableOpacity>
+
+        {/* User Premium Button */}
+        <TouchableOpacity
+          style={[
+            styles.premiumButton,
+            { 
+              backgroundColor: isUserPremium ? '#00C853' : '#FF0000' 
+            }
+          ]}
+          onPress={() => {
+            if (!isUserPremium) {
+              navigation.navigate('PremiumSubscription');
+            }
+          }}
+          activeOpacity={isUserPremium ? 1 : 0.7}
+        >
+          <Crown size={16} color="white" />
+          <Text style={styles.premiumButtonText}>
+            {isUserPremium ? 'Premium' : 'Go Premium'}
+          </Text>
         </TouchableOpacity>
 
         {/* Content Creator Premium Toggle */}
@@ -1765,6 +1790,19 @@ const createYouTubeStyles = (colors: any, isDarkMode: boolean) => StyleSheet.cre
     borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  premiumButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    gap: 4,
+  },
+  premiumButtonText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
   channelProfileButton: {
     padding: 4,

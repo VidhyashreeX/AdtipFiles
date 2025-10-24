@@ -34,18 +34,23 @@ const ContentCreatorSubscriptionScreen = () => {
   useEffect(() => {
     const fetchPlans = async () => {
       try {
-        const response = await ApiService.get('/content-creator-plans');
-        if (response.status) {
-          setPlans(response.data);
-          if (response.data.length > 1) {
-            setSelectedPlanId(response.data[1].id);
-          } else if (response.data.length > 0) {
-            setSelectedPlanId(response.data[0].id);
+        // Use correct API method
+        const response = await ApiService.getContentSubscriptionPlans();
+        console.log('[ContentCreatorSubscription] Plans response:', response);
+        
+        if (response.status && response.plans) {
+          setPlans(response.plans);
+          if (response.plans.length > 1) {
+            // Select the middle plan (usually the best value)
+            setSelectedPlanId(response.plans[1].id);
+          } else if (response.plans.length > 0) {
+            setSelectedPlanId(response.plans[0].id);
           }
         } else {
           Alert.alert('Error', 'Could not fetch content creator plans.');
         }
       } catch (error) {
+        console.error('[ContentCreatorSubscription] Error fetching plans:', error);
         Alert.alert('Error', 'An error occurred while fetching plans.');
       } finally {
         setLoading(false);
@@ -63,42 +68,69 @@ const ContentCreatorSubscriptionScreen = () => {
       Alert.alert('Authentication Error', 'Could not identify user. Please log in again.');
       return;
     }
+    
     setPaymentProcessing(true);
+    
     try {
-      const keyRes = await ApiService.getRazorpayDetails();
+      // Get Razorpay key
+      const keyRes = await ApiService.getContentPremiumRazorpayDetails();
       const razorpayKey = keyRes.api_key;
-      const res = await ApiService.post('/content-creator/subscribe', { plan_id: selectedPlanId });
-      if (!res.status || !res.order) {
-        throw new Error(res.message || 'Failed to create order.');
+      
+      // Create subscription using correct API
+      const res = await ApiService.createContentPremiumSubscription(selectedPlanId, user.id);
+      
+      console.log('[ContentCreatorSubscription] Subscription creation response:', res);
+      
+      if (!res.status || !res.subscription_id) {
+        throw new Error(res.message || 'Failed to create subscription.');
       }
-      const order = res.order;
+      
+      // Find the selected plan for display
+      const selectedPlan = plans.find(p => p.id === selectedPlanId);
+      
       const options = {
         key: razorpayKey,
-        order_id: order.id,
+        subscription_id: res.subscription_id, // Use subscription ID instead of order ID
         name: 'Content Creator Premium',
-        description: 'Your content creator premium plan',
-        amount: order.amount,
-        currency: order.currency,
+        description: selectedPlan?.name || 'Content creator premium subscription',
+        amount: selectedPlan?.amount ? selectedPlan.amount * 100 : 0, // Amount in paise
+        currency: 'INR',
         prefill: {
-          email: user.emailId,
-          contact: '',
-          name: user.name,
+          email: user.emailId || '',
+          contact: user.phoneNumber || '',
+          name: user.name || '',
         },
         theme: { color: colors.primary },
       };
+      
+      console.log('[ContentCreatorSubscription] Opening Razorpay with options:', options);
+      
       RazorpayCheckout.open(options)
         .then(async (paymentData: any) => {
-          await ApiService.post('/content-creator/payment-callback', paymentData);
-          Alert.alert('Success', 'Your content creator plan is being processed!');
-          navigation.goBack();
+          console.log('[ContentCreatorSubscription] Payment successful:', paymentData);
+          
+          // Payment webhook will handle activation, just show success
+          Alert.alert(
+            'Success', 
+            'Your content creator subscription has been activated!',
+            [
+              {
+                text: 'OK',
+                onPress: () => navigation.goBack()
+              }
+            ]
+          );
         })
         .catch((error: any) => {
-          Alert.alert('Payment Failed', `Code: ${error.code}\nDescription: ${error.description}`);
+          console.error('[ContentCreatorSubscription] Payment failed:', error);
+          Alert.alert('Payment Failed', `${error.description || error.message || 'Payment was cancelled or failed'}`);
         })
         .finally(() => {
           setPaymentProcessing(false);
         });
+        
     } catch (error: any) {
+      console.error('[ContentCreatorSubscription] Error:', error);
       setPaymentProcessing(false);
       Alert.alert('Error', error.message || 'An unexpected error occurred.');
     }
@@ -161,8 +193,12 @@ const ContentCreatorSubscriptionScreen = () => {
               onPress={() => setSelectedPlanId(plan.id)}
             >
               <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>{plan.name}</Text>
-              <Text style={{ color: '#fff', marginTop: 4 }}>₹{plan.price} / {plan.billing_cycle}</Text>
-              <Text style={{ color: '#fff', marginTop: 4 }}>{plan.description}</Text>
+              <Text style={{ color: '#fff', marginTop: 4 }}>
+                ₹{plan.amount} / {plan.billing_cycle || plan.plan_interval || 'month'}
+              </Text>
+              {plan.description && (
+                <Text style={{ color: '#fff', marginTop: 4 }}>{plan.description}</Text>
+              )}
             </TouchableOpacity>
           ))
         )}

@@ -35,7 +35,7 @@ import {
   UpdateChannelRequest,
   ChannelAnalyticsResponse 
 } from '../../types/api';
-import { Play, Calendar, Users, Eye, Settings, Edit3, Upload, BarChart3, MoreVertical, Trash2, Edit } from 'lucide-react-native';
+import { Play, Calendar, Users, Eye, Settings, Edit3, Upload, BarChart3, MoreVertical, Trash2, Edit, DollarSign, TrendingUp, Video as VideoIcon } from 'lucide-react-native';
 
 const { width } = Dimensions.get('window');
 
@@ -77,6 +77,7 @@ const MyChannelScreen: React.FC = () => {
   const [videos, setVideos] = useState<Video[]>([]);
   const [shorts, setShorts] = useState<Video[]>([]);
   const [analytics, setAnalytics] = useState<ChannelAnalyticsResponse | null>(null);
+  const [earnings, setEarnings] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState('');
@@ -159,6 +160,7 @@ const MyChannelScreen: React.FC = () => {
         // Fetch videos and shorts for this channel
         await fetchChannelContent(channelData.channelId);
         await fetchChannelAnalytics(channelData.channelId);
+        await fetchChannelEarnings(channelData.channelId);
       } else {
         setError('No channel found for this user');
       }
@@ -220,6 +222,28 @@ const MyChannelScreen: React.FC = () => {
       }
     } catch (err) {
       console.error('Error fetching analytics:', err);
+    }
+  };
+
+  // Fetch channel earnings
+  const fetchChannelEarnings = async (channelId: string) => {
+    try {
+      console.log('💰 [MyChannelScreen] Fetching earnings for channel:', channelId);
+      const earningsResponse = await ApiService.getChannelEarnings(channelId);
+      
+      if (earningsResponse.status && earningsResponse.data) {
+        setEarnings(earningsResponse.data);
+        console.log('💰 [MyChannelScreen] Earnings data:', earningsResponse.data);
+        
+        // Update channel with correct earnings data
+        setChannel(prev => prev ? {
+          ...prev,
+          totalViews: earningsResponse.data.earnings?.total_views || 0,
+          totalEarnings: earningsResponse.data.earnings?.total_earnings || 0,
+        } : null);
+      }
+    } catch (err) {
+      console.error('Error fetching channel earnings:', err);
     }
   };
 
@@ -561,6 +585,84 @@ const MyChannelScreen: React.FC = () => {
     </View>
   );
 
+  // Render earnings section
+  const renderEarnings = () => {
+    if (!earnings || !earnings.earnings) return null;
+    
+    return (
+      <View style={[styles.section, { backgroundColor: colors.card }]}>
+        <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
+          Earnings Breakdown
+        </Text>
+        
+        <View style={styles.earningsGrid}>
+          {/* Total Views */}
+          <View style={[styles.earningCard, { backgroundColor: colors.surface }]}>
+            <View style={[styles.earningIcon, { backgroundColor: '#2196F3' }]}>
+              <Eye size={20} color="white" />
+            </View>
+            <Text style={[styles.earningLabel, { color: colors.text.secondary }]}>
+              Total Views
+            </Text>
+            <Text style={[styles.earningValue, { color: colors.text.primary }]}>
+              {(earnings.earnings.total_views || 0).toLocaleString()}
+            </Text>
+          </View>
+
+          {/* View Earnings */}
+          <View style={[styles.earningCard, { backgroundColor: colors.surface }]}>
+            <View style={[styles.earningIcon, { backgroundColor: '#4CAF50' }]}>
+              <DollarSign size={20} color="white" />
+            </View>
+            <Text style={[styles.earningLabel, { color: colors.text.secondary }]}>
+              View Earnings
+            </Text>
+            <Text style={[styles.earningValue, { color: colors.text.primary }]}>
+              ₹{(earnings.earnings.view_earnings || 0).toFixed(2)}
+            </Text>
+          </View>
+
+          {/* Paid Video Earnings */}
+          <View style={[styles.earningCard, { backgroundColor: colors.surface }]}>
+            <View style={[styles.earningIcon, { backgroundColor: '#FF9800' }]}>
+              <VideoIcon size={20} color="white" />
+            </View>
+            <Text style={[styles.earningLabel, { color: colors.text.secondary }]}>
+              Paid Content
+            </Text>
+            <Text style={[styles.earningValue, { color: colors.text.primary }]}>
+              ₹{(earnings.earnings.paid_video_earnings || 0).toFixed(2)}
+            </Text>
+          </View>
+
+          {/* Total Earnings */}
+          <View style={[styles.earningCard, { backgroundColor: colors.surface }]}>
+            <View style={[styles.earningIcon, { backgroundColor: '#00BCD4' }]}>
+              <TrendingUp size={20} color="white" />
+            </View>
+            <Text style={[styles.earningLabel, { color: colors.text.secondary }]}>
+              Total Earnings
+            </Text>
+            <Text style={[styles.earningValue, { color: colors.text.primary }]}>
+              ₹{(earnings.earnings.total_earnings || 0).toFixed(2)}
+            </Text>
+          </View>
+        </View>
+
+        {/* Available Balance */}
+        <View style={[styles.balanceCard, { backgroundColor: colors.primary }]}>
+          <Text style={styles.balanceLabel}>Available Balance</Text>
+          <Text style={styles.balanceValue}>
+            ₹{(earnings.earnings.available_balance || 0).toFixed(2)}
+          </Text>
+          <TouchableOpacity style={styles.withdrawButton}>
+            <Text style={styles.withdrawButtonText}>Withdraw</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
+
   // Render about section
   const renderAbout = () => (
     <View style={styles.aboutContainer}>
@@ -773,7 +875,12 @@ const MyChannelScreen: React.FC = () => {
   // Render footer component for non-list tabs
   const renderListFooter = () => {
     if (activeTab === 'Analytics') {
-      return renderAnalytics();
+      return (
+        <>
+          {renderEarnings()}
+          {renderAnalytics()}
+        </>
+      );
     }
     if (activeTab === 'About') {
       return renderAbout();
@@ -1417,6 +1524,69 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
+  },
+  // Earnings section styles
+  section: {
+    marginTop: 16,
+    padding: 16,
+    borderRadius: 12,
+  },
+  earningsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginTop: 12,
+  },
+  earningCard: {
+    flex: 1,
+    minWidth: '45%',
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  earningIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  earningLabel: {
+    fontSize: 12,
+    marginBottom: 4,
+  },
+  earningValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  balanceCard: {
+    marginTop: 16,
+    padding: 20,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  balanceLabel: {
+    color: 'white',
+    fontSize: 14,
+    marginBottom: 8,
+  },
+  balanceValue: {
+    color: 'white',
+    fontSize: 32,
+    fontWeight: 'bold',
+    marginBottom: 16,
+  },
+  withdrawButton: {
+    backgroundColor: 'white',
+    paddingHorizontal: 32,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  withdrawButtonText: {
+    color: '#00BCD4',
+    fontWeight: 'bold',
+    fontSize: 16,
   },
 
 });
