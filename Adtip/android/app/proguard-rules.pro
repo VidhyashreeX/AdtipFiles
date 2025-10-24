@@ -231,10 +231,54 @@
 # NETWORKING RULES
 # ================================================================================================
 
-# OkHttp
+# OkHttp - Complete rules to prevent WebSocket crashes
 -keep class okhttp3.** { *; }
 -keep interface okhttp3.** { *; }
 -dontwarn okhttp3.**
+-dontwarn okio.**
+
+# OkHttp WebSocket - Critical for preventing MessageDeflater crashes
+-keep class okhttp3.internal.ws.** { *; }
+-keep class okhttp3.internal.ws.WebSocketReader { *; }
+-keep class okhttp3.internal.ws.WebSocketWriter { *; }
+-keep class okhttp3.internal.ws.MessageDeflater { *; }
+-keep class okhttp3.internal.ws.MessageInflater { *; }
+-keep class okhttp3.internal.ws.RealWebSocket { *; }
+-keep class okhttp3.internal.ws.RealWebSocket$* { *; }
+-keepclassmembers class okhttp3.internal.ws.RealWebSocket {
+    *;
+}
+-keepclassmembers class okhttp3.internal.ws.MessageDeflater {
+    *;
+}
+
+# OkHttp Interceptors and Connection Pool
+-keep class okhttp3.internal.** { *; }
+-keep class okhttp3.Request { *; }
+-keep class okhttp3.Response { *; }
+-keep class okhttp3.Call { *; }
+-keep class okhttp3.Callback { *; }
+-keep class okhttp3.EventListener { *; }
+
+# Okio - Required by OkHttp
+-keep class okio.** { *; }
+-dontwarn okio.**
+-keep class okio.Buffer { *; }
+-keep class okio.BufferedSource { *; }
+-keep class okio.BufferedSink { *; }
+
+# Socket.IO (uses OkHttp underneath)
+-keep class io.socket.** { *; }
+-keep class io.socket.client.** { *; }
+-keep class io.socket.emitter.** { *; }
+-keep class io.socket.engineio.** { *; }
+-keep class io.socket.engineio.client.** { *; }
+-dontwarn io.socket.**
+
+# Socket.IO Engine.IO transport
+-keep class io.socket.engineio.client.transports.** { *; }
+-keep class io.socket.engineio.client.Transport { *; }
+-keep class io.socket.engineio.client.Transport$* { *; }
 
 # Retrofit
 -keep class retrofit2.** { *; }

@@ -214,6 +214,35 @@ android {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
+    
+    // Configure packaging to avoid conflicts
+    packagingOptions {
+        // Add these exclusions to prevent duplicate classes
+        exclude 'META-INF/INDEX.LIST'
+        exclude 'META-INF/DEPENDENCIES.txt'
+        exclude 'META-INF/LICENSE.txt'
+        exclude 'META-INF/NOTICE.txt'
+        exclude 'META-INF/NOTICE'
+        exclude 'META-INF/LICENSE'
+        exclude 'META-INF/DEPENDENCIES'
+        exclude 'META-INF/notice.txt'
+        exclude 'META-INF/license.txt'
+        exclude 'META-INF/dependencies.txt'
+        exclude 'META-INF/LGPL2.1'
+        exclude 'META-INF/ASL2.0'
+        exclude 'META-INF/*.kotlin_module'
+        exclude '**/kotlin/**'
+        exclude '**/*.kotlin_metadata'
+        exclude '**/*.kotlin_builtins'
+        exclude '**/kotlin-tooling-metadata.json'
+        
+        // Pick first for native libraries - critical for preventing duplicates
+        pickFirst '**/libc++_shared.so'
+        pickFirst '**/libjsc.so'
+        pickFirst '**/libhermes.so'
+        pickFirst '**/libreactnativejni.so'
+        pickFirst '**/libfbjni.so'
+    }
 
     // Bundle configuration for AAB optimization
     bundle {
@@ -229,9 +258,26 @@ android {
     }
 }
 
+// Force resolution of OkHttp and Okio to specific versions
+// This prevents WebSocket MessageDeflater crashes
+configurations.all {
+    resolutionStrategy {
+        force 'com.squareup.okhttp3:okhttp:4.12.0'
+        force 'com.squareup.okio:okio:3.6.0'
+        
+        // Exclude conflicting versions
+        exclude group: 'com.squareup.okhttp3', module: 'okhttp-bom'
+    }
+}
+
 dependencies {
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
+    
+    // OkHttp - Explicit version to fix WebSocket MessageDeflater crashes
+    // Force a stable version that handles WebSocket compression correctly
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+    implementation 'com.squareup.okio:okio:3.6.0'
     
     // PubScale Offerwall SDK
     implementation 'com.pubscale.sdkone:offerwall:1.0.11'

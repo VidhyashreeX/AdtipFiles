@@ -1,7 +1,7 @@
 // src/services/SocketService.ts - WebSocket service for real-time features
 import io, { Socket } from 'socket.io-client';
 import { Logger } from '../utils/ProductionLogger';
-import ApiService from './ApiService';
+import { API_BASE_URL } from '../constants/api';
 
 export interface StreamSocketEvents {
   viewer_joined: (data: { userId: number; userName: string; viewerCount: number }) => void;
@@ -66,10 +66,10 @@ class SocketService {
     try {
       Logger.info('SocketService', 'Connecting to socket server...');
 
-      // Get base URL from ApiService
-      const baseUrl = ApiService.getBaseUrl().replace('/api', '');
+      // Get base URL - remove /api suffix for socket.io connection
+      const baseUrl = API_BASE_URL.replace('/api', '');
       
-      // Initialize socket connection with auth
+      // Initialize socket connection with auth and optimized settings
       this.socket = io(baseUrl, {
         auth: {
           token,
@@ -81,6 +81,17 @@ class SocketService {
         reconnectionDelay: this.reconnectDelay,
         reconnectionDelayMax: 5000,
         timeout: 20000,
+        // Disable per-message compression to prevent MessageDeflater crashes
+        // This is a known issue with OkHttp's WebSocket implementation
+        // Set high threshold to effectively disable compression
+        perMessageDeflate: {
+          threshold: 1024 * 1024, // Only compress messages larger than 1MB (effectively disabled)
+        },
+        // Add additional WebSocket options for stability
+        forceNew: false,
+        multiplex: true,
+        upgrade: true,
+        rememberUpgrade: true,
       });
 
       // Setup event handlers
@@ -206,6 +217,12 @@ class SocketService {
       return;
     }
 
+    // Validate streamId to prevent WebSocket errors
+    if (!streamId || typeof streamId !== 'string' || streamId.trim().length === 0) {
+      Logger.warn('SocketService', 'Cannot join room - invalid streamId');
+      return;
+    }
+
     Logger.info('SocketService', 'Joining stream room:', streamId);
     
     // Leave previous room if in one
@@ -213,14 +230,18 @@ class SocketService {
       this.leaveStreamRoom(this.currentStreamRoom);
     }
 
-    this.socket.emit('join_stream', { streamId }, (response: any) => {
-      if (response?.success) {
-        this.currentStreamRoom = streamId;
-        Logger.info('SocketService', 'Joined stream room successfully:', streamId);
-      } else {
-        Logger.error('SocketService', 'Failed to join stream room:', response?.error);
-      }
-    });
+    try {
+      this.socket.emit('join_stream', { streamId: streamId.trim() }, (response: any) => {
+        if (response?.success) {
+          this.currentStreamRoom = streamId.trim();
+          Logger.info('SocketService', 'Joined stream room successfully:', streamId);
+        } else {
+          Logger.error('SocketService', 'Failed to join stream room:', response?.error);
+        }
+      });
+    } catch (error) {
+      Logger.error('SocketService', 'Error joining stream room:', error);
+    }
   }
 
   /**
@@ -233,18 +254,28 @@ class SocketService {
       return;
     }
 
+    // Validate streamId
+    if (!streamId || typeof streamId !== 'string' || streamId.trim().length === 0) {
+      Logger.warn('SocketService', 'Cannot leave room - invalid streamId');
+      return;
+    }
+
     Logger.info('SocketService', 'Leaving stream room:', streamId);
     
-    this.socket.emit('leave_stream', { streamId }, (response: any) => {
-      if (response?.success) {
-        if (this.currentStreamRoom === streamId) {
-          this.currentStreamRoom = null;
+    try {
+      this.socket.emit('leave_stream', { streamId: streamId.trim() }, (response: any) => {
+        if (response?.success) {
+          if (this.currentStreamRoom === streamId) {
+            this.currentStreamRoom = null;
+          }
+          Logger.info('SocketService', 'Left stream room successfully:', streamId);
+        } else {
+          Logger.error('SocketService', 'Failed to leave stream room:', response?.error);
         }
-        Logger.info('SocketService', 'Left stream room successfully:', streamId);
-      } else {
-        Logger.error('SocketService', 'Failed to leave stream room:', response?.error);
-      }
-    });
+      });
+    } catch (error) {
+      Logger.error('SocketService', 'Error leaving stream room:', error);
+    }
   }
 
   /**
@@ -258,16 +289,32 @@ class SocketService {
       return;
     }
 
-    this.socket.emit('stream_chat', {
-      streamId,
-      message
-    }, (response: any) => {
-      if (response?.success) {
-        Logger.debug('SocketService', 'Chat message sent successfully');
-      } else {
-        Logger.error('SocketService', 'Failed to send chat message:', response?.error);
-      }
-    });
+    // Validate message to prevent WebSocket compression errors
+    if (!message || typeof message !== 'string' || message.trim().length === 0) {
+      Logger.warn('SocketService', 'Cannot send empty or invalid chat message');
+      return;
+    }
+
+    // Validate streamId
+    if (!streamId || typeof streamId !== 'string') {
+      Logger.warn('SocketService', 'Cannot send chat - invalid streamId');
+      return;
+    }
+
+    try {
+      this.socket.emit('stream_chat', {
+        streamId,
+        message: message.trim()
+      }, (response: any) => {
+        if (response?.success) {
+          Logger.debug('SocketService', 'Chat message sent successfully');
+        } else {
+          Logger.error('SocketService', 'Failed to send chat message:', response?.error);
+        }
+      });
+    } catch (error) {
+      Logger.error('SocketService', 'Error sending chat message:', error);
+    }
   }
 
   /**
@@ -287,16 +334,37 @@ class SocketService {
       return;
     }
 
-    this.socket.emit('stream_tip', {
-      streamId,
-      ...tipData
-    }, (response: any) => {
-      if (response?.success) {
-        Logger.debug('SocketService', 'Tip notification sent successfully');
-      } else {
-        Logger.error('SocketService', 'Failed to send tip notification:', response?.error);
-      }
-    });
+    // Validate input data to prevent WebSocket errors
+    if (!streamId || typeof streamId !== 'string' || streamId.trim().length === 0) {
+      Logger.warn('SocketService', 'Cannot notify tip - invalid streamId');
+      return;
+    }
+
+    if (!tipData || typeof tipData !== 'object') {
+      Logger.warn('SocketService', 'Cannot notify tip - invalid tipData');
+      return;
+    }
+
+    if (!tipData.tipId || !tipData.userId || !tipData.userName || typeof tipData.amount !== 'number') {
+      Logger.warn('SocketService', 'Cannot notify tip - missing required fields');
+      return;
+    }
+
+    try {
+      this.socket.emit('stream_tip', {
+        streamId: streamId.trim(),
+        ...tipData,
+        message: tipData.message?.trim() || '' // Ensure message is never undefined/null
+      }, (response: any) => {
+        if (response?.success) {
+          Logger.debug('SocketService', 'Tip notification sent successfully');
+        } else {
+          Logger.error('SocketService', 'Failed to send tip notification:', response?.error);
+        }
+      });
+    } catch (error) {
+      Logger.error('SocketService', 'Error sending tip notification:', error);
+    }
   }
 
   /**
