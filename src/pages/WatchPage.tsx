@@ -12,6 +12,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { toast } from "sonner";
 import TiptubePlayer from "../components/TiptubePlayer";
 import ShareModal from "@/components/ShareModal";
 import { useAuthModal } from "../contexts/AuthModalContext";
@@ -138,10 +139,8 @@ const WatchPage = () => {
       try {
         const usePublicApi = !localStorage.getItem("UserLoggedIn") || !userId || !token;
         
-        // Fetch main video
-        const videoEndpoint = usePublicApi
-          ? `${BASE_URL}/getpublicvideos/0/1`
-          : `${BASE_URL}/getvideos/${userId}/0/1`;
+        // Fetch specific video by ID
+        const videoEndpoint = `${BASE_URL}/getvideo/${id}/${userId || 0}`;
         
         const videoRes = await fetch(videoEndpoint, {
           method: "GET",
@@ -152,17 +151,16 @@ const WatchPage = () => {
         });
         
         const videoData = await videoRes.json();
-        const videoList = Array.isArray(videoData.data)
-          ? videoData.data.map(transformVideoData)
-          : [];
         
-        const foundVideo = videoList.find((v) => String(v.id) === String(id));
-        
-        if (foundVideo) {
+        // Check if video was found
+        if (videoData.status === 200 && videoData.data && Array.isArray(videoData.data) && videoData.data.length > 0) {
+          const foundVideo = transformVideoData(videoData.data[0]);
           setCurrentVideo(foundVideo);
         } else {
           console.error("Video not found");
-          navigate("/");
+          toast.error("Video not found");
+          navigate("/watch");
+          return;
         }
         
         // Fetch related videos
@@ -278,7 +276,7 @@ const WatchPage = () => {
       id: Date.now(),
       userId: userId || 0,
       userName: user?.name || "Guest User",
-      userAvatar: user?.profile_url || "/placeholder.svg",
+      userAvatar: user?.profile_image || "/placeholder.svg",
       text: newComment,
       likes: 0,
       posted: "just now",
@@ -463,7 +461,7 @@ const WatchPage = () => {
               {user ? (
                 <div className="flex gap-4 mb-8">
                   <img 
-                    src={user.profile_url || "/placeholder.svg"} 
+                    src={user.profile_image || "/placeholder.svg"} 
                     alt={user.name}
                     className="w-10 h-10 rounded-full"
                   />
