@@ -772,50 +772,9 @@ const TipTubeScreen = () => {
       return;
     }
 
-    setSelectedVideoId(video.id);
-    try {
-      // --- NEW LOGIC: Three cases for paid/normal videos ---
-      if (video.isPaidPromotional === 1) {
-        if (video.has_content_creator_premium === 1) {
-          // Case 1: Paid video, owner has content creator premium
-          const response = await ApiService.viewSubscriptionPaidVideo(video.id);
-          if (response.status === true) {
-            const videoUrl = response.data?.video_link || video.videoUrl;
-            navigation.navigate('VideoPlayerModal', {
-              video: { ...video, videoUrl },
-              upNextVideos: shuffleArray(videos.filter((v: Video) => v.id !== video.id)).slice(0, 10)
-            });
-            try { await walletCtx.refreshBalance(); } catch {}
-          } else {
-            setShowInsufficientBalanceModal(true);
-          }
-        } else {
-          // Case 2: Paid video, owner does NOT have content creator premium
-          const response = await ApiService.viewPaidVideoNoPremium(video.id);
-          if (response.status === true) {
-            const videoUrl = response.data?.video_link || video.videoUrl;
-            navigation.navigate('VideoPlayerModal', {
-              video: { ...video, videoUrl },
-              upNextVideos: shuffleArray(videos.filter((v: Video) => v.id !== video.id)).slice(0, 10)
-            });
-            try { await walletCtx.refreshBalance(); } catch {}
-          } else {
-            setShowInsufficientBalanceModal(true);
-          }
-        }
-      } else {
-        // Case 3: Normal video
-        await ApiService.viewNormalVideo(video.id);
-        navigation.navigate('VideoPlayerModal', {
-          video,
-          upNextVideos: shuffleArray(videos.filter((v: Video) => v.id !== video.id)).slice(0, 10)
-        });
-      }
-    } catch (error) {
-      TipTubeLogger.error('Error handling video press:', error);
-      Alert.alert('Error', 'There was an issue accessing this video. Please try again later.');
-    }
-  }, [videos, navigation, isGuest, showLoginPromptForAction]);
+    // Navigate to WatchScreen directly - simpler like web implementation
+    navigation.navigate('WatchScreen', { videoId: video.id });
+  }, [navigation, isGuest, showLoginPromptForAction]);
 
   // Render helper functions
   const renderSkeletonLoading = useCallback(() => (

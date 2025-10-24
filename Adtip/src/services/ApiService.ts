@@ -2251,7 +2251,7 @@ export default class ApiService {
         throw new Error('Valid promotional price is required for paid videos');
       }
 
-      const response = await this.post('/api/uploadshot', data);
+      const response = await this.post('/api/uploadcontent', data);
       console.log('[ApiService] Video shot uploaded successfully:', response);
       return response;
     } catch (error: any) {

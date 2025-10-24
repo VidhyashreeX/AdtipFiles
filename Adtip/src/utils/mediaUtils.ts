@@ -21,36 +21,56 @@ export const isCloudflareUrl = (url: string): boolean => {
 };
 
 /**
+ * Check if URL is for a video file (not images/thumbnails)
+ */
+const isVideoUrl = (url: string): boolean => {
+  const videoExtensions = ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.m4v', '.flv', '.wmv'];
+  const lowerUrl = url.toLowerCase();
+  return videoExtensions.some(ext => lowerUrl.includes(ext));
+};
+
+/**
  * Converts a relative or partial URL to a fully qualified URL with authentication
  * Now handles Cloudflare URLs by generating presigned URLs with better error handling
+ * IMPORTANT: Presigned URL generation is ONLY done for VIDEO files, not images/thumbnails
  */
-export const getSecureMediaUrl = async (mediaUrl?: string | null): Promise<string | undefined> => {
+export const getSecureMediaUrl = async (mediaUrl?: string | null, skipPresigned: boolean = false): Promise<string | undefined> => {
   if (!mediaUrl || mediaUrl === 'null' || mediaUrl === 'undefined') {
     return undefined;
   }
 
-  // If it's a Cloudflare URL, generate presigned URL
+  // If it's a Cloudflare URL, check if we should generate presigned URL
   if (mediaUrl.startsWith('http://') || mediaUrl.startsWith('https://')) {
     if (isCloudflareUrl(mediaUrl)) {
-      logDebug('MediaUtils', 'Detected Cloudflare URL, generating presigned URL', { mediaUrl });
-      try {
-        const presignedUrl = await CloudflareUploadService.generatePresignedUrlFromPublicUrl(mediaUrl);
-        if (presignedUrl) {
-          logDebug('MediaUtils', 'Generated presigned URL successfully');
-          return presignedUrl;
-        } else {
-          logWarn('MediaUtils', 'Failed to generate presigned URL, using fallback strategy');
+      // SKIP presigned URL generation for images/thumbnails (performance optimization)
+      // Only generate presigned URLs for actual video files
+      const shouldGeneratePresigned = !skipPresigned && isVideoUrl(mediaUrl);
+      
+      if (shouldGeneratePresigned) {
+        logDebug('MediaUtils', 'Detected Cloudflare VIDEO URL, generating presigned URL', { mediaUrl });
+        try {
+          const presignedUrl = await CloudflareUploadService.generatePresignedUrlFromPublicUrl(mediaUrl);
+          if (presignedUrl) {
+            logDebug('MediaUtils', 'Generated presigned URL successfully');
+            return presignedUrl;
+          } else {
+            logWarn('MediaUtils', 'Failed to generate presigned URL, using fallback strategy');
+            // Try to construct a direct access URL as fallback
+            const fallbackUrl = mediaUrl.replace('theadtip.in', '94e2ffe1e7d5daf0d3de8d11c55dd2d6.r2.cloudflarestorage.com');
+            logDebug('MediaUtils', 'Using fallback URL', { fallbackUrl });
+            return fallbackUrl;
+          }
+        } catch (error) {
+          logError('MediaUtils', 'Error generating presigned URL', error);
           // Try to construct a direct access URL as fallback
           const fallbackUrl = mediaUrl.replace('theadtip.in', '94e2ffe1e7d5daf0d3de8d11c55dd2d6.r2.cloudflarestorage.com');
-          logDebug('MediaUtils', 'Using fallback URL', { fallbackUrl });
+          logDebug('MediaUtils', 'Using fallback URL after error', { fallbackUrl });
           return fallbackUrl;
         }
-      } catch (error) {
-        logError('MediaUtils', 'Error generating presigned URL', error);
-        // Try to construct a direct access URL as fallback
-        const fallbackUrl = mediaUrl.replace('theadtip.in', '94e2ffe1e7d5daf0d3de8d11c55dd2d6.r2.cloudflarestorage.com');
-        logDebug('MediaUtils', 'Using fallback URL after error', { fallbackUrl });
-        return fallbackUrl;
+      } else {
+        // For images/thumbnails, return URL as-is (no presigned URL needed)
+        logDebug('MediaUtils', 'Cloudflare image/thumbnail URL detected, skipping presigned generation', { mediaUrl });
+        return mediaUrl;
       }
     }
     return mediaUrl;

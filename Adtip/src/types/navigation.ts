@@ -146,6 +146,10 @@ export type MainNavigatorParamList = {
   ContactForm: undefined;
   CreateCampaign: undefined;
   Explore: undefined;
+  WatchScreen: {
+    videoId: number;
+    id?: number;
+  };
   VideoPlayerModal: {
     video: any;
     cardLayout: any;

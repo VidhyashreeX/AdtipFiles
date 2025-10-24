@@ -200,7 +200,7 @@ export const ADDITIONAL_ENDPOINTS = {
   GET_SENT_NOTIFICATIONS: '/api/getsentnotification', // + '/:userId'
   UPDATE_USER: '/api/updateuser',
   UPLOAD_POST: '/api/post',
-  UPLOAD_SHOT: '/api/uploadshot',
+  UPLOAD_SHOT: '/api/uploadcontent', // Fixed: Changed from /api/uploadshot to /api/uploadcontent
   GENERATE_PRESIGNED_URL: '/api/generatePresignedUrl',
   GET_REFERRAL_DETAILS: '/api/referral/details', // + '/:userId'
 };

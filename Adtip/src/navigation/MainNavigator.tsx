@@ -111,6 +111,7 @@ import YourChannelScreen from '../screens/tiptube/YourChannelScreen';
 import FollowedChannelScreen from '../screens/tiptube/FollowedChannelScreen';
 import LibraryScreen from '../screens/tiptube/LibraryScreen';
 import EditChannelScreen from '../screens/channel/EditChannelScreen';
+import WatchScreen from '../screens/tiptube/WatchScreen';
 
 
 // Import PremiumUserScreen
@@ -474,6 +475,16 @@ const MainNavigator = () => {
       <Stack.Screen name="FollowersList" component={FollowersList} />
       <Stack.Screen name="FollowingsList" component={FollowingsList} />
       <Stack.Screen name="Explore" component={ExploreScreen} />
+      
+      {/* WATCH SCREEN - Simple YouTube-style video player page */}
+      <Stack.Screen
+        name="WatchScreen"
+        component={WatchScreen}
+        options={{
+          headerShown: false,
+          animation: 'slide_from_right',
+        }}
+      />
       
       {/* FIXED VIDEO PLAYER MODAL SCREEN */}
       <Stack.Screen
