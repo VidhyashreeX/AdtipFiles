@@ -3,6 +3,14 @@
 
 ## Overview
 
+## DEV START -
+
+pnpm install  # Install dependencies
+pnpm dev      # Start dev server
+pnpm build    # Build for production
+pnpm lint     # Run linter
+
+
 AdTip is a comprehensive digital marketplace platform that combines social media features, e-commerce functionality, and advertising opportunities in one integrated ecosystem. The platform enables users to buy and sell products, engage with premium content, promote their offerings through ads, and earn money through various engagement mechanisms.
 
 ## Core Features
