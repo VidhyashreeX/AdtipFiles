@@ -223,6 +223,50 @@ export interface SendChatMessageResponse {
   };
 }
 
+// ===== Video Ad Interfaces =====
+
+export interface VideoAdResponse {
+  adId: number;
+  campaignId: number;
+  placementId: number;
+  sessionId: string;
+  creative: {
+    type: string;
+    url: string;
+    duration: number;
+    thumbnail: string;
+    clickThroughUrl: string;
+  };
+  placement: 'pre-roll' | 'mid-roll' | 'post-roll' | 'banner';
+  isSkippable: boolean;
+  skipOffset: number;
+  trackingUrls: {
+    impression: string;
+    start: string;
+    firstQuartile: string;
+    midpoint: string;
+    thirdQuartile: string;
+    complete: string;
+    skip: string;
+    click: string;
+    close: string;
+    error: string;
+  };
+  companionBanner: {
+    imageUrl: string;
+    clickThroughUrl: string;
+  } | null;
+}
+
+export interface RequestVideoAdParams {
+  videoId: number;
+  userId: number | null;
+  placement: 'pre-roll' | 'mid-roll' | 'post-roll' | 'banner';
+  videoDuration: number;
+  videoPosition?: number;
+  platform?: 'web' | 'mobile' | 'tablet';
+}
+
 // Define public endpoints that don't require authentication
 const PUBLIC_ENDPOINTS = [
   ApiEndpoints.AUTH_ENDPOINTS.OTP_LOGIN,
@@ -3839,6 +3883,111 @@ export default class ApiService {
     } catch (error) {
       console.error('[ApiService] ❌ Error verifying content creator subscription payment:', error);
       throw this.handleError(error);
+    }
+  }
+
+  // ===== Video Ad Methods =====
+
+  /**
+   * Request a video ad from the backend
+   * @param params - Ad request parameters
+   * @returns VideoAdResponse or null if no ad is available
+   */
+  static async requestVideoAd(params: RequestVideoAdParams): Promise<VideoAdResponse | null> {
+    try {
+      const {
+        videoId,
+        userId,
+        placement,
+        videoDuration,
+        videoPosition = 0,
+        platform = 'mobile',
+      } = params;
+
+      console.log('[ApiService] 📺 Requesting video ad:', {
+        videoId,
+        userId,
+        placement,
+        videoDuration,
+      });
+
+      const requestBody = {
+        videoId,
+        userId,
+        placement,
+        videoDuration,
+        videoPosition,
+        platform,
+      };
+
+      const response = await apiClient.post(
+        '/api/v1/video-ads/request',
+        requestBody
+      );
+
+      // Check for 404 or unsuccessful response
+      if (response.status === 404 || !response.data?.data) {
+        console.log('[ApiService] 📺 No ad available');
+        return null;
+      }
+
+      if (response.status !== 200) {
+        console.error('[ApiService] 📺 Error response:', response.data);
+        return null;
+      }
+
+      console.log('[ApiService] 📺 Ad received:', response.data.data.adId);
+      return response.data.data as VideoAdResponse;
+    } catch (error: any) {
+      // 404 is expected when no ads are available
+      if (error.response?.status === 404) {
+        console.log('[ApiService] 📺 No ad available (404)');
+        return null;
+      }
+      console.error('[ApiService] 📺 Error requesting video ad:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Track an ad event by calling the tracking URL
+   * @param url - Full tracking URL from the ad response
+   */
+  static async trackAdEvent(url: string): Promise<void> {
+    try {
+      if (!url) {
+        console.warn('[ApiService] 📺 No tracking URL provided');
+        return;
+      }
+
+      const eventName = url.split('event=')[1]?.split('&')[0];
+      console.log('[ApiService] 📺 Tracking event:', eventName);
+
+      // Fire and forget - don't wait for response
+      fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      }).catch((error) => {
+        // Silently log tracking errors - don't disrupt playback
+        console.warn('[ApiService] 📺 Tracking error:', error.message);
+      });
+    } catch (error) {
+      // Silently log tracking errors - don't disrupt playback
+      console.warn('[ApiService] 📺 Tracking exception:', error);
+    }
+  }
+
+  /**
+   * Track multiple ad events in parallel
+   * @param urls - Array of tracking URLs
+   */
+  static async trackAdEvents(urls: string[]): Promise<void> {
+    try {
+      await Promise.all(urls.map((url) => this.trackAdEvent(url)));
+    } catch (error) {
+      console.warn('[ApiService] 📺 Error tracking multiple events:', error);
     }
   }
 

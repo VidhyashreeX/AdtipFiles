@@ -34,6 +34,8 @@ import {
   VolumeX,
 } from 'lucide-react-native';
 import Orientation from 'react-native-orientation-locker';
+import { VideoAdResponse } from '../../services/ApiService';
+import VideoAdOverlay from './VideoAdOverlay';
 
 const {width: SCREEN_WIDTH, height: SCREEN_HEIGHT} = Dimensions.get('window');
 
@@ -57,6 +59,13 @@ interface TipTubeVideoPlayerProps {
   onDragClose?: () => void;
   onFullscreenChange?: (isFullscreen: boolean) => void;
   onGestureToggle?: (active: boolean) => void;
+  // Ad-related props
+  isAdPlaying?: boolean;
+  adData?: VideoAdResponse | null;
+  onAdComplete?: () => void;
+  onAdSkip?: () => void;
+  onAdClick?: () => void;
+  onAdEvent?: (eventName: keyof VideoAdResponse['trackingUrls']) => void;
 }
 
 const formatTime = (seconds: number): string => {
@@ -82,6 +91,13 @@ const TipTubeVideoPlayer: React.FC<TipTubeVideoPlayerProps> = ({
   onDragClose,
   onFullscreenChange,
   onGestureToggle,
+  // Ad props
+  isAdPlaying = false,
+  adData = null,
+  onAdComplete,
+  onAdSkip,
+  onAdClick,
+  onAdEvent,
 }) => {
   const videoRef = useRef<VideoRef>(null);
 
@@ -95,6 +111,11 @@ const TipTubeVideoPlayer: React.FC<TipTubeVideoPlayerProps> = ({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [isSeeking, setIsSeeking] = useState(false);
+
+  // Ad-specific state
+  const [adDuration, setAdDuration] = useState(0);
+  const [adCurrentTime, setAdCurrentTime] = useState(0);
+  const [trackedEvents, setTrackedEvents] = useState<Set<string>>(new Set());
 
   const hideControlsTimeout = useRef<NodeJS.Timeout | null>(null);
   const dragY = useRef(new Animated.Value(0)).current;
@@ -166,26 +187,79 @@ const TipTubeVideoPlayer: React.FC<TipTubeVideoPlayerProps> = ({
   // Video event handlers
   const handleLoad = useCallback((data: OnLoadData) => {
     console.log('[TipTubeVideoPlayer] Video loaded:', data);
-    setDuration(data.duration);
-    setLoading(false);
-    setError(null);
-  }, []);
+    
+    if (isAdPlaying) {
+      // Ad video loaded
+      setAdDuration(data.duration);
+      setAdCurrentTime(0);
+      setTrackedEvents(new Set(['impression']));
+      setLoading(false);
+      
+      // Track impression and start events
+      if (onAdEvent) {
+        onAdEvent('impression');
+        onAdEvent('start');
+      }
+    } else {
+      // Content video loaded
+      setDuration(data.duration);
+      setCurrentTime(0);
+      setLoading(false);
+      setError(null);
+    }
+  }, [isAdPlaying, onAdEvent]);
 
   const handleProgress = useCallback(
     (data: OnProgressData) => {
-      if (!isSeeking) {
-        setCurrentTime(data.currentTime);
+      if (isAdPlaying) {
+        // Track ad progress
+        setAdCurrentTime(data.currentTime);
+        
+        // Fire quartile tracking events
+        if (adDuration > 0 && onAdEvent) {
+          const percent = (data.currentTime / adDuration) * 100;
+          
+          if (percent >= 25 && !trackedEvents.has('firstQuartile')) {
+            onAdEvent('firstQuartile');
+            setTrackedEvents(prev => new Set(prev).add('firstQuartile'));
+          }
+          
+          if (percent >= 50 && !trackedEvents.has('midpoint')) {
+            onAdEvent('midpoint');
+            setTrackedEvents(prev => new Set(prev).add('midpoint'));
+          }
+          
+          if (percent >= 75 && !trackedEvents.has('thirdQuartile')) {
+            onAdEvent('thirdQuartile');
+            setTrackedEvents(prev => new Set(prev).add('thirdQuartile'));
+          }
+        }
+      } else {
+        // Content video progress
+        if (!isSeeking) {
+          setCurrentTime(data.currentTime);
+        }
       }
     },
-    [isSeeking],
+    [isSeeking, isAdPlaying, adDuration, trackedEvents, onAdEvent],
   );
 
   const handleEnd = useCallback(() => {
     console.log('[TipTubeVideoPlayer] Video ended');
-    setPaused(true);
-    setShowControls(true);
-    onVideoEnd?.();
-  }, [onVideoEnd]);
+    
+    if (isAdPlaying) {
+      // Ad finished
+      if (onAdEvent) {
+        onAdEvent('complete');
+      }
+      onAdComplete?.();
+    } else {
+      // Content video ended
+      setPaused(true);
+      setShowControls(true);
+      onVideoEnd?.();
+    }
+  }, [isAdPlaying, onAdEvent, onAdComplete, onVideoEnd]);
 
   const handleError = useCallback((error: any) => {
     console.error('[TipTubeVideoPlayer] Video error:', error);
@@ -208,6 +282,11 @@ const TipTubeVideoPlayer: React.FC<TipTubeVideoPlayerProps> = ({
 
   // Control handlers
   const togglePlayPause = useCallback(() => {
+    // Don't allow pausing ads manually (unless through ad click)
+    if (isAdPlaying) {
+      return;
+    }
+    
     const newPausedState = !paused;
     setPaused(newPausedState);
 
@@ -221,7 +300,7 @@ const TipTubeVideoPlayer: React.FC<TipTubeVideoPlayerProps> = ({
       onVideoPlay?.();
       resetHideControlsTimer();
     }
-  }, [paused, onVideoPlay, onVideoPause, resetHideControlsTimer]);
+  }, [paused, isAdPlaying, onVideoPlay, onVideoPause, resetHideControlsTimer]);
 
   // Toggle fullscreen with automatic rotation
   const toggleFullscreen = useCallback(() => {
@@ -359,7 +438,7 @@ const TipTubeVideoPlayer: React.FC<TipTubeVideoPlayerProps> = ({
 
   // Prepare video source with better error handling
   const videoSource = {
-    uri: videoUrl,
+    uri: isAdPlaying && adData ? adData.creative.url : videoUrl,
     headers: {
       Accept: 'video/*',
     },
@@ -391,6 +470,7 @@ const TipTubeVideoPlayer: React.FC<TipTubeVideoPlayerProps> = ({
         onPress={handleTapVideo}
         style={styles.videoContainer}>
         <Video
+          key={isAdPlaying ? 'ad' : 'content'} // Force reload when switching between ad and content
           ref={videoRef}
           source={videoSource}
           style={videoStyle}
@@ -433,7 +513,7 @@ const TipTubeVideoPlayer: React.FC<TipTubeVideoPlayerProps> = ({
         )}
 
         {/* Controls Overlay */}
-        {showControls && !loading && !error && (
+        {showControls && !loading && !error && !isAdPlaying && (
           <View style={styles.controlsOverlay}>
             {/* Top Controls */}
             <View style={styles.topControls}>
@@ -491,6 +571,26 @@ const TipTubeVideoPlayer: React.FC<TipTubeVideoPlayerProps> = ({
               </View>
             </View>
           </View>
+        )}
+
+        {/* Ad Overlay */}
+        {isAdPlaying && adData && (
+          <VideoAdOverlay
+            adData={adData}
+            videoDuration={adDuration}
+            currentTime={adCurrentTime}
+            onSkip={() => {
+              if (onAdEvent) {
+                onAdEvent('skip');
+              }
+              onAdSkip?.();
+            }}
+            onClick={() => {
+              // Pause the ad when user clicks to visit advertiser
+              setPaused(true);
+              onAdClick?.();
+            }}
+          />
         )}
       </TouchableOpacity>
     </Animated.View>

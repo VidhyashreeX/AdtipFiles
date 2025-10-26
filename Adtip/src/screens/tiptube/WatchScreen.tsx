@@ -23,6 +23,7 @@ import {
   RefreshControl,
   Alert,
   StatusBar,
+  Linking,
 } from 'react-native';
 import {
   useRoute,
@@ -42,8 +43,10 @@ import {
 import {useAuth} from '../../contexts/AuthContext';
 import {useTheme} from '../../contexts/ThemeContext';
 import TipTubeVideoPlayer from '../../components/tiptube/TipTubeVideoPlayer';
+import VideoBannerAd from '../../components/tiptube/VideoBannerAd';
 import VideoCommentSheet from '../../components/tiptube/VideoCommentSheet';
-import ApiService from '../../services/ApiService';
+//import ApiService from '../../services/ApiService';
+import ApiService, { VideoAdResponse } from '../../services/ApiService';
 import {API_BASE_URL} from '../../constants/api';
 
 const {width: SCREEN_WIDTH} = Dimensions.get('window');
@@ -137,6 +140,12 @@ const WatchScreen: React.FC = () => {
   const [playerFullscreen, setPlayerFullscreen] = useState(false);
   const [playerInteracting, setPlayerInteracting] = useState(false);
 
+  // Ad-related state
+  const [preRollAd, setPreRollAd] = useState<VideoAdResponse | null>(null);
+  const [bannerAd, setBannerAd] = useState<VideoAdResponse | null>(null);
+  const [isAdPlaying, setIsAdPlaying] = useState<boolean>(true); // Start as true to check for ads
+  const [isAdLoading, setIsAdLoading] = useState<boolean>(true);
+
   const userId = user?.id || null;
 
   useFocusEffect(
@@ -148,6 +157,58 @@ const WatchScreen: React.FC = () => {
       };
     }, []),
   );
+
+  // Fetch ads for the video
+  const fetchAds = useCallback(async (video: Video) => {
+    try {
+      console.log('[WatchScreen] Fetching ads for video:', video.id);
+
+      // Fetch banner ad
+      const bannerAdData = await ApiService.requestVideoAd({
+        videoId: video.id,
+        userId: userId,
+        placement: 'banner',
+        videoDuration: video.duration,
+        platform: 'mobile',
+      });
+
+      if (bannerAdData) {
+        console.log('[WatchScreen] Banner ad loaded:', bannerAdData.adId);
+        setBannerAd(bannerAdData);
+      } else {
+        console.log('[WatchScreen] No banner ad available');
+        setBannerAd(null);
+      }
+
+      // Fetch pre-roll ad
+      const preRollAdData = await ApiService.requestVideoAd({
+        videoId: video.id,
+        userId: userId,
+        placement: 'pre-roll',
+        videoDuration: video.duration,
+        platform: 'mobile',
+      });
+
+      if (preRollAdData) {
+        console.log('[WatchScreen] Pre-roll ad loaded:', preRollAdData.adId);
+        setPreRollAd(preRollAdData);
+        setIsAdPlaying(true);
+        setIsAdLoading(false);
+      } else {
+        console.log('[WatchScreen] No pre-roll ad available');
+        setPreRollAd(null);
+        setIsAdPlaying(false);
+        setIsAdLoading(false);
+      }
+    } catch (error) {
+      console.error('[WatchScreen] Error fetching ads:', error);
+      // Don't block video playback if ads fail
+      setPreRollAd(null);
+      setBannerAd(null);
+      setIsAdPlaying(false);
+      setIsAdLoading(false);
+    }
+  }, [userId]);
 
   // Fetch video data
   const fetchVideoData = useCallback(async () => {
@@ -202,6 +263,9 @@ const WatchScreen: React.FC = () => {
         if (userId) {
           checkLikeStatus(videoData.data[0].id, userId);
         }
+
+        // Fetch ads after video data is loaded
+        await fetchAds(video);
       } else {
         console.error('Video not found');
         navigation.goBack();
@@ -274,6 +338,42 @@ const WatchScreen: React.FC = () => {
     setRefreshing(true);
     fetchVideoData();
   }, [fetchVideoData]);
+
+  // Ad event handlers
+  const handleAdComplete = useCallback(() => {
+    console.log('[WatchScreen] Ad completed');
+    setIsAdPlaying(false);
+  }, []);
+
+  const handleAdSkip = useCallback(() => {
+    console.log('[WatchScreen] Ad skipped');
+    setIsAdPlaying(false);
+  }, []);
+
+  const handleAdEvent = useCallback((eventName: keyof VideoAdResponse['trackingUrls']) => {
+    if (preRollAd && preRollAd.trackingUrls[eventName]) {
+      ApiService.trackAdEvent(preRollAd.trackingUrls[eventName]);
+    }
+  }, [preRollAd]);
+
+  const handleAdClick = useCallback(async () => {
+    try {
+      handleAdEvent('click');
+      
+      if (preRollAd && preRollAd.creative.clickThroughUrl) {
+        const url = preRollAd.creative.clickThroughUrl;
+        const supported = await Linking.canOpenURL(url);
+        
+        if (supported) {
+          await Linking.openURL(url);
+        } else {
+          console.error('[WatchScreen] Cannot open URL:', url);
+        }
+      }
+    } catch (error) {
+      console.error('[WatchScreen] Error handling ad click:', error);
+    }
+  }, [preRollAd, handleAdEvent]);
 
   // Action handlers
   const handleLike = useCallback(async () => {
@@ -419,28 +519,19 @@ const WatchScreen: React.FC = () => {
             onExitFullscreen={handlePlayerExitFullscreen}
             onFullscreenChange={handlePlayerFullscreenChange}
             onGestureToggle={setPlayerInteracting}
+            // Ad props
+            isAdPlaying={isAdPlaying && !isAdLoading}
+            adData={preRollAd}
+            onAdComplete={handleAdComplete}
+            onAdSkip={handleAdSkip}
+            onAdClick={handleAdClick}
+            onAdEvent={handleAdEvent}
           />
         )}
       </View>
 
       {/* Advertisement Banner */}
-      <View style={styles.adBannerContainer}>
-        <View style={styles.adBadge}>
-          <Text style={styles.adBadgeText}>Sponsored</Text>
-        </View>
-        <View style={styles.adContent}>
-          <View style={styles.adIconContainer}>
-            <Text style={styles.adIcon}>💰</Text>
-          </View>
-          <View style={styles.adTextContainer}>
-            <Text style={styles.adTitle}>WintWealth: 9-12% Fixed Returns</Text>
-            <Text style={styles.adSubtitle}>Sponsored · 4.6★ FREE</Text>
-          </View>
-          <TouchableOpacity style={styles.adButton}>
-            <Text style={styles.adButtonText}>Install</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+      <VideoBannerAd adData={bannerAd} />
 
       {/* Video Info */}
       <View style={styles.infoContainer}>
