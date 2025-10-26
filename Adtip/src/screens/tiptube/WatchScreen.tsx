@@ -143,8 +143,8 @@ const WatchScreen: React.FC = () => {
   // Ad-related state
   const [preRollAd, setPreRollAd] = useState<VideoAdResponse | null>(null);
   const [bannerAd, setBannerAd] = useState<VideoAdResponse | null>(null);
-  const [isAdPlaying, setIsAdPlaying] = useState<boolean>(true); // Start as true to check for ads
-  const [isAdLoading, setIsAdLoading] = useState<boolean>(true);
+  const [isAdPlaying, setIsAdPlaying] = useState<boolean>(false); // Will be set to true when ad loads
+  const [isAdLoading, setIsAdLoading] = useState<boolean>(true); // Loading state for ad fetch
 
   const userId = user?.id || null;
 
@@ -191,6 +191,9 @@ const WatchScreen: React.FC = () => {
 
       if (preRollAdData) {
         console.log('[WatchScreen] Pre-roll ad loaded:', preRollAdData.adId);
+        console.log('[WatchScreen] Pre-roll ad URL:', preRollAdData.creative.url);
+        console.log('[WatchScreen] Pre-roll ad duration:', preRollAdData.creative.duration);
+        console.log('[WatchScreen] Pre-roll ad type:', preRollAdData.creative.type);
         setPreRollAd(preRollAdData);
         setIsAdPlaying(true);
         setIsAdLoading(false);
@@ -508,7 +511,8 @@ const WatchScreen: React.FC = () => {
       }>
       {/* Video Player */}
       <View style={styles.playerContainer}>
-        {currentVideo.videoUrl && (
+        {/* Only render player after ad loading is complete */}
+        {currentVideo.videoUrl && !isAdLoading && (
           <TipTubeVideoPlayer
             videoUrl={currentVideo.videoUrl}
             thumbnail={currentVideo.thumbnail}
@@ -520,13 +524,20 @@ const WatchScreen: React.FC = () => {
             onFullscreenChange={handlePlayerFullscreenChange}
             onGestureToggle={setPlayerInteracting}
             // Ad props
-            isAdPlaying={isAdPlaying && !isAdLoading}
+            isAdPlaying={isAdPlaying}
             adData={preRollAd}
             onAdComplete={handleAdComplete}
             onAdSkip={handleAdSkip}
             onAdClick={handleAdClick}
             onAdEvent={handleAdEvent}
           />
+        )}
+        
+        {/* Show loading while checking for ads */}
+        {isAdLoading && (
+          <View style={{aspectRatio: 16/9, justifyContent: 'center', alignItems: 'center', backgroundColor: '#000'}}>
+            <ActivityIndicator size="large" color="#00D9FF" />
+          </View>
         )}
       </View>
 

@@ -35,7 +35,6 @@ import {
 } from 'lucide-react-native';
 import Orientation from 'react-native-orientation-locker';
 import { VideoAdResponse } from '../../services/ApiService';
-import VideoAdOverlay from './VideoAdOverlay';
 
 const {width: SCREEN_WIDTH, height: SCREEN_HEIGHT} = Dimensions.get('window');
 
@@ -127,6 +126,27 @@ const TipTubeVideoPlayer: React.FC<TipTubeVideoPlayerProps> = ({
     },
     [onGestureToggle],
   );
+
+  // CRITICAL: Ensure ad plays automatically when ad starts
+  useEffect(() => {
+    if (isAdPlaying && adData) {
+      console.log('[TipTubeVideoPlayer] 🎬 Starting ad playback, setting paused=false');
+      setPaused(false);
+      setTrackedEvents(new Set()); // Reset tracked events for new ad
+      setAdCurrentTime(0);
+      setAdDuration(adData.creative.duration || 0);
+      setError(null); // Clear any previous errors
+      setLoading(true); // Show loading while ad loads
+    } else if (!isAdPlaying) {
+      // When ad finishes, reset states for content video
+      console.log('[TipTubeVideoPlayer] 📺 Transitioning to content video');
+      setAdCurrentTime(0);
+      setAdDuration(0);
+      setTrackedEvents(new Set());
+      setError(null);
+      setLoading(true);
+    }
+  }, [isAdPlaying, adData]);
 
   useEffect(() => {
     return () => {
@@ -245,16 +265,19 @@ const TipTubeVideoPlayer: React.FC<TipTubeVideoPlayerProps> = ({
   );
 
   const handleEnd = useCallback(() => {
-    console.log('[TipTubeVideoPlayer] Video ended');
+    console.log('[TipTubeVideoPlayer] Video ended, isAdPlaying:', isAdPlaying);
     
     if (isAdPlaying) {
-      // Ad finished
+      // Ad finished - track completion and transition to content video
+      console.log('[TipTubeVideoPlayer] 🎬 Ad completed, transitioning to content video');
       if (onAdEvent) {
         onAdEvent('complete');
       }
+      // This will trigger the parent to set isAdPlaying=false, causing content video to load
       onAdComplete?.();
     } else {
       // Content video ended
+      console.log('[TipTubeVideoPlayer] 📺 Content video completed');
       setPaused(true);
       setShowControls(true);
       onVideoEnd?.();
@@ -263,6 +286,9 @@ const TipTubeVideoPlayer: React.FC<TipTubeVideoPlayerProps> = ({
 
   const handleError = useCallback((error: any) => {
     console.error('[TipTubeVideoPlayer] Video error:', error);
+    console.error('[TipTubeVideoPlayer] Error details:', JSON.stringify(error, null, 2));
+    console.error('[TipTubeVideoPlayer] Current video source:', isAdPlaying ? 'AD' : 'CONTENT');
+    console.error('[TipTubeVideoPlayer] Current URI:', isAdPlaying && adData ? adData.creative.url : videoUrl);
 
     // Handle specific ExoPlayer errors
     if (
@@ -278,7 +304,16 @@ const TipTubeVideoPlayer: React.FC<TipTubeVideoPlayerProps> = ({
 
     setError('Failed to load video. Please try again.');
     setLoading(false);
-  }, []);
+    
+    // If ad fails, skip it and play content
+    if (isAdPlaying) {
+      console.log('[TipTubeVideoPlayer] Ad failed to load, skipping to content video');
+      if (onAdEvent) {
+        onAdEvent('error');
+      }
+      onAdComplete?.();
+    }
+  }, [isAdPlaying, adData, videoUrl, onAdEvent, onAdComplete]);
 
   // Control handlers
   const togglePlayPause = useCallback(() => {
@@ -436,13 +471,40 @@ const TipTubeVideoPlayer: React.FC<TipTubeVideoPlayerProps> = ({
     }),
   ).current;
 
-  // Prepare video source with better error handling
+  // Prepare video source - play ad first, then content video
+  const currentVideoUrl = isAdPlaying && adData ? adData.creative.url : videoUrl;
   const videoSource = {
-    uri: isAdPlaying && adData ? adData.creative.url : videoUrl,
+    uri: currentVideoUrl,
     headers: {
       Accept: 'video/*',
     },
   };
+
+  console.log('[TipTubeVideoPlayer] Current video source:', {
+    isAdPlaying,
+    hasAdData: !!adData,
+    currentUrl: currentVideoUrl,
+    adUrl: adData?.creative?.url,
+    contentUrl: videoUrl
+  });
+
+  // Debug logging for video playback
+  useEffect(() => {
+    if (isAdPlaying && adData) {
+      console.log('[TipTubeVideoPlayer] 🎬 AD PLAYBACK DEBUG:');
+      console.log('[TipTubeVideoPlayer]   Playing ad video directly in main player');
+      console.log('[TipTubeVideoPlayer]   Ad URL:', adData.creative.url);
+      console.log('[TipTubeVideoPlayer]   Ad duration:', adData.creative.duration, 'seconds');
+      console.log('[TipTubeVideoPlayer]   Is skippable:', adData.isSkippable);
+      console.log('[TipTubeVideoPlayer]   Skip after:', adData.skipOffset, 'seconds');
+      console.log('[TipTubeVideoPlayer]   Paused state:', paused);
+    } else if (!isAdPlaying) {
+      console.log('[TipTubeVideoPlayer] 📺 CONTENT PLAYBACK DEBUG:');
+      console.log('[TipTubeVideoPlayer]   Playing content video in main player');
+      console.log('[TipTubeVideoPlayer]   Content URL:', videoUrl);
+      console.log('[TipTubeVideoPlayer]   Paused state:', paused);
+    }
+  }, [isAdPlaying, adData, videoUrl, paused]);
 
   const containerStyle = isFullscreen
     ? styles.fullscreenContainer
@@ -481,7 +543,7 @@ const TipTubeVideoPlayer: React.FC<TipTubeVideoPlayerProps> = ({
           onProgress={handleProgress}
           onEnd={handleEnd}
           onError={handleError}
-          poster={thumbnail}
+          poster={isAdPlaying && adData ? adData.creative.thumbnail : thumbnail}
           posterResizeMode="cover"
           repeat={false}
           playInBackground={false}
@@ -495,6 +557,13 @@ const TipTubeVideoPlayer: React.FC<TipTubeVideoPlayerProps> = ({
           }}
           controls={false}
           fullscreen={isFullscreen}
+          onLoadStart={() => {
+            console.log('[TipTubeVideoPlayer] Video load started');
+            setLoading(true);
+          }}
+          onBuffer={({isBuffering}) => {
+            console.log('[TipTubeVideoPlayer] Buffering:', isBuffering);
+          }}
         />
 
         {/* Loading Indicator */}
@@ -512,7 +581,7 @@ const TipTubeVideoPlayer: React.FC<TipTubeVideoPlayerProps> = ({
           </View>
         )}
 
-        {/* Controls Overlay */}
+        {/* Controls Overlay - Hide during ads, show during content */}
         {showControls && !loading && !error && !isAdPlaying && (
           <View style={styles.controlsOverlay}>
             {/* Top Controls */}
@@ -573,24 +642,49 @@ const TipTubeVideoPlayer: React.FC<TipTubeVideoPlayerProps> = ({
           </View>
         )}
 
-        {/* Ad Overlay */}
+        {/* Ad Controls Overlay - Simple skip button and ad info */}
         {isAdPlaying && adData && (
-          <VideoAdOverlay
-            adData={adData}
-            videoDuration={adDuration}
-            currentTime={adCurrentTime}
-            onSkip={() => {
-              if (onAdEvent) {
-                onAdEvent('skip');
-              }
-              onAdSkip?.();
-            }}
-            onClick={() => {
-              // Pause the ad when user clicks to visit advertiser
-              setPaused(true);
-              onAdClick?.();
-            }}
-          />
+          <View style={styles.adControlsOverlay}>
+            {/* Ad Info */}
+            <View style={styles.adInfoContainer}>
+              <Text style={styles.adInfoText}>
+                {adData.isSkippable && adCurrentTime >= adData.skipOffset
+                  ? `Ad • ${Math.max(0, Math.ceil(adDuration - adCurrentTime))}s`
+                  : adData.isSkippable
+                  ? `Ad • Skip in ${Math.max(0, Math.ceil(adData.skipOffset - adCurrentTime))}s`
+                  : `Ad • ${Math.max(0, Math.ceil(adDuration - adCurrentTime))}s`}
+              </Text>
+            </View>
+
+            {/* Skip Button */}
+            {adData.isSkippable && adCurrentTime >= adData.skipOffset && (
+              <TouchableOpacity
+                style={styles.skipButton}
+                onPress={() => {
+                  if (onAdEvent) {
+                    onAdEvent('skip');
+                  }
+                  onAdSkip?.();
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.skipButtonText}>Skip Ad</Text>
+              </TouchableOpacity>
+            )}
+
+            {/* Visit Advertiser Button */}
+            <TouchableOpacity
+              style={styles.visitButton}
+              onPress={() => {
+                // Pause the ad when user clicks to visit advertiser
+                setPaused(true);
+                onAdClick?.();
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.visitButtonText}>Visit Advertiser</Text>
+            </TouchableOpacity>
+          </View>
         )}
       </TouchableOpacity>
     </Animated.View>
@@ -690,10 +784,59 @@ const styles = StyleSheet.create({
     minWidth: 45,
     textAlign: 'center',
   },
+  // Ad Controls Styles
+  adControlsOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'space-between',
+    padding: 16,
+    paddingBottom: 20,
+  },
+  adInfoContainer: {
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    marginTop: 12,
+  },
+  adInfoText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  skipButton: {
+    alignSelf: 'flex-end',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 6,
+    marginBottom: 8,
+  },
+  skipButtonText: {
+    color: '#000000',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  visitButton: {
+    alignSelf: 'flex-end',
+    backgroundColor: 'rgba(0, 168, 255, 0.9)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  visitButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
 });
 
 // Memoize to prevent unnecessary re-renders
 export default memo(TipTubeVideoPlayer, (prevProps, nextProps) => {
-  // Only re-render if videoUrl changes
-  return prevProps.videoUrl === nextProps.videoUrl;
+  // Re-render if videoUrl, isAdPlaying, or adData changes
+  return (
+    prevProps.videoUrl === nextProps.videoUrl &&
+    prevProps.isAdPlaying === nextProps.isAdPlaying &&
+    prevProps.adData === nextProps.adData
+  );
 });
