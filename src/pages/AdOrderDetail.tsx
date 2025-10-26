@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { ArrowLeft, BarChart3, TrendingUp, Users, Eye, MousePointer, Calendar, MapPin, Play, Pause, Edit, Download } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 
