@@ -15,15 +15,14 @@ import {
 } from 'react-native';
 import {useNavigation, useRoute} from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
-import { IndianRupee, VolumeX, Volume2, Play, Pause } from 'lucide-react-native';
+import {IndianRupee, VolumeX, Volume2, Play, Pause} from 'lucide-react-native';
 import Video from 'react-native-video';
-import Orientation from 'react-native-orientation-locker';
 //import { PubScale } from 'pubscale-sdk';
 
 // Components
 import Header from '../../components/common/Header';
 import CategoryChip from '../../components/common/CategoryChip';
-import { createSecureVideoSource } from '../../utils/mediaUtils';
+import {createSecureVideoSource} from '../../utils/mediaUtils';
 
 // Context and services
 import {useTheme} from '../../contexts/ThemeContext';
@@ -81,7 +80,7 @@ const VideoScreen = () => {
   const {user} = useAuth();
   const navigation = useNavigation();
   const route = useRoute();
-  
+
   // Create dynamic styles based on theme
   const styles = createStyles(colors, isDarkMode);
   const videoRef = useRef<any>(null);
@@ -122,17 +121,27 @@ const VideoScreen = () => {
 
     try {
       setLoading(true);
-      console.log('[VideoScreen] Fetching video details for videoId:', videoId, 'userId:', user?.id || 0);
+      console.log(
+        '[VideoScreen] Fetching video details for videoId:',
+        videoId,
+        'userId:',
+        user?.id || 0,
+      );
 
       // Pass userId as query parameter for the new endpoint
       const response = await ApiService.get(
         `${ENDPOINTS.GET_VIDEO}/${videoId}`,
-        { userId: user?.id || 0 }
+        {userId: user?.id || 0},
       );
 
       console.log('[VideoScreen] API response:', response);
 
-      if (response && response.data && Array.isArray(response.data) && response.data.length > 0) {
+      if (
+        response &&
+        response.data &&
+        Array.isArray(response.data) &&
+        response.data.length > 0
+      ) {
         setVideo(response.data[0]); // Take first video from array
       } else if (response && response.data && !Array.isArray(response.data)) {
         setVideo(response.data); // Single video object
@@ -145,12 +154,17 @@ const VideoScreen = () => {
         try {
           // Check if user has liked this video using getUserVideoViewLikeDetails
           const likeDetailsResponse = await ApiService.get(
-            `/api/getUserVideoViewLikeDetails/${user.id}/1`
+            `/api/getUserVideoViewLikeDetails/${user.id}/1`,
           );
 
-          if (likeDetailsResponse.data && Array.isArray(likeDetailsResponse.data)) {
+          if (
+            likeDetailsResponse.data &&
+            Array.isArray(likeDetailsResponse.data)
+          ) {
             const videoLikeInfo = likeDetailsResponse.data.find(
-              (item: any) => item.videoId === Number(videoId) || item.reelId === Number(videoId)
+              (item: any) =>
+                item.videoId === Number(videoId) ||
+                item.reelId === Number(videoId),
             );
             if (videoLikeInfo) {
               setLiked(videoLikeInfo.is_like === 1);
@@ -160,12 +174,15 @@ const VideoScreen = () => {
           // Check if user follows the channel (if video has channel info)
           if (response.data.channelId) {
             const followedChannelsResponse = await ApiService.get(
-              `/api/getlistoffollowedchannelbyuser/${user.id}`
+              `/api/getlistoffollowedchannelbyuser/${user.id}`,
             );
 
-            if (followedChannelsResponse.data && Array.isArray(followedChannelsResponse.data)) {
+            if (
+              followedChannelsResponse.data &&
+              Array.isArray(followedChannelsResponse.data)
+            ) {
               const isFollowingChannel = followedChannelsResponse.data.some(
-                (channel: any) => channel.channelId === response.data.channelId
+                (channel: any) => channel.channelId === response.data.channelId,
               );
               setSubscribed(isFollowingChannel);
             }
@@ -201,12 +218,21 @@ const VideoScreen = () => {
     const loadSecureVideoSource = async () => {
       if (video?.videoUrl && !localVideoPath) {
         try {
-          console.log('[VideoScreen] Loading secure video source for:', video.videoUrl);
+          console.log(
+            '[VideoScreen] Loading secure video source for:',
+            video.videoUrl,
+          );
           const secureSource = await createSecureVideoSource(video.videoUrl);
           setSecureVideoSource(secureSource);
-          console.log('[VideoScreen] Secure video source loaded:', secureSource);
+          console.log(
+            '[VideoScreen] Secure video source loaded:',
+            secureSource,
+          );
         } catch (error) {
-          console.error('[VideoScreen] Failed to load secure video source:', error);
+          console.error(
+            '[VideoScreen] Failed to load secure video source:',
+            error,
+          );
         }
       }
     };
@@ -229,19 +255,6 @@ const VideoScreen = () => {
   useEffect(() => {
     fetchVideoDetails();
   }, [videoId, fetchVideoDetails]);
-
-  // Handle orientation changes
-  useEffect(() => {
-    if (isFullscreen) {
-      Orientation.lockToLandscape();
-    } else {
-      Orientation.lockToPortrait();
-    }
-
-    return () => {
-      Orientation.lockToPortrait();
-    };
-  }, [isFullscreen]);
 
   // Handle controls visibility
   useEffect(() => {
@@ -365,7 +378,7 @@ const VideoScreen = () => {
         Number(video.id),
         Number(user.id),
         liked ? 0 : 1, // Toggle like status
-        Number(video.createdby || video.userId || user.id) // Use video creator ID
+        Number(video.createdby || video.userId || user.id), // Use video creator ID
       );
 
       setLiked(!liked);
@@ -490,12 +503,14 @@ const VideoScreen = () => {
 
   const containerStyles = [
     styles.container,
-    isFullscreen ? styles.fullscreenContainer : { backgroundColor: colors.background },
+    isFullscreen
+      ? styles.fullscreenContainer
+      : {backgroundColor: colors.background},
   ];
 
   const videoContainerStyles = [
     styles.videoContainer,
-    isFullscreen ? styles.fullscreenVideo : { height: (width * 9) / 16 },
+    isFullscreen ? styles.fullscreenVideo : {height: (width * 9) / 16},
   ];
 
   return (
@@ -517,14 +532,20 @@ const VideoScreen = () => {
         style={videoContainerStyles}>
         <Video
           ref={videoRef}
-          source={localVideoPath ? {uri: localVideoPath} : (secureVideoSource || {uri: String(video?.videoUrl || video?.videoLink || '')})}
+          source={
+            localVideoPath
+              ? {uri: localVideoPath}
+              : secureVideoSource || {
+                  uri: String(video?.videoUrl || video?.videoLink || ''),
+                }
+          }
           style={styles.videoPlayer}
           resizeMode="contain"
           paused={paused}
           onProgress={handleProgress}
           onLoad={handleLoad}
           onEnd={handleEnd}
-          onBuffer={({ isBuffering: buffering }) => setIsBuffering(buffering)}
+          onBuffer={({isBuffering: buffering}) => setIsBuffering(buffering)}
           muted={muted}
           repeat={false}
           playInBackground={false}
@@ -623,7 +644,8 @@ const VideoScreen = () => {
             <View style={styles.videoStats}>
               <Text style={[styles.statsText, {color: colors.text.secondary}]}>
                 {(video.views || 0).toLocaleString()} views
-                {video.createdAt && ` • ${new Date(video.createdAt).toLocaleDateString()}`}
+                {video.createdAt &&
+                  ` • ${new Date(video.createdAt).toLocaleDateString()}`}
               </Text>
 
               {video.category && (
@@ -645,7 +667,7 @@ const VideoScreen = () => {
                   style={[
                     styles.actionText,
                     liked && styles.likedActionText,
-                    { color: liked ? colors.primary : colors.text.secondary },
+                    {color: liked ? colors.primary : colors.text.secondary},
                   ]}>
                   {(video.likes || 0).toLocaleString()}
                 </Text>
@@ -676,7 +698,12 @@ const VideoScreen = () => {
           <View style={[styles.channelContainer, {borderColor: colors.border}]}>
             <View style={styles.channelInfo}>
               <Image
-                source={{uri: video.user?.avatarUrl || video.channel_profile || 'https://avatar.iran.liara.run/public'}}
+                source={{
+                  uri:
+                    video.user?.avatarUrl ||
+                    video.channel_profile ||
+                    'https://avatar.iran.liara.run/public',
+                }}
                 style={styles.channelImage}
               />
               <View style={styles.channelText}>
@@ -689,7 +716,13 @@ const VideoScreen = () => {
                     styles.subscriberCount,
                     {color: colors.text.secondary},
                   ]}>
-                  {((video.user?.followers || video.total_followers || video.followers || 0)).toLocaleString()} followers
+                  {(
+                    video.user?.followers ||
+                    video.total_followers ||
+                    video.followers ||
+                    0
+                  ).toLocaleString()}{' '}
+                  followers
                 </Text>
               </View>
             </View>
@@ -697,7 +730,9 @@ const VideoScreen = () => {
             <TouchableOpacity
               style={[
                 styles.subscribeButton,
-                subscribed ? styles.subscribedButton : styles.notSubscribedButton,
+                subscribed
+                  ? styles.subscribedButton
+                  : styles.notSubscribedButton,
                 !subscribed && {backgroundColor: colors.primary},
                 {borderColor: colors.border},
               ]}
@@ -713,7 +748,7 @@ const VideoScreen = () => {
           </View>
 
           {/* Video description */}
-          {(video.description || video.videoDesciption) ? (
+          {video.description || video.videoDesciption ? (
             <View style={styles.descriptionContainer}>
               <Text
                 style={[
@@ -730,238 +765,245 @@ const VideoScreen = () => {
   );
 };
 
-const createStyles = (colors: any, isDarkMode: boolean) => StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: colors.background,
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-    color: colors.text.primary,
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-    backgroundColor: colors.background,
-  },
-  errorText: {
-    fontSize: 16,
-    textAlign: 'center',
-    marginVertical: 16,
-    color: colors.text.primary,
-  },
-  retryButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-    backgroundColor: colors.primary,
-  },
-  videoContainer: {
-    width: '100%',
-    backgroundColor: '#000',
-    position: 'relative',
-  },
-  videoPlayer: {
-    width: '100%',
-    height: '100%',
-  },
-  controls: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
-    justifyContent: 'space-between',
-  },
-  topControls: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    padding: 16,
-  },
-  centerControls: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  playPauseButton: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  bottomControls: {
-    padding: 16,
-  },
-  timeControls: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  timeText: {
-    color: '#fff',
-    fontSize: 12,
-  },
-  progressContainer: {
-    flex: 1,
-    height: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    borderRadius: 2,
-    marginHorizontal: 8,
-    position: 'relative',
-  },
-  progressBar: {
-    height: '100%',
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    borderRadius: 2,
-  },
-  seekThumb: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    position: 'absolute',
-    top: -4,
-    marginLeft: -6,
-  },
-  actionControls: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  bufferingContainer: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-  },
-  content: {
-    flex: 1,
-    padding: 16,
-  },  videoInfo: {
-    marginBottom: 16,
-  },
-  videoTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 8,
-    color: colors.text.primary,
-  },
-  videoStats: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  statsText: {
-    fontSize: 14,
-    color: colors.text.secondary,
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: isDarkMode ? colors.border : 'rgba(0, 0, 0, 0.1)',
-    paddingVertical: 12,
-  },  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 24,
-  },
-  actionText: {
-    marginLeft: 6,
-    fontSize: 14,
-    color: colors.text.primary,
-  },
-  likedActionText: {
-    fontWeight: '600',
-    color: colors.primary,
-  },
-  rewardContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginLeft: 'auto',
-    backgroundColor: isDarkMode ? 'rgba(46, 204, 113, 0.15)' : 'rgba(46, 204, 113, 0.1)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  rewardText: {
-    marginLeft: 4,
-    fontSize: 12,
-    fontWeight: '500',
-    color: isDarkMode ? '#2ecc71' : '#27ae60',
-  },  channelContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 16,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-    marginBottom: 16,
-  },
-  channelInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  channelImage: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-  },
-  channelText: {
-    marginLeft: 12,
-  },
-  channelName: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: colors.text.primary,
-  },
-  subscriberCount: {
-    fontSize: 14,
-    color: colors.text.secondary,
-  },  subscribeButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-  },
-  subscribedButton: {
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  notSubscribedButton: {
-    // backgroundColor will be set to colors.primary in component
-    borderWidth: 0,
-  },
-  subscribeText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.text.primary,
-  },
-  descriptionContainer: {
-    marginBottom: 20,
-  },
-  descriptionText: {
-    fontSize: 14,
-    lineHeight: 22,
-    color: colors.text.primary,
-  },
-  fullscreenContainer: {
-    backgroundColor: '#000',
-    paddingTop: 0,
-  },
-  fullscreenVideo: {
-    height: '100%',
-  },
-});
+const createStyles = (colors: any, isDarkMode: boolean) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    loadingContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: colors.background,
+    },
+    loadingText: {
+      marginTop: 12,
+      fontSize: 16,
+      color: colors.text.primary,
+    },
+    errorContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 20,
+      backgroundColor: colors.background,
+    },
+    errorText: {
+      fontSize: 16,
+      textAlign: 'center',
+      marginVertical: 16,
+      color: colors.text.primary,
+    },
+    retryButton: {
+      paddingVertical: 10,
+      paddingHorizontal: 24,
+      borderRadius: 8,
+      backgroundColor: colors.primary,
+    },
+    videoContainer: {
+      width: '100%',
+      backgroundColor: '#000',
+      position: 'relative',
+    },
+    videoPlayer: {
+      width: '100%',
+      height: '100%',
+    },
+    controls: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: 'rgba(0, 0, 0, 0.4)',
+      justifyContent: 'space-between',
+    },
+    topControls: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      padding: 16,
+    },
+    centerControls: {
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    playPauseButton: {
+      width: 60,
+      height: 60,
+      borderRadius: 30,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    bottomControls: {
+      padding: 16,
+    },
+    timeControls: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 8,
+    },
+    timeText: {
+      color: '#fff',
+      fontSize: 12,
+    },
+    progressContainer: {
+      flex: 1,
+      height: 4,
+      backgroundColor: 'rgba(255, 255, 255, 0.3)',
+      borderRadius: 2,
+      marginHorizontal: 8,
+      position: 'relative',
+    },
+    progressBar: {
+      height: '100%',
+      position: 'absolute',
+      left: 0,
+      top: 0,
+      borderRadius: 2,
+    },
+    seekThumb: {
+      width: 12,
+      height: 12,
+      borderRadius: 6,
+      position: 'absolute',
+      top: -4,
+      marginLeft: -6,
+    },
+    actionControls: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    bufferingContainer: {
+      ...StyleSheet.absoluteFillObject,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    },
+    content: {
+      flex: 1,
+      padding: 16,
+    },
+    videoInfo: {
+      marginBottom: 16,
+    },
+    videoTitle: {
+      fontSize: 18,
+      fontWeight: '600',
+      marginBottom: 8,
+      color: colors.text.primary,
+    },
+    videoStats: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 16,
+    },
+    statsText: {
+      fontSize: 14,
+      color: colors.text.secondary,
+    },
+    actionButtons: {
+      flexDirection: 'row',
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderColor: isDarkMode ? colors.border : 'rgba(0, 0, 0, 0.1)',
+      paddingVertical: 12,
+    },
+    actionButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginRight: 24,
+    },
+    actionText: {
+      marginLeft: 6,
+      fontSize: 14,
+      color: colors.text.primary,
+    },
+    likedActionText: {
+      fontWeight: '600',
+      color: colors.primary,
+    },
+    rewardContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginLeft: 'auto',
+      backgroundColor: isDarkMode
+        ? 'rgba(46, 204, 113, 0.15)'
+        : 'rgba(46, 204, 113, 0.1)',
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderRadius: 12,
+    },
+    rewardText: {
+      marginLeft: 4,
+      fontSize: 12,
+      fontWeight: '500',
+      color: isDarkMode ? '#2ecc71' : '#27ae60',
+    },
+    channelContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingVertical: 16,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+      marginBottom: 16,
+    },
+    channelInfo: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      flex: 1,
+    },
+    channelImage: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+    },
+    channelText: {
+      marginLeft: 12,
+    },
+    channelName: {
+      fontSize: 16,
+      fontWeight: '500',
+      color: colors.text.primary,
+    },
+    subscriberCount: {
+      fontSize: 14,
+      color: colors.text.secondary,
+    },
+    subscribeButton: {
+      paddingVertical: 8,
+      paddingHorizontal: 16,
+      borderRadius: 20,
+    },
+    subscribedButton: {
+      backgroundColor: 'transparent',
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    notSubscribedButton: {
+      // backgroundColor will be set to colors.primary in component
+      borderWidth: 0,
+    },
+    subscribeText: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: colors.text.primary,
+    },
+    descriptionContainer: {
+      marginBottom: 20,
+    },
+    descriptionText: {
+      fontSize: 14,
+      lineHeight: 22,
+      color: colors.text.primary,
+    },
+    fullscreenContainer: {
+      backgroundColor: '#000',
+      paddingTop: 0,
+    },
+    fullscreenVideo: {
+      height: '100%',
+    },
+  });
 
 export default VideoScreen;

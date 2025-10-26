@@ -11,9 +11,8 @@ import {
 import {useNavigation, useRoute} from '@react-navigation/native';
 import Video from 'react-native-video';
 import Icon from 'react-native-vector-icons/Feather';
-import { Play, Pause } from 'lucide-react-native';
+import {Play, Pause} from 'lucide-react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
-import Orientation from 'react-native-orientation-locker';
 import ApiService from '../../services/ApiService';
 
 const VideoPreviewScreen = () => {
@@ -115,16 +114,14 @@ const VideoPreviewScreen = () => {
 
   // Toggle fullscreen mode
   const toggleFullscreen = () => {
-    if (isFullscreen) {
-      Orientation.lockToPortrait();
-    } else {
-      Orientation.lockToLandscape();
-    }
     setIsFullscreen(!isFullscreen);
   };
 
   // Handle video progress
-  const handleProgress = ({currentTime: progressCurrentTime, seekableDuration}: any) => {
+  const handleProgress = ({
+    currentTime: progressCurrentTime,
+    seekableDuration,
+  }: any) => {
     setCurrentTime(progressCurrentTime);
     if (seekableDuration) {
       setProgress(progressCurrentTime / seekableDuration);
@@ -149,7 +146,6 @@ const VideoPreviewScreen = () => {
 
   // Close preview
   const handleClose = () => {
-    Orientation.lockToPortrait();
     navigation.goBack();
   };
 
@@ -178,8 +174,6 @@ const VideoPreviewScreen = () => {
 
   return (
     <View style={[styles.container, styles.containerBlack, safeAreaStyle]}>
-      
-
       <TouchableOpacity
         activeOpacity={1}
         style={styles.videoContainer}

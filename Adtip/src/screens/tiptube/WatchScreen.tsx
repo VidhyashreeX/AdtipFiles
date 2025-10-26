@@ -1,6 +1,6 @@
 /**
  * WatchScreen - Simple YouTube-style video watch page
- * 
+ *
  * Mimics the web implementation (WatchPage.tsx):
  * - Clean, simple state management
  * - Fetches video data on mount
@@ -9,7 +9,7 @@
  * - Stable video playback
  */
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, {useState, useEffect, useCallback, useMemo} from 'react';
 import {
   View,
   Text,
@@ -22,26 +22,31 @@ import {
   Share,
   RefreshControl,
   Alert,
+  StatusBar,
 } from 'react-native';
-import { useRoute, useNavigation } from '@react-navigation/native';
+import {
+  useRoute,
+  useNavigation,
+  useFocusEffect,
+} from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { 
+import {
   Heart,
-  MessageCircle, 
-  Send, 
+  MessageCircle,
+  Send,
   Eye,
   Clock,
   ChevronDown,
   ChevronUp,
 } from 'lucide-react-native';
-import { useAuth } from '../../contexts/AuthContext';
-import { useTheme } from '../../contexts/ThemeContext';
+import {useAuth} from '../../contexts/AuthContext';
+import {useTheme} from '../../contexts/ThemeContext';
 import TipTubeVideoPlayer from '../../components/tiptube/TipTubeVideoPlayer';
 import VideoCommentSheet from '../../components/tiptube/VideoCommentSheet';
 import ApiService from '../../services/ApiService';
-import { API_BASE_URL } from '../../constants/api';
+import {API_BASE_URL} from '../../constants/api';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const {width: SCREEN_WIDTH} = Dimensions.get('window');
 
 interface Video {
   id: number;
@@ -75,10 +80,14 @@ const formatDate = (dateString: string): string => {
   const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
 
   if (diffInSeconds < 60) return 'just now';
-  if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} minutes ago`;
-  if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} hours ago`;
-  if (diffInSeconds < 2592000) return `${Math.floor(diffInSeconds / 86400)} days ago`;
-  if (diffInSeconds < 31536000) return `${Math.floor(diffInSeconds / 2592000)} months ago`;
+  if (diffInSeconds < 3600)
+    return `${Math.floor(diffInSeconds / 60)} minutes ago`;
+  if (diffInSeconds < 86400)
+    return `${Math.floor(diffInSeconds / 3600)} hours ago`;
+  if (diffInSeconds < 2592000)
+    return `${Math.floor(diffInSeconds / 86400)} days ago`;
+  if (diffInSeconds < 31536000)
+    return `${Math.floor(diffInSeconds / 2592000)} months ago`;
   return `${Math.floor(diffInSeconds / 31536000)} years ago`;
 };
 
@@ -86,17 +95,22 @@ const transformVideoData = (apiVideo: any): Video => ({
   id: apiVideo.id || 0,
   title: apiVideo.name || '',
   description: apiVideo.description || 'No description available',
-  thumbnail: apiVideo.video_Thumbnail !== 'undefined' ? apiVideo.video_Thumbnail : undefined,
+  thumbnail:
+    apiVideo.video_Thumbnail !== 'undefined'
+      ? apiVideo.video_Thumbnail
+      : undefined,
   videoUrl: apiVideo.video_link,
   duration: parseInt(apiVideo.play_duration || apiVideo.duration || '0', 10),
   views: apiVideo.total_views || 0,
   likes: apiVideo.likes || 0,
   dislikes: apiVideo.dislikes || 0,
   posted: apiVideo.createddate || 'Recently',
-  avatar: apiVideo.channel_profile !== 'null' ? apiVideo.channel_profile : undefined,
+  avatar:
+    apiVideo.channel_profile !== 'null' ? apiVideo.channel_profile : undefined,
   creatorName: apiVideo.channelName || 'Unknown Creator',
   isVerified: apiVideo.isVerified || false,
-  channelId: apiVideo.video_channel || apiVideo.channelId || apiVideo.createdby || 0,
+  channelId:
+    apiVideo.video_channel || apiVideo.channelId || apiVideo.createdby || 0,
   price: apiVideo.price ? parseFloat(apiVideo.price) : undefined,
   subscribers: apiVideo.subscribers || apiVideo.channelSubscribers || 0,
 });
@@ -104,9 +118,9 @@ const transformVideoData = (apiVideo: any): Video => ({
 const WatchScreen: React.FC = () => {
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
-  const { user } = useAuth();
-  const { colors, isDarkMode } = useTheme();
-  
+  const {user} = useAuth();
+  const {colors, isDarkMode} = useTheme();
+
   const videoId = route.params?.videoId || route.params?.id;
 
   // State
@@ -120,8 +134,20 @@ const WatchScreen: React.FC = () => {
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [commentCount, setCommentCount] = useState(0);
+  const [playerFullscreen, setPlayerFullscreen] = useState(false);
+  const [playerInteracting, setPlayerInteracting] = useState(false);
 
   const userId = user?.id || null;
+
+  useFocusEffect(
+    useCallback(() => {
+      StatusBar.setHidden(false);
+
+      return () => {
+        StatusBar.setHidden(false);
+      };
+    }, []),
+  );
 
   // Fetch video data
   const fetchVideoData = useCallback(async () => {
@@ -142,7 +168,7 @@ const WatchScreen: React.FC = () => {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(token ? {Authorization: `Bearer ${token}`} : {}),
         },
       });
 
@@ -163,11 +189,15 @@ const WatchScreen: React.FC = () => {
 
       const videoData = await videoRes.json();
 
-      if (videoData.status === 200 && videoData.data && videoData.data.length > 0) {
+      if (
+        videoData.status === 200 &&
+        videoData.data &&
+        videoData.data.length > 0
+      ) {
         const video = transformVideoData(videoData.data[0]);
         setCurrentVideo(video);
         setCommentCount(videoData.data[0].comments || 0);
-        
+
         // Check if user has liked this video
         if (userId) {
           checkLikeStatus(videoData.data[0].id, userId);
@@ -187,14 +217,17 @@ const WatchScreen: React.FC = () => {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(token ? {Authorization: `Bearer ${token}`} : {}),
         },
       });
 
       // Validate related videos response
       if (relatedRes.ok) {
         const relatedContentType = relatedRes.headers.get('content-type');
-        if (relatedContentType && relatedContentType.includes('application/json')) {
+        if (
+          relatedContentType &&
+          relatedContentType.includes('application/json')
+        ) {
           const relatedData = await relatedRes.json();
           const relatedList = Array.isArray(relatedData.data)
             ? relatedData.data
@@ -219,14 +252,17 @@ const WatchScreen: React.FC = () => {
   }, [videoId, userId, navigation]);
 
   // Check if user has liked the video
-  const checkLikeStatus = useCallback(async (videoId: number, userId: number) => {
-    try {
-      // You can implement this if there's an API to check like status
-      // For now, we'll rely on the backend response
-    } catch (error) {
-      console.error('[WatchScreen] Error checking like status:', error);
-    }
-  }, []);
+  const checkLikeStatus = useCallback(
+    async (videoId: number, userId: number) => {
+      try {
+        // You can implement this if there's an API to check like status
+        // For now, we'll rely on the backend response
+      } catch (error) {
+        console.error('[WatchScreen] Error checking like status:', error);
+      }
+    },
+    [],
+  );
 
   // Initial load
   useEffect(() => {
@@ -242,11 +278,11 @@ const WatchScreen: React.FC = () => {
   // Action handlers
   const handleLike = useCallback(async () => {
     if (!currentVideo || !user) return;
-    
+
     try {
       const newIsLiked = !isLiked;
       const likeValue = newIsLiked ? 1 : 0;
-      
+
       // Optimistic update
       setIsLiked(newIsLiked);
       setCurrentVideo({
@@ -259,7 +295,7 @@ const WatchScreen: React.FC = () => {
         currentVideo.id,
         user.id,
         likeValue,
-        currentVideo.channelId as number
+        currentVideo.channelId as number,
       );
     } catch (error) {
       console.error('[WatchScreen] Error liking video:', error);
@@ -275,10 +311,10 @@ const WatchScreen: React.FC = () => {
 
   const handleDislike = useCallback(() => {
     if (!currentVideo) return;
-    
+
     const newIsDisliked = !isDisliked;
     setIsDisliked(newIsDisliked);
-    
+
     if (newIsDisliked) {
       setIsLiked(false);
       setCurrentVideo({
@@ -300,7 +336,7 @@ const WatchScreen: React.FC = () => {
 
   const handleShare = useCallback(async () => {
     if (!currentVideo) return;
-    
+
     try {
       await Share.share({
         message: `Check out this video: ${currentVideo.title}\n\nhttps://adtip.in/video/${currentVideo.id}`,
@@ -311,11 +347,27 @@ const WatchScreen: React.FC = () => {
     }
   }, [currentVideo]);
 
-  const handleRelatedVideoPress = useCallback((video: Video) => {
-    navigation.push('WatchScreen', { videoId: video.id });
-  }, [navigation]);
+  const handleRelatedVideoPress = useCallback(
+    (video: Video) => {
+      navigation.push('WatchScreen', {videoId: video.id});
+    },
+    [navigation],
+  );
 
-  const styles = useMemo(() => createStyles(colors, isDarkMode), [colors, isDarkMode]);
+  const handlePlayerFullscreenChange = useCallback((isFull: boolean) => {
+    setPlayerInteracting(false);
+    setPlayerFullscreen(isFull);
+  }, []);
+
+  const handlePlayerExitFullscreen = useCallback(() => {
+    setPlayerInteracting(false);
+    setPlayerFullscreen(false);
+  }, []);
+
+  const styles = useMemo(
+    () => createStyles(colors, isDarkMode),
+    [colors, isDarkMode],
+  );
 
   // Loading state
   if (loading && !currentVideo) {
@@ -334,8 +386,7 @@ const WatchScreen: React.FC = () => {
         <Text style={styles.errorTitle}>Video not found</Text>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
-          style={styles.errorButton}
-        >
+          style={styles.errorButton}>
           <Text style={styles.errorButtonText}>Go Back</Text>
         </TouchableOpacity>
       </View>
@@ -345,15 +396,16 @@ const WatchScreen: React.FC = () => {
   return (
     <ScrollView
       style={styles.container}
+      scrollEnabled={!playerFullscreen && !playerInteracting}
       refreshControl={
         <RefreshControl
+          enabled={!playerFullscreen && !playerInteracting}
           refreshing={refreshing}
           onRefresh={handleRefresh}
           colors={[colors.primary]}
           tintColor={colors.primary}
         />
-      }
-    >
+      }>
       {/* Video Player */}
       <View style={styles.playerContainer}>
         {currentVideo.videoUrl && (
@@ -364,6 +416,9 @@ const WatchScreen: React.FC = () => {
             onVideoEnd={() => console.log('Video ended')}
             onVideoPlay={() => console.log('Video playing')}
             onDragClose={() => navigation.goBack()}
+            onExitFullscreen={handlePlayerExitFullscreen}
+            onFullscreenChange={handlePlayerFullscreenChange}
+            onGestureToggle={setPlayerInteracting}
           />
         )}
       </View>
@@ -402,7 +457,9 @@ const WatchScreen: React.FC = () => {
           </View>
           <View style={styles.stat}>
             <Clock size={16} color={colors.text.secondary} />
-            <Text style={styles.statText}>{formatDate(currentVideo.posted)}</Text>
+            <Text style={styles.statText}>
+              {formatDate(currentVideo.posted)}
+            </Text>
           </View>
         </View>
 
@@ -410,22 +467,20 @@ const WatchScreen: React.FC = () => {
         <View style={styles.actionsRow}>
           <TouchableOpacity
             onPress={handleLike}
-            style={[styles.actionButton, isLiked && styles.actionButtonActive]}
-          >
+            style={[styles.actionButton, isLiked && styles.actionButtonActive]}>
             <Heart
               size={20}
               color={isLiked ? '#FF0000' : colors.text.primary}
               fill={isLiked ? '#FF0000' : 'none'}
             />
-            <Text style={[styles.actionText, isLiked && { color: '#FF0000' }]}>
+            <Text style={[styles.actionText, isLiked && {color: '#FF0000'}]}>
               {formatViews(currentVideo.likes || 0)}
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             onPress={() => setShowComments(true)}
-            style={styles.actionButton}
-          >
+            style={styles.actionButton}>
             <MessageCircle size={20} color={colors.text.primary} />
             <Text style={styles.actionText}>
               {commentCount > 0 ? formatViews(commentCount) : 'Comment'}
@@ -442,15 +497,22 @@ const WatchScreen: React.FC = () => {
         <View style={styles.channelSection}>
           <TouchableOpacity
             style={styles.channelInfo}
-            onPress={() => navigation.navigate('Channel', { channelId: currentVideo.channelId })}
-          >
+            onPress={() =>
+              navigation.navigate('Channel', {
+                channelId: currentVideo.channelId,
+              })
+            }>
             <Image
-              source={{ uri: currentVideo.avatar || 'https://via.placeholder.com/40' }}
+              source={{
+                uri: currentVideo.avatar || 'https://via.placeholder.com/40',
+              }}
               style={styles.channelAvatar}
             />
             <View style={styles.channelDetails}>
               <View style={styles.channelNameRow}>
-                <Text style={styles.channelName}>{currentVideo.creatorName}</Text>
+                <Text style={styles.channelName}>
+                  {currentVideo.creatorName}
+                </Text>
                 {currentVideo.isVerified && (
                   <View style={styles.verifiedBadge}>
                     <Text style={styles.verifiedText}>✓</Text>
@@ -468,14 +530,12 @@ const WatchScreen: React.FC = () => {
             style={[
               styles.subscribeButton,
               isSubscribed && styles.subscribedButton,
-            ]}
-          >
+            ]}>
             <Text
               style={[
                 styles.subscribeButtonText,
                 isSubscribed && styles.subscribedButtonText,
-              ]}
-            >
+              ]}>
               {isSubscribed ? 'Subscribed' : 'Subscribe'}
             </Text>
           </TouchableOpacity>
@@ -485,14 +545,12 @@ const WatchScreen: React.FC = () => {
         <View style={styles.descriptionContainer}>
           <Text
             style={styles.descriptionText}
-            numberOfLines={showFullDescription ? undefined : 3}
-          >
+            numberOfLines={showFullDescription ? undefined : 3}>
             {currentVideo.description}
           </Text>
           <TouchableOpacity
             onPress={() => setShowFullDescription(!showFullDescription)}
-            style={styles.showMoreButton}
-          >
+            style={styles.showMoreButton}>
             <Text style={styles.showMoreText}>
               {showFullDescription ? 'Show less' : 'Show more'}
             </Text>
@@ -508,14 +566,15 @@ const WatchScreen: React.FC = () => {
       {/* Related Videos */}
       <View style={styles.relatedSection}>
         <Text style={styles.relatedTitle}>Related Videos</Text>
-        {relatedVideos.map((video) => (
+        {relatedVideos.map(video => (
           <TouchableOpacity
             key={video.id}
             style={styles.relatedVideoCard}
-            onPress={() => handleRelatedVideoPress(video)}
-          >
+            onPress={() => handleRelatedVideoPress(video)}>
             <Image
-              source={{ uri: video.thumbnail || 'https://via.placeholder.com/168x94' }}
+              source={{
+                uri: video.thumbnail || 'https://via.placeholder.com/168x94',
+              }}
               style={styles.relatedThumbnail}
             />
             <View style={styles.relatedInfo}>
