@@ -236,6 +236,7 @@ export interface VideoAdResponse {
     duration: number;
     thumbnail: string;
     clickThroughUrl: string;
+    id?: number; // Creative ID for reward tracking
   };
   placement: 'pre-roll' | 'mid-roll' | 'post-roll' | 'banner';
   isSkippable: boolean;

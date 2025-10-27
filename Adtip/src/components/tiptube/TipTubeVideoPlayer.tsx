@@ -35,6 +35,9 @@ import {
 } from 'lucide-react-native';
 import Orientation from 'react-native-orientation-locker';
 import { VideoAdResponse } from '../../services/ApiService';
+import VideoAdRewardService from '../../services/VideoAdRewardService';
+import Toast from 'react-native-toast-message';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const {width: SCREEN_WIDTH, height: SCREEN_HEIGHT} = Dimensions.get('window');
 
@@ -264,15 +267,75 @@ const TipTubeVideoPlayer: React.FC<TipTubeVideoPlayerProps> = ({
     [isSeeking, isAdPlaying, adDuration, trackedEvents, onAdEvent],
   );
 
-  const handleEnd = useCallback(() => {
+  /**
+   * Helper function to credit ad rewards
+   */
+  const creditAdReward = useCallback(async (watchDuration: number, wasSkipped: boolean = false) => {
+    if (!adData || !adData.campaignId || !adData.creative.id) {
+      return;
+    }
+
+    try {
+      // Get user ID from storage
+      const userDataStr = await AsyncStorage.getItem('userData');
+      if (!userDataStr) {
+        console.log('[TipTubeVideoPlayer] No user data found, skipping reward credit');
+        return;
+      }
+
+      const userData = JSON.parse(userDataStr);
+      const userId = userData.id || userData.userId;
+
+      if (!userId) {
+        console.log('[TipTubeVideoPlayer] No user ID found, skipping reward credit');
+        return;
+      }
+
+      // For skipped ads, only credit if they watched past the skip offset
+      if (wasSkipped && watchDuration < adData.skipOffset) {
+        console.log('[TipTubeVideoPlayer] User skipped before skip offset, no reward');
+        return;
+      }
+
+      const response = await VideoAdRewardService.creditReward(
+        userId,
+        adData.campaignId,
+        adData.creative.id,
+        watchDuration,
+        adData.sessionId
+      );
+
+      if (response.status === 200 && response.data.credited) {
+        Toast.show({
+          type: 'success',
+          text1: '🎉 Reward Earned!',
+          text2: `You earned ₹${response.data.rewardAmount} for watching this ad!`,
+          visibilityTime: 4000,
+        });
+      }
+    } catch (error: any) {
+      // Don't interrupt playback for reward errors
+      console.error('[TipTubeVideoPlayer] Failed to credit ad reward:', error);
+      if (error?.message && !error.message.includes('already been rewarded')) {
+        console.warn('[TipTubeVideoPlayer] Reward credit error:', error.message);
+      }
+    }
+  }, [adData]);
+
+  const handleEnd = useCallback(async () => {
     console.log('[TipTubeVideoPlayer] Video ended, isAdPlaying:', isAdPlaying);
     
     if (isAdPlaying) {
-      // Ad finished - track completion and transition to content video
+      // Ad finished - track completion and credit reward
       console.log('[TipTubeVideoPlayer] 🎬 Ad completed, transitioning to content video');
       if (onAdEvent) {
         onAdEvent('complete');
       }
+
+      // Credit reward
+      const watchDuration = adCurrentTime > 0 ? adCurrentTime : adDuration;
+      await creditAdReward(watchDuration, false);
+
       // This will trigger the parent to set isAdPlaying=false, causing content video to load
       onAdComplete?.();
     } else {
@@ -282,7 +345,7 @@ const TipTubeVideoPlayer: React.FC<TipTubeVideoPlayerProps> = ({
       setShowControls(true);
       onVideoEnd?.();
     }
-  }, [isAdPlaying, onAdEvent, onAdComplete, onVideoEnd]);
+  }, [isAdPlaying, onAdEvent, onAdComplete, onVideoEnd, adCurrentTime, adDuration, creditAdReward]);
 
   const handleError = useCallback((error: any) => {
     console.error('[TipTubeVideoPlayer] Video error:', error);
@@ -660,10 +723,12 @@ const TipTubeVideoPlayer: React.FC<TipTubeVideoPlayerProps> = ({
             {adData.isSkippable && adCurrentTime >= adData.skipOffset && (
               <TouchableOpacity
                 style={styles.skipButton}
-                onPress={() => {
+                onPress={async () => {
                   if (onAdEvent) {
                     onAdEvent('skip');
                   }
+                  // Credit reward for skipped ad (if they watched past skip offset)
+                  await creditAdReward(adCurrentTime, true);
                   onAdSkip?.();
                 }}
                 activeOpacity={0.8}
