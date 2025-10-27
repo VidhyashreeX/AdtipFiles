@@ -15,6 +15,8 @@ import AdOverlay from './AdOverlay';
 import CompanionBanner from './CompanionBanner';
 import { trackAdEvent } from '../utils/adTracking';
 import axios from 'axios';
+import VideoAdRewardService from '../services/VideoAdRewardService';
+import toast from 'react-hot-toast';
 
 interface TiptubePlayerProps {
   videoId: number;
@@ -40,6 +42,7 @@ interface AdData {
   placementId: number;
   sessionId: string;
   creative: {
+    id: number; // Creative ID for reward tracking (REQUIRED)
     type: string;
     url: string;
     duration: number;
@@ -85,11 +88,15 @@ const TiptubePlayer: React.FC<TiptubePlayerProps> = ({
   const [playedCuePoints, setPlayedCuePoints] = useState<Set<number>>(new Set());
   const [videoDuration, setVideoDuration] = useState(0);
   const [currentVideoTime, setCurrentVideoTime] = useState(0);
+  const [adCurrentTime, setAdCurrentTime] = useState(0); // Track ad playback time for UI
   
   // Refs
   const playerRef = useRef<any>(null);
   const adPlayerRef = useRef<any>(null);
   const lastQuartileTracked = useRef<string | null>(null);
+  const adPlayedSeconds = useRef<number>(0); // Track actual ad playback time
+  const adStartTime = useRef<number>(0); // Track when ad started (fallback)
+  const adTimerInterval = useRef<NodeJS.Timeout | null>(null); // Fallback timer
 
   // Base API URL
   const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
@@ -150,8 +157,21 @@ const TiptubePlayer: React.FC<TiptubePlayerProps> = ({
       const response = await axios.get(`${API_BASE_URL}/api/v1/video-ads/request`, { params });
 
       if (response.data.status === 200 && response.data.data) {
-        console.log('[TiptubePlayer] Ad received:', response.data.data.adId);
-        return response.data.data;
+        const adData = response.data.data;
+        console.log('🎬 [TiptubePlayer] ========== RAW AD RESPONSE ==========');
+        console.log('🎬 [TiptubePlayer] Full response:', JSON.stringify(adData, null, 2));
+        console.log('🎬 [TiptubePlayer] Creative object:', adData.creative);
+        console.log('🎬 [TiptubePlayer] Creative ID:', adData.creative?.id);
+        
+        // Validate that creative.id exists
+        if (!adData.creative?.id) {
+          console.error('❌ [TiptubePlayer] CRITICAL ERROR: Backend response missing creative.id!');
+          console.error('❌ [TiptubePlayer] This will prevent reward crediting!');
+          return null; // Don't show ad if we can't track it properly
+        }
+        
+        console.log('✅ [TiptubePlayer] Ad validated with creative ID:', adData.creative.id);
+        return adData;
       } else {
         console.log('[TiptubePlayer] No ad available');
         return null;
@@ -194,8 +214,40 @@ const TiptubePlayer: React.FC<TiptubePlayerProps> = ({
         const adData = await Promise.race([requestAd('pre-roll'), timeoutPromise]);
         
         if (adData) {
+          console.log('🎬 [TiptubePlayer] ========== AD RECEIVED ==========');
+          console.log('🎬 [TiptubePlayer] Ad Data:', {
+            campaignId: adData.campaignId,
+            creativeId: adData.creative?.id,
+            isSkippable: adData.isSkippable,
+            skipOffset: adData.skipOffset,
+            duration: adData.creative?.duration,
+            sessionId: adData.sessionId
+          });
+          
+          // Reset ad tracking
+          adPlayedSeconds.current = 0;
+          adStartTime.current = Date.now();
+          lastQuartileTracked.current = null;
+          setAdCurrentTime(0); // Reset UI timer
+          
+          // Start fallback timer (updates every 100ms)
+          if (adTimerInterval.current) {
+            clearInterval(adTimerInterval.current);
+          }
+          adTimerInterval.current = setInterval(() => {
+            const elapsed = (Date.now() - adStartTime.current) / 1000;
+            // Only update if onProgress hasn't updated recently (fallback)
+            if (elapsed > adPlayedSeconds.current + 0.5) {
+              adPlayedSeconds.current = elapsed;
+              setAdCurrentTime(elapsed); // Update UI state!
+              console.log('⏱️ [TiptubePlayer] Fallback timer update:', elapsed.toFixed(2) + 's');
+            }
+          }, 100);
+          
           setCurrentAdData(adData);
           setIsAdPlaying(true);
+          
+          console.log('🎬 [TiptubePlayer] Ad state set - ad should start playing now');
           
           // Track impression
           await trackAdEvent(adData.trackingUrls.impression);
@@ -230,6 +282,28 @@ const TiptubePlayer: React.FC<TiptubePlayerProps> = ({
 
     return () => clearTimeout(emergencyTimeout);
   }, [preRollComplete, isAdPlaying]);
+
+  /**
+   * Cleanup timer on unmount
+   */
+  useEffect(() => {
+    return () => {
+      if (adTimerInterval.current) {
+        clearInterval(adTimerInterval.current);
+        adTimerInterval.current = null;
+        console.log('🔴 [TiptubePlayer] Component unmounting - cleanup fallback timer');
+      }
+    };
+  }, []);
+
+  /**
+   * Log ad current time changes for debugging
+   */
+  useEffect(() => {
+    if (isAdPlaying) {
+      console.log('🎬 [TiptubePlayer] adCurrentTime state updated:', adCurrentTime);
+    }
+  }, [adCurrentTime, isAdPlaying]);
 
   /**
    * Monitor main video progress for mid-roll insertion
@@ -283,26 +357,155 @@ const TiptubePlayer: React.FC<TiptubePlayerProps> = ({
    * Handle ad completion or skip
    */
   const handleAdEnd = useCallback(async (skipped: boolean = false) => {
-    if (!currentAdData) return;
+    console.log('🔴 [TiptubePlayer] ==================== AD END TRIGGERED ====================');
+    console.log('🔴 [TiptubePlayer] handleAdEnd called with skipped:', skipped);
+    
+    if (!currentAdData) {
+      console.log('🔴 [TiptubePlayer] NO CURRENT AD DATA - RETURNING');
+      return;
+    }
 
+    // Use the tracked playback time (more accurate than wall clock time)
+    const watchDuration = adPlayedSeconds.current;
+
+    console.log('🔴 [TiptubePlayer] Ad ending details:', {
+      skipped,
+      watchDuration,
+      skipOffset: currentAdData.skipOffset,
+      isSkippable: currentAdData.isSkippable,
+      userId,
+      creativeId: currentAdData.creative.id,
+      campaignId: currentAdData.campaignId,
+      sessionId: currentAdData.sessionId
+    });
+
+    // Track skip or complete event
     if (skipped) {
+      console.log('🔴 [TiptubePlayer] Tracking SKIP event');
       await trackAdEvent(currentAdData.trackingUrls.skip);
     } else {
+      console.log('🔴 [TiptubePlayer] Tracking COMPLETE event');
       await trackAdEvent(currentAdData.trackingUrls.complete);
     }
 
+    // Credit reward if user is logged in and has watched enough of the ad
+    console.log('🔴 [TiptubePlayer] Checking reward eligibility:', {
+      hasUserId: !!userId,
+      userId: userId,
+      hasCreativeId: !!currentAdData.creative.id,
+      creativeId: currentAdData.creative.id,
+      campaignId: currentAdData.campaignId
+    });
+    
+    if (userId && currentAdData.creative.id) {
+      console.log('✅ [TiptubePlayer] User ID and Creative ID present - proceeding with reward logic');
+      
+      try {
+        // For skippable ads: must watch past skip offset
+        // For non-skippable ads: must watch to completion
+        const shouldCredit = skipped 
+          ? (currentAdData.isSkippable && watchDuration >= currentAdData.skipOffset)
+          : true; // Always credit if they watched to the end
+
+        console.log('🔴 [TiptubePlayer] Reward credit check:', {
+          shouldCredit,
+          calculation: skipped ? `${watchDuration} >= ${currentAdData.skipOffset}` : 'watched to end',
+          watchDuration,
+          skipOffset: currentAdData.skipOffset,
+          isSkippable: currentAdData.isSkippable
+        });
+
+        if (shouldCredit) {
+          console.log('🟢 [TiptubePlayer] ✅ SHOULD CREDIT - Calling creditReward API...');
+          console.log('🟢 [TiptubePlayer] API Call Parameters:', {
+            userId,
+            campaignId: currentAdData.campaignId,
+            creativeId: currentAdData.creative.id,
+            viewDuration: watchDuration,
+            sessionId: currentAdData.sessionId
+          });
+          
+          const response = await VideoAdRewardService.creditReward(
+            userId,
+            currentAdData.campaignId,
+            currentAdData.creative.id,
+            watchDuration,
+            currentAdData.sessionId
+          );
+
+          console.log('🟢 [TiptubePlayer] ✅ REWARD API RESPONSE:', response);
+          console.log('🟢 [TiptubePlayer] Response Status:', response.status);
+          console.log('🟢 [TiptubePlayer] Response Data:', response.data);
+
+          if (response.status === 200 && response.data.credited) {
+            console.log('🎉 [TiptubePlayer] ✅✅✅ REWARD CREDITED SUCCESSFULLY! Amount:', response.data.rewardAmount);
+            
+            // Show success message
+            toast.success(
+              `🎉 ${response.message} You earned ₹${response.data.rewardAmount}!`,
+              { duration: 4000 }
+            );
+            
+            // Also show alert for testing
+            alert(`✅ REWARD CREDITED!\nAmount: ₹${response.data.rewardAmount}\nCampaign: ${currentAdData.campaignId}\nWatch Duration: ${watchDuration}s`);
+          } else {
+            console.log('⚠️ [TiptubePlayer] Response received but credited=false:', response);
+          }
+        } else {
+          console.log('🔴 [TiptubePlayer] ❌ NOT CREDITING - insufficient watch duration');
+          console.log('🔴 [TiptubePlayer] Required:', currentAdData.skipOffset, 'Actual:', watchDuration);
+          alert(`❌ NOT CREDITED\nRequired: ${currentAdData.skipOffset}s\nYou watched: ${watchDuration}s`);
+        }
+      } catch (error: any) {
+        console.error('🔴 [TiptubePlayer] ❌❌❌ ERROR in credit reward:', error);
+        console.error('🔴 [TiptubePlayer] Error details:', {
+          message: error?.message,
+          response: error?.response?.data,
+          status: error?.response?.status
+        });
+        
+        // Show error alert for testing
+        alert(`❌ ERROR: ${error?.message || 'Unknown error'}\nCheck console for details`);
+        
+        // Only log specific errors (already rewarded is expected, not an error)
+        if (error?.message && !error.message.includes('already been rewarded')) {
+          console.warn('[TiptubePlayer] Reward credit error:', error.message);
+        }
+      }
+    } else {
+      console.log('🔴 [TiptubePlayer] ❌ Skipping reward credit - missing userId or creativeId:', {
+        hasUserId: !!userId,
+        userId: userId,
+        hasCreativeId: !!currentAdData.creative.id,
+        creativeId: currentAdData.creative.id
+      });
+      alert(`❌ CANNOT CREDIT\nUser ID: ${userId || 'MISSING'}\nCreative ID: ${currentAdData.creative.id || 'MISSING'}`);
+    }
+
     // Reset ad state
+    console.log('🔴 [TiptubePlayer] Resetting ad state...');
+    
+    // Clear fallback timer
+    if (adTimerInterval.current) {
+      clearInterval(adTimerInterval.current);
+      adTimerInterval.current = null;
+      console.log('🔴 [TiptubePlayer] Fallback timer cleared');
+    }
+    
     setIsAdPlaying(false);
     setCurrentAdData(null);
+    setAdCurrentTime(0);
     lastQuartileTracked.current = null;
+    adPlayedSeconds.current = 0;
+    adStartTime.current = 0;
 
     // Mark pre-roll as complete if this was a pre-roll
     if (!preRollComplete) {
       setPreRollComplete(true);
     }
 
-    console.log('[TiptubePlayer] Ad playback ended, resuming content');
-  }, [currentAdData, preRollComplete]);
+    console.log('🔴 [TiptubePlayer] ==================== AD END COMPLETE ====================');
+  }, [currentAdData, preRollComplete, userId]);
 
   /**
    * Handle ad progress for quartile tracking
@@ -310,24 +513,53 @@ const TiptubePlayer: React.FC<TiptubePlayerProps> = ({
   const handleAdProgress = useCallback(async (state: PlayerProgressState) => {
     if (!currentAdData) return;
 
+    // Safety check - ensure state has required properties
+    if (!state || typeof state.playedSeconds !== 'number' || typeof state.played !== 'number') {
+      console.warn('⚠️ [TiptubePlayer] Invalid progress state:', state);
+      return;
+    }
+
+    // Track actual playback time
+    adPlayedSeconds.current = state.playedSeconds;
+    setAdCurrentTime(state.playedSeconds); // Update state for UI re-render
+    
+    console.log('⏱️ [TiptubePlayer] Ad progress update - setting adCurrentTime:', state.playedSeconds);
+    
+    // Log every second for debugging
+    const currentSecond = Math.floor(state.playedSeconds);
+    const previousSecond = Math.floor(state.playedSeconds - 0.1);
+    
+    if (currentSecond !== previousSecond) {
+      console.log('📊 [TiptubePlayer] Ad Progress:', {
+        playedSeconds: state.playedSeconds.toFixed(2),
+        played: (state.played * 100).toFixed(1) + '%',
+        skipOffset: currentAdData.skipOffset,
+        canSkip: state.playedSeconds >= currentAdData.skipOffset
+      });
+    }
+
     const progress = state.played * 100; // Percentage
 
     // Track start
     if (progress > 0 && lastQuartileTracked.current === null) {
       await trackAdEvent(currentAdData.trackingUrls.start);
       lastQuartileTracked.current = 'start';
+      console.log('🎬 [TiptubePlayer] Ad started playing - tracking enabled');
     }
 
     // Track quartiles
     if (progress >= 25 && lastQuartileTracked.current === 'start') {
       await trackAdEvent(currentAdData.trackingUrls.firstQuartile);
       lastQuartileTracked.current = 'firstQuartile';
+      console.log('📊 [TiptubePlayer] First quartile reached (25%)');
     } else if (progress >= 50 && lastQuartileTracked.current === 'firstQuartile') {
       await trackAdEvent(currentAdData.trackingUrls.midpoint);
       lastQuartileTracked.current = 'midpoint';
+      console.log('📊 [TiptubePlayer] Midpoint reached (50%)');
     } else if (progress >= 75 && lastQuartileTracked.current === 'midpoint') {
       await trackAdEvent(currentAdData.trackingUrls.thirdQuartile);
       lastQuartileTracked.current = 'thirdQuartile';
+      console.log('📊 [TiptubePlayer] Third quartile reached (75%)');
     }
   }, [currentAdData]);
 
@@ -386,17 +618,20 @@ const TiptubePlayer: React.FC<TiptubePlayerProps> = ({
           height="100%"
           playing={autoplay}
           controls
-          onReady={() => {
-            handleVideoReady();
-            // Get duration when player is ready
-            if (playerRef.current) {
-              const duration = playerRef.current.getDuration();
-              if (duration) {
-                handleVideoDuration(duration);
+          onReady={handleVideoReady}
+          onProgress={(state: any) => {
+            handleVideoProgress(state);
+            // Get duration from progress state on first call
+            if (state.loadedSeconds > 0 && !currentVideoTime) {
+              const player = playerRef.current;
+              if (player) {
+                const duration = player.getDuration ? player.getDuration() : state.duration;
+                if (duration) {
+                  handleVideoDuration(duration);
+                }
               }
             }
           }}
-          onProgress={handleVideoProgress as any}
           onEnded={handleVideoEnd}
           onPlay={onVideoPlay}
         />
@@ -413,6 +648,15 @@ const TiptubePlayer: React.FC<TiptubePlayerProps> = ({
             playing
             controls={false}
             volume={0.8}
+            onReady={() => {
+              console.log('🎬 [TiptubePlayer] Ad player ready');
+              adStartTime.current = Date.now();
+            }}
+            onStart={() => {
+              console.log('🎬 [TiptubePlayer] Ad playback started');
+              adStartTime.current = Date.now();
+              adPlayedSeconds.current = 0;
+            }}
             onProgress={handleAdProgress as any}
             onEnded={() => handleAdEnd(false)}
             onError={(error: any) => {
@@ -427,6 +671,7 @@ const TiptubePlayer: React.FC<TiptubePlayerProps> = ({
             ad={currentAdData}
             onSkip={() => handleAdEnd(true)}
             onClick={handleAdClick}
+            currentPlayedSeconds={adCurrentTime}
           />
         </div>
       )}

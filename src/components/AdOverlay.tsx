@@ -26,32 +26,30 @@ interface AdOverlayProps {
   ad: AdData;
   onSkip: () => void;
   onClick: () => void;
+  currentPlayedSeconds: number; // Track actual video playback time
 }
 
-const AdOverlay: React.FC<AdOverlayProps> = ({ ad, onSkip, onClick }) => {
-  const [secondsPlayed, setSecondsPlayed] = useState(0);
+const AdOverlay: React.FC<AdOverlayProps> = ({ ad, onSkip, onClick, currentPlayedSeconds }) => {
   const [canSkip, setCanSkip] = useState(false);
 
+  // Update skip availability based on actual played seconds from video player
   useEffect(() => {
-    // Update seconds counter
-    const interval = setInterval(() => {
-      setSecondsPlayed(prev => {
-        const newValue = prev + 1;
-        
-        // Enable skip button after skip offset
-        if (ad.isSkippable && newValue >= ad.skipOffset) {
-          setCanSkip(true);
-        }
-        
-        return newValue;
-      });
-    }, 1000);
+    console.log('🟡 [AdOverlay] Timer update:', {
+      currentPlayedSeconds,
+      skipOffset: ad.skipOffset,
+      canSkip: currentPlayedSeconds >= ad.skipOffset,
+      isSkippable: ad.isSkippable
+    });
+    
+    if (ad.isSkippable && currentPlayedSeconds >= ad.skipOffset) {
+      setCanSkip(true);
+    }
+  }, [currentPlayedSeconds, ad.isSkippable, ad.skipOffset]);
 
-    return () => clearInterval(interval);
-  }, [ad.isSkippable, ad.skipOffset]);
-
-  const remainingSeconds = ad.creative.duration - secondsPlayed;
-  const skipCountdown = ad.skipOffset - secondsPlayed;
+  const remainingSeconds = Math.max(0, Math.ceil(ad.creative.duration - currentPlayedSeconds));
+  const skipCountdown = Math.max(0, Math.ceil(ad.skipOffset - currentPlayedSeconds));
+  
+  console.log('🟡 [AdOverlay] Render:', { currentPlayedSeconds, remainingSeconds, skipCountdown, canSkip });
 
   return (
     <div 
@@ -113,7 +111,10 @@ const AdOverlay: React.FC<AdOverlayProps> = ({ ad, onSkip, onClick }) => {
               <button
                 onClick={(e) => {
                   e.stopPropagation();
+                  console.log('🟡 [AdOverlay] ========== SKIP BUTTON CLICKED ==========');
+                  console.log('🟡 [AdOverlay] Calling onSkip callback...');
                   onSkip();
+                  console.log('🟡 [AdOverlay] onSkip callback completed');
                 }}
                 className="bg-white/90 hover:bg-white text-black font-semibold px-6 py-3 rounded-md shadow-lg transition-all hover:scale-105 flex items-center gap-2"
               >

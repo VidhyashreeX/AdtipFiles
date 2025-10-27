@@ -178,8 +178,8 @@ const TipTube = () => {
       const usePublicApi = !localStorage.getItem("UserLoggedIn") || !userId || !token;
 
       const apiEndpoint = usePublicApi
-        ? `${BASE_URL}/getpublicshorts/1`
-        : `${BASE_URL}/getshorts/${userId}/1`;
+        ? `${BASE_URL}/getpublicshots`
+        : `${BASE_URL}/getshots/${userId}`;
 
       const res = await fetch(apiEndpoint, {
         method: "GET",
