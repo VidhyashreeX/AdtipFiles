@@ -95,11 +95,19 @@ const Header: React.FC<HeaderProps> = ({
   const route = useRoute();
   const {colors, isDarkMode} = useTheme();
   const {isGuest} = useAuth();
-  const {balance, isLoading, isPremium} = useWallet();
-  // Enhanced user data from new system (with fallback to old system)
+  
+  // Use new UserDataContext as the single source of truth for premium status
   const { userData, isLoading: userDataLoading } = useUserDataContext();
-  const { isPremium: isPremiumNew } = useUserPremiumStatus();
-  const { walletBalance: walletBalanceNew } = useUserWallet();
+  const { isPremium, isContentCreatorPremium } = useUserPremiumStatus();
+  const { walletBalance } = useUserWallet();
+  
+  // Legacy WalletContext for backward compatibility (if needed)
+  const {balance: legacyBalance, isLoading: legacyLoading} = useWallet();
+  
+  // Use new system values, with fallback to legacy
+  const balance = walletBalance !== undefined ? String(walletBalance) : legacyBalance;
+  const isLoading = userDataLoading || legacyLoading;
+  
   const {toggleSidebar} = useSidebar();
   const { requireAuth, loginPromptVisible, hideLoginPrompt, loginPromptMessage } = useGuestGuard();
   const {width: screenWidth} = useWindowDimensions();

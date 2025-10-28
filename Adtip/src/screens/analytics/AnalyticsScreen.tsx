@@ -13,7 +13,7 @@ import Icon from 'react-native-vector-icons/Feather';
 import { IndianRupee } from 'lucide-react-native';
 import {useTheme} from '../../contexts/ThemeContext';
 import {useAuth} from '../../contexts/AuthContext';
-import {useContentCreatorPremium} from '../../contexts/ContentCreatorPremiumContext';
+import {useUserDataContext, useUserPremiumStatus} from '../../contexts/UserDataContext';
 import Header from '../../components/common/Header';
 import { useRoute, RouteProp, useNavigation } from '@react-navigation/native';
 import ApiService from '../../services/ApiService';
@@ -43,11 +43,10 @@ type AnalyticsScreenRouteProp = RouteProp<RootStackParamList, 'Analytics'>;
 const AnalyticsScreen: React.FC = () => {
   const {colors} = useTheme();
   const {user} = useAuth();
-  const {
-    isContentCreatorPremium,
-    contentCreatorPremiumData,
-    isLoading: contentCreatorPremiumLoading
-  } = useContentCreatorPremium();
+  
+  // Get premium statuses from UserDataContext (single source of truth)
+  const { isPremium: isUserPremium, isContentCreatorPremium } = useUserPremiumStatus();
+  
   const [showPremiumPopup, setShowPremiumPopup] = useState(false);
   const [showPremiumAlert, setShowPremiumAlert] = useState(false);
   const navigation = useNavigation();
@@ -68,7 +67,7 @@ const AnalyticsScreen: React.FC = () => {
 
   // Check content creator premium access
   useEffect(() => {
-    if (!contentCreatorPremiumLoading && !isContentCreatorPremium) {
+    if (!isContentCreatorPremium) {
       // User doesn't have content creator premium, show custom alert
       setShowPremiumAlert(true);
       return;
@@ -78,12 +77,12 @@ const AnalyticsScreen: React.FC = () => {
     if (isContentCreatorPremium) {
       loadAnalytics();
     }
-  }, [selectedPeriod, isContentCreatorPremium, contentCreatorPremiumLoading]);
+  }, [selectedPeriod, isContentCreatorPremium]);
 
   // Handle premium alert actions
   const handlePremiumUpgrade = () => {
     setShowPremiumAlert(false);
-    navigation.navigate('ContentCreatorPremium');
+    navigation.navigate('SubscriptionScreen' as never);
   };
 
   const handlePremiumGoBack = () => {
@@ -151,7 +150,7 @@ const AnalyticsScreen: React.FC = () => {
 
   const handleWithdraw = () => {
     const availableBalance = parseFloat(analytics?.available_balance || '0');
-    if (!isPremium) {
+    if (!isUserPremium) {
       setShowPremiumPopup(true);
       return;
     }
@@ -161,34 +160,6 @@ const AnalyticsScreen: React.FC = () => {
     }
     setIsWithdrawalModalVisible(true);
   };
-
-  // Show loading while checking content creator premium status
-  if (contentCreatorPremiumLoading) {
-    return (
-      <View style={[styles.container, {backgroundColor: colors.background}]}>
-        <Header
-          title="Analytics"
-          showWallet={false}
-          showSearch={false}
-          showPremium={false}
-          leftComponent={
-            <TouchableOpacity
-              onPress={() => navigation.goBack()}
-              style={styles.backButton}
-            >
-              <Icon name="arrow-left" size={24} color={colors.text.primary} />
-            </TouchableOpacity>
-          }
-        />
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[styles.loadingText, { color: colors.text.secondary }]}>
-            Checking premium access...
-          </Text>
-        </View>
-      </View>
-    );
-  }
 
   // Show basic screen with header for non-premium users
   // The useEffect will handle showing the alert

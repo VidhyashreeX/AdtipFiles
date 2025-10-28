@@ -1,6 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import { TouchableOpacity, Animated, StyleSheet, ViewStyle } from 'react-native';
-import { useContentCreatorPremium } from '../../contexts/ContentCreatorPremiumContext';
+import { useUserPremiumStatus } from '../../contexts/UserDataContext';
 
 interface Props {
   onPress: () => void;
@@ -8,7 +8,7 @@ interface Props {
 }
 
 const ContentCreatorPlanToggle: React.FC<Props> = ({ onPress, style }) => {
-  const { isContentCreatorPremium, isLoading } = useContentCreatorPremium();
+  const { isContentCreatorPremium } = useUserPremiumStatus();
   const toggleAnimation = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -37,10 +37,9 @@ const ContentCreatorPlanToggle: React.FC<Props> = ({ onPress, style }) => {
 
   return (
     <TouchableOpacity
-      style={[styles.premiumToggleContainer, style, { opacity: isLoading ? 0.6 : 1 }]}
+      style={[styles.premiumToggleContainer, style]}
       onPress={onPress}
       activeOpacity={0.8}
-      disabled={isLoading}
     >
       <Animated.View
         style={[

@@ -29,8 +29,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useTabNavigator } from '../../contexts/TabNavigatorContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useDataContext } from '../../providers/DataProvider';
-import { useContentCreatorPremium } from '../../contexts/ContentCreatorPremiumContext';
-import { useUserPremiumStatus } from '../../contexts/UserDataContext';
+import { useUserDataContext, useUserPremiumStatus } from '../../contexts/UserDataContext';
 import { isPremiumUser } from '../../utils/userDataUtils';
 import { useVideos, useGuestVideos, useSearchVideos, useChannelData } from '../../hooks/useQueries';
 import { useNetInfo } from '@react-native-community/netinfo';
@@ -192,8 +191,14 @@ const TipTubeScreen = () => {
   const route = useRoute();
   const videoId: string | undefined = (route.params && typeof route.params === 'object' && 'videoId' in route.params) ? String((route.params as any).videoId) : undefined;
 
-  // Check USER premium status (not content creator premium)
-  const isUserPremium = user && (user.is_premium === 1 || user.is_premium === true);
+  // Get premium statuses from UserDataContext (single source of truth)
+  const { isPremium: isUserPremium, isContentCreatorPremium } = useUserPremiumStatus();
+  
+  console.log('[TipTubeScreen] Premium statuses:', {
+    isUserPremium,
+    isContentCreatorPremium,
+    userId: user?.id
+  });
 
   // UI state management (decoupled from navigation)
   const [selectedCategory, setSelectedCategory] = useState("All");
@@ -221,14 +226,6 @@ const TipTubeScreen = () => {
 
   // Insufficient balance modal state
   const [showInsufficientBalanceModal, setShowInsufficientBalanceModal] = useState(false);
-
-  // Content Creator Premium State - Using shared context
-  const {
-    isContentCreatorPremium,
-    contentCreatorPremiumData,
-    refreshContentCreatorPremiumStatus,
-    isLoading: contentCreatorPremiumLoading
-  } = useContentCreatorPremium();
 
   // Refs
   const flatListRef = useRef<FlatList>(null);
@@ -617,6 +614,23 @@ const TipTubeScreen = () => {
     navigation.navigate('TipShorts');
   }, [navigation]);
 
+  // Content Creator Premium Toggle Handler (moved before ChannelProfileComponent)
+  const handleTogglePremium = useCallback(() => {
+    requireAuth('premium', () => {
+      console.log('🚀 [TipTubeScreen] User clicked premium toggle');
+      console.log('📊 [TipTubeScreen] Current premium status:', {
+        isContentCreatorPremium,
+        isUserPremium
+      });
+      navigation.navigate('SubscriptionScreen' as never);
+    });
+  }, [requireAuth, isContentCreatorPremium, isUserPremium, navigation]);
+
+  // State for user's channel profile image (moved before ChannelProfileComponent)
+  const [channelProfileImage, setChannelProfileImage] = useState<string | null>(
+    user?.id ? getFallbackAvatarUrl(user.id) : null
+  );
+
   // Custom channel profile component for header
   const ChannelProfileComponent = useCallback(() => {
     if (isGuest) {
@@ -750,17 +764,6 @@ const TipTubeScreen = () => {
   const handleViewHistory = useCallback(() => {
     navigation.navigate('Wallet' as never);
   }, [navigation]);
-
-  // Get premium status using the same logic as the header toggle
-  const { isPremium } = useUserPremiumStatus();
-
-
-
-
-
-
-
-
 
   // Handle video press with view API calls
   const handleVideoPress = useCallback(async (video: Video) => {
@@ -919,7 +922,7 @@ const TipTubeScreen = () => {
 
       {/* CPX Survey Banner */}
       <SurveyBanner
-        isPremium={isPremium}
+        isPremium={isUserPremium}
         onUpgrade={() => navigation.navigate('SubscriptionScreen' as never)}
         renderCPXAtRoot={true}
       />
@@ -961,25 +964,8 @@ const TipTubeScreen = () => {
     }
   }, [selectedVideoId, openPlayer, videos]);
 
-  // Content Creator Premium Toggle Handler
-  const handleTogglePremium = () => {
-    requireAuth('premium', () => {
-      console.log('🚀 [TipTubeScreen] User clicked premium toggle');
-      console.log('📊 [TipTubeScreen] Current premium status:', {
-        isContentCreatorPremium,
-        hasData: !!contentCreatorPremiumData
-      });
-      navigation.navigate('SubscriptionScreen' as never);
-    });
-  };
-
   // Add state for live search query (separate from committed searchQuery)
   const [liveSearchQuery, setLiveSearchQuery] = useState("");
-
-  // State for user's channel profile image
-  const [channelProfileImage, setChannelProfileImage] = useState<string | null>(
-    user?.id ? getFallbackAvatarUrl(user.id) : null
-  );
 
   // Debounced setter for live search
   const debouncedSetLiveSearchQuery = useMemo(() => debounce((q: string) => setLiveSearchQuery(q), 300), []);
@@ -1080,7 +1066,7 @@ const TipTubeScreen = () => {
         <View style={styles.container}>
           {/* CPX Research Component at root level for full-screen modal */}
           <CPXResearchComponent
-            isPremium={isPremium}
+            isPremium={isUserPremium}
             onRewardEarned={(amount, isPremium) => {
               // Handle reward earned - could trigger wallet refresh, show notification, etc.
               console.log('Survey reward earned:', amount, isPremium);

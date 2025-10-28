@@ -13,6 +13,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useChannelData } from '../../hooks/useQueries';
+import { useUserPremiumStatus } from '../../contexts/UserDataContext';
 import Header from '../../components/common/Header';
 import ContentCreatorPlanToggle from '../../components/common/ContentCreatorPlanToggle';
 import { useGuestGuard } from '../../hooks/useGuestGuard';
@@ -32,6 +33,15 @@ const LibraryScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
 
   const styles = createStyles(colors, isDarkMode, insets.top);
+
+  // Get premium statuses from UserDataContext (single source of truth)
+  const { isPremium: isUserPremium, isContentCreatorPremium } = useUserPremiumStatus();
+  
+  console.log('[LibraryScreen] Premium statuses:', {
+    isUserPremium,
+    isContentCreatorPremium,
+    userId: user?.id
+  });
 
   // Fetch user's channel data to get channelId
   const {
@@ -73,7 +83,11 @@ const LibraryScreen: React.FC = () => {
   const handleTogglePremium = () => {
     requireAuth('premium', () => {
       console.log('🚀 [LibraryScreen] User clicked content creator premium toggle');
-      navigation.navigate('ContentCreatorPremium' as never);
+      console.log('📊 [LibraryScreen] Current premium status:', {
+        isContentCreatorPremium,
+        isUserPremium
+      });
+      navigation.navigate('SubscriptionScreen' as never);
     });
   };
 
