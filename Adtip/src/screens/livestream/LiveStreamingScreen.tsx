@@ -106,16 +106,20 @@ const safeCallMeetingMethod = async (
   }
 };
 
-// Message Component for Live Chat
+// Message Component for Live Chat - Memoized to prevent unnecessary re-renders
 const ChatMessage: React.FC<{ 
   message: { id: string; user: string; text: string; timestamp: number };
   colors: any;
-}> = ({ message, colors }) => (
+}> = React.memo(({ message, colors }) => (
   <View style={[styles.chatMessage, { backgroundColor: colors.card }]}>
-    <Text style={[styles.chatUser, { color: colors.primary }]}>{message.user}</Text>
-    <Text style={[styles.chatText, { color: colors.text.primary }]}>{message.text}</Text>
+    <Text style={[styles.chatUser, { color: colors.primary }]} numberOfLines={1}>{message.user}</Text>
+    <Text style={[styles.chatText, { color: colors.text.primary }]} numberOfLines={3}>{message.text}</Text>
   </View>
-);
+), (prevProps, nextProps) => {
+  // Only re-render if message or colors actually changed
+  return prevProps.message.id === nextProps.message.id && 
+         prevProps.colors === nextProps.colors;
+});
 
 // Viewer Component - Shows host video and viewer count
 const ViewerMode: React.FC<{ 
@@ -134,7 +138,9 @@ const ViewerMode: React.FC<{
   const { participants, leave } = useMeeting();
   const [showChat, setShowChat] = useState(false);
   const [chatMessage, setChatMessage] = useState('');
+  // Limit message history to prevent memory issues on low-end devices
   const [messages, setMessages] = useState<Array<{id: string; user: string; text: string; timestamp: number}>>([]);
+  const maxMessages = 50; // Limit chat history
   const [isWaitingForHost, setIsWaitingForHost] = useState(true);
   
   // ⏱️ WATCH TIME TRACKING
@@ -176,17 +182,17 @@ const ViewerMode: React.FC<{
     }
   }, [userId, meetingId, getSecondsWatched]);
 
-  // Start heartbeat interval
+  // Start heartbeat interval - Optimized for low-end devices
   useEffect(() => {
-    // Send initial heartbeat after 10 seconds
+    // Longer delay for initial heartbeat to reduce startup load
     const initialTimeout = setTimeout(() => {
       sendHeartbeat();
-    }, 10000);
+    }, 15000); // 15 seconds instead of 10
 
-    // Then send every 30 seconds
+    // Longer interval between heartbeats to reduce CPU usage
     heartbeatIntervalRef.current = setInterval(() => {
       sendHeartbeat();
-    }, 30000);
+    }, 45000); // 45 seconds instead of 30
 
     return () => {
       clearTimeout(initialTimeout);
@@ -297,7 +303,11 @@ const ViewerMode: React.FC<{
         text: chatMessage.trim(),
         timestamp: Date.now(),
       };
-      setMessages(prev => [...prev, newMessage]);
+      // Limit message history to prevent memory issues
+      setMessages(prev => {
+        const newMessages = [...prev, newMessage];
+        return newMessages.slice(-maxMessages);
+      });
       setChatMessage('');
     }
   };
@@ -400,6 +410,11 @@ const ViewerMode: React.FC<{
             renderItem={({ item }) => <ChatMessage message={item} colors={colors} />}
             style={styles.chatList}
             showsVerticalScrollIndicator={false}
+            windowSize={5}
+            maxToRenderPerBatch={10}
+            updateCellsBatchingPeriod={50}
+            removeClippedSubviews={true}
+            initialNumToRender={15}
           />
 
           <View style={[styles.chatInput, { borderTopColor: colors.border }]}>
@@ -606,24 +621,28 @@ const HostMode: React.FC<HostModeProps> = ({
   const checkBalanceIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const costPerMinute = 1; // Cost per minute for streaming
 
-  // Get viewers (exclude local/host participant) - Bug #3
+  // Get viewers (exclude local/host participant) - Bug #3 - Memoized for performance
   const viewers = useMemo(() => {
     return Array.from(participants.values()).filter(p => !p.local);
   }, [participants]);
 
   const viewerCount = viewers.length;
 
-  // Log participant updates - Bug #3
+  // Log participant updates - Bug #3 - Throttled to reduce console spam
   useEffect(() => {
-    console.log('[HostMode] Participants updated:', {
-      total: participants.size,
-      viewers: viewerCount,
-      participants: Array.from(participants.values()).map(p => ({
-        id: p.id,
-        displayName: p.displayName,
-        isLocal: p.local
-      }))
-    });
+    const timer = setTimeout(() => {
+      console.log('[HostMode] Participants updated:', {
+        total: participants.size,
+        viewers: viewerCount,
+        participants: Array.from(participants.values()).map(p => ({
+          id: p.id,
+          displayName: p.displayName,
+          isLocal: p.local
+        }))
+      });
+    }, 1000); // Log only once per second
+
+    return () => clearTimeout(timer);
   }, [participants, viewerCount]);
 
   // Bug #5: Wallet balance monitoring functions
@@ -687,7 +706,7 @@ const HostMode: React.FC<HostModeProps> = ({
     );
   }, [userId, meetingId, leave, navigation]);
 
-  // Bug #5: Check wallet balance periodically
+  // Bug #5: Check wallet balance periodically - Optimized for low-end devices
   useEffect(() => {
     const checkBalance = async () => {
       try {
@@ -720,13 +739,14 @@ const HostMode: React.FC<HostModeProps> = ({
       }
     };
 
-    // Check immediately
-    checkBalance();
+    // Delay initial check to reduce startup load
+    const initialTimeout = setTimeout(checkBalance, 5000);
 
-    // Then check every 30 seconds
-    checkBalanceIntervalRef.current = setInterval(checkBalance, 30000);
+    // Check every 60 seconds instead of 30 to reduce CPU usage
+    checkBalanceIntervalRef.current = setInterval(checkBalance, 60000);
 
     return () => {
+      clearTimeout(initialTimeout);
       if (checkBalanceIntervalRef.current) {
         clearInterval(checkBalanceIntervalRef.current);
       }
@@ -865,24 +885,52 @@ const HostMode: React.FC<HostModeProps> = ({
   );
 };
 
-// Host Video View Component
-const HostVideoView: React.FC<{ participantId: string }> = ({ participantId }) => {
+// Host Video View Component - Optimized for low-end devices
+const HostVideoView: React.FC<{ participantId: string }> = React.memo(({ participantId }) => {
   const { webcamStream, webcamOn } = useParticipant(participantId);
+  const [isReady, setIsReady] = useState(false);
 
+  // Optimize stream URL creation with proper cleanup
   const streamURL = useMemo(() => {
     if (webcamOn && webcamStream?.track) {
-      return new MediaStream([webcamStream.track]).toURL();
+      try {
+        const mediaStream = new MediaStream([webcamStream.track]);
+        const url = mediaStream.toURL();
+        setIsReady(true);
+        return url;
+      } catch (error) {
+        console.error('Error creating stream URL:', error);
+        setIsReady(false);
+        return undefined;
+      }
     }
+    setIsReady(false);
     return undefined;
   }, [webcamOn, webcamStream?.track]);
 
-  if (webcamOn && streamURL) {
+  // Cleanup stream URL on unmount
+  useEffect(() => {
+    return () => {
+      if (streamURL) {
+        try {
+          // Release the stream URL to free memory
+          URL.revokeObjectURL(streamURL);
+        } catch (error) {
+          // Ignore cleanup errors
+        }
+      }
+    };
+  }, [streamURL]);
+
+  if (webcamOn && streamURL && isReady) {
     return (
       <RTCView
         streamURL={streamURL}
         objectFit="cover"
         mirror
         style={styles.videoView}
+        // Optimize rendering on low-end devices
+        zOrder={0}
       />
     );
   }
@@ -893,7 +941,7 @@ const HostVideoView: React.FC<{ participantId: string }> = ({ participantId }) =
       <Text style={styles.noVideoText}>Camera Off</Text>
     </View>
   );
-};
+});
 
 // Main Live Streaming Container
 const LiveStreamContainer: React.FC<{
@@ -922,15 +970,22 @@ const LiveStreamContainer: React.FC<{
     logInfo('LiveStreaming', 'Cleaning up devices...');
 
     try {
-      // Mute mic
+      // Mute mic - use batch operations to reduce overhead
       const localParticipant = currentMeeting.localParticipant;
+      const operations = [];
+      
       if (localParticipant?.micOn) {
-        await safeCallMeetingMethod(currentMeeting, 'muteMic');
+        operations.push(safeCallMeetingMethod(currentMeeting, 'muteMic'));
       }
 
       // Disable webcam
       if (localParticipant?.webcamOn) {
-        await safeCallMeetingMethod(currentMeeting, 'disableWebcam');
+        operations.push(safeCallMeetingMethod(currentMeeting, 'disableWebcam'));
+      }
+
+      // Execute all cleanup operations in parallel
+      if (operations.length > 0) {
+        await Promise.all(operations);
       }
 
       logInfo('LiveStreaming', 'Devices cleaned up successfully');
