@@ -272,14 +272,21 @@ const TipTubeVideoPlayer: React.FC<TipTubeVideoPlayerProps> = ({
    */
   const creditAdReward = useCallback(async (watchDuration: number, wasSkipped: boolean = false) => {
     if (!adData || !adData.campaignId || !adData.creative.id) {
+      console.log('[TipTubeVideoPlayer] ⚠️ Cannot credit reward - missing ad data');
       return;
     }
 
     try {
+      console.log('[TipTubeVideoPlayer] 💰 Attempting to credit ad reward...');
+      console.log('[TipTubeVideoPlayer]   Campaign ID:', adData.campaignId);
+      console.log('[TipTubeVideoPlayer]   Creative ID:', adData.creative.id);
+      console.log('[TipTubeVideoPlayer]   Watch Duration:', watchDuration, 'seconds');
+      console.log('[TipTubeVideoPlayer]   Was Skipped:', wasSkipped);
+
       // Get user ID from storage
       const userDataStr = await AsyncStorage.getItem('userData');
       if (!userDataStr) {
-        console.log('[TipTubeVideoPlayer] No user data found, skipping reward credit');
+        console.log('[TipTubeVideoPlayer] ❌ No user data found, skipping reward credit');
         return;
       }
 
@@ -287,16 +294,19 @@ const TipTubeVideoPlayer: React.FC<TipTubeVideoPlayerProps> = ({
       const userId = userData.id || userData.userId;
 
       if (!userId) {
-        console.log('[TipTubeVideoPlayer] No user ID found, skipping reward credit');
+        console.log('[TipTubeVideoPlayer] ❌ No user ID found, skipping reward credit');
         return;
       }
+
+      console.log('[TipTubeVideoPlayer]   User ID:', userId);
 
       // For skipped ads, only credit if they watched past the skip offset
       if (wasSkipped && watchDuration < adData.skipOffset) {
-        console.log('[TipTubeVideoPlayer] User skipped before skip offset, no reward');
+        console.log('[TipTubeVideoPlayer] ❌ User skipped before skip offset, no reward');
         return;
       }
 
+      console.log('[TipTubeVideoPlayer] 📡 Calling credit-reward API...');
       const response = await VideoAdRewardService.creditReward(
         userId,
         adData.campaignId,
@@ -305,17 +315,23 @@ const TipTubeVideoPlayer: React.FC<TipTubeVideoPlayerProps> = ({
         adData.sessionId
       );
 
+      console.log('[TipTubeVideoPlayer] ✅ Credit-reward API response:', response);
+
       if (response.status === 200 && response.data.credited) {
+        console.log('[TipTubeVideoPlayer] 🎉 Reward credited successfully! Amount:', response.data.rewardAmount);
         Toast.show({
           type: 'success',
           text1: '🎉 Reward Earned!',
           text2: `You earned ₹${response.data.rewardAmount} for watching this ad!`,
           visibilityTime: 4000,
         });
+      } else {
+        console.log('[TipTubeVideoPlayer] ⚠️ Reward not credited. Response:', response);
       }
     } catch (error: any) {
       // Don't interrupt playback for reward errors
-      console.error('[TipTubeVideoPlayer] Failed to credit ad reward:', error);
+      console.error('[TipTubeVideoPlayer] ❌ Failed to credit ad reward:', error);
+      console.error('[TipTubeVideoPlayer]    Error details:', JSON.stringify(error, null, 2));
       if (error?.message && !error.message.includes('already been rewarded')) {
         console.warn('[TipTubeVideoPlayer] Reward credit error:', error.message);
       }
@@ -323,7 +339,7 @@ const TipTubeVideoPlayer: React.FC<TipTubeVideoPlayerProps> = ({
   }, [adData]);
 
   const handleEnd = useCallback(async () => {
-    console.log('[TipTubeVideoPlayer] Video ended, isAdPlaying:', isAdPlaying);
+    console.log('[TipTubeVideoPlayer] 🎬 Video ended, isAdPlaying:', isAdPlaying);
     
     if (isAdPlaying) {
       // Ad finished - track completion and credit reward
@@ -334,6 +350,7 @@ const TipTubeVideoPlayer: React.FC<TipTubeVideoPlayerProps> = ({
 
       // Credit reward
       const watchDuration = adCurrentTime > 0 ? adCurrentTime : adDuration;
+      console.log('[TipTubeVideoPlayer] 💰 Crediting ad reward with duration:', watchDuration);
       await creditAdReward(watchDuration, false);
 
       // This will trigger the parent to set isAdPlaying=false, causing content video to load
@@ -724,10 +741,15 @@ const TipTubeVideoPlayer: React.FC<TipTubeVideoPlayerProps> = ({
               <TouchableOpacity
                 style={styles.skipButton}
                 onPress={async () => {
+                  console.log('[TipTubeVideoPlayer] ⏭️ User clicked Skip Ad button');
+                  console.log('[TipTubeVideoPlayer]   Current time:', adCurrentTime);
+                  console.log('[TipTubeVideoPlayer]   Skip offset:', adData.skipOffset);
+                  
                   if (onAdEvent) {
                     onAdEvent('skip');
                   }
                   // Credit reward for skipped ad (if they watched past skip offset)
+                  console.log('[TipTubeVideoPlayer] 💰 Crediting reward for skipped ad...');
                   await creditAdReward(adCurrentTime, true);
                   onAdSkip?.();
                 }}
