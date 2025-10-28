@@ -283,22 +283,15 @@ const TipTubeVideoPlayer: React.FC<TipTubeVideoPlayerProps> = ({
       console.log('[TipTubeVideoPlayer]   Watch Duration:', watchDuration, 'seconds');
       console.log('[TipTubeVideoPlayer]   Was Skipped:', wasSkipped);
 
-      // Get user ID from storage
-      const userDataStr = await AsyncStorage.getItem('userData');
-      if (!userDataStr) {
-        console.log('[TipTubeVideoPlayer] ❌ No user data found, skipping reward credit');
-        return;
-      }
-
-      const userData = JSON.parse(userDataStr);
-      const userId = userData.id || userData.userId;
-
+      // Get user ID from storage (UserDataManager saves individual keys for compatibility)
+      const userId = await AsyncStorage.getItem('userId');
       if (!userId) {
         console.log('[TipTubeVideoPlayer] ❌ No user ID found, skipping reward credit');
         return;
       }
 
-      console.log('[TipTubeVideoPlayer]   User ID:', userId);
+      const userIdNumber = parseInt(userId, 10);
+      console.log('[TipTubeVideoPlayer]   User ID:', userIdNumber);
 
       // For skipped ads, only credit if they watched past the skip offset
       if (wasSkipped && watchDuration < adData.skipOffset) {
@@ -308,7 +301,7 @@ const TipTubeVideoPlayer: React.FC<TipTubeVideoPlayerProps> = ({
 
       console.log('[TipTubeVideoPlayer] 📡 Calling credit-reward API...');
       const response = await VideoAdRewardService.creditReward(
-        userId,
+        userIdNumber,
         adData.campaignId,
         adData.creative.id,
         watchDuration,
@@ -344,14 +337,60 @@ const TipTubeVideoPlayer: React.FC<TipTubeVideoPlayerProps> = ({
     if (isAdPlaying) {
       // Ad finished - track completion and credit reward
       console.log('[TipTubeVideoPlayer] 🎬 Ad completed, transitioning to content video');
+      
+      // CRITICAL: Capture ad data BEFORE calling onAdComplete which may clear it
+      const capturedAdData = adData;
+      const capturedWatchDuration = adCurrentTime > 0 ? adCurrentTime : adDuration;
+      
+      console.log('[TipTubeVideoPlayer]   Captured ad data for completion:', {
+        campaignId: capturedAdData?.campaignId,
+        creativeId: capturedAdData?.creative?.id,
+        sessionId: capturedAdData?.sessionId,
+        watchDuration: capturedWatchDuration
+      });
+      
       if (onAdEvent) {
         onAdEvent('complete');
       }
 
-      // Credit reward
-      const watchDuration = adCurrentTime > 0 ? adCurrentTime : adDuration;
-      console.log('[TipTubeVideoPlayer] 💰 Crediting ad reward with duration:', watchDuration);
-      await creditAdReward(watchDuration, false);
+      // Credit reward with captured data
+      console.log('[TipTubeVideoPlayer] 💰 Crediting ad reward with duration:', capturedWatchDuration);
+      
+      if (capturedAdData && capturedAdData.campaignId && capturedAdData.creative.id) {
+        try {
+          const userId = await AsyncStorage.getItem('userId');
+          
+            
+            if (userId) {
+              console.log('[TipTubeVideoPlayer] � Calling credit-reward API for completion...');
+              const response = await VideoAdRewardService.creditReward(
+                parseInt(userId, 10),
+                capturedAdData.campaignId,
+                capturedAdData.creative.id,
+                capturedWatchDuration,
+                capturedAdData.sessionId
+              );
+              
+              console.log('[TipTubeVideoPlayer] ✅ Credit API response:', response);
+              
+              if (response.status === 200 && response.data.credited) {
+                Toast.show({
+                  type: 'success',
+                  text1: '🎉 Reward Earned!',
+                  text2: `You earned ₹${response.data.rewardAmount} for watching this ad!`,
+                  visibilityTime: 4000,
+                });
+              }
+            } else {
+              console.warn('⚠️ [ADREWARD-COMPLETE] No user ID found');
+            }
+          
+        } catch (error) {
+          console.error('[TipTubeVideoPlayer] ❌ Error crediting completion reward:', error);
+        }
+      } else {
+        console.log('[TipTubeVideoPlayer] ⚠️ Cannot credit reward - missing captured ad data');
+      }
 
       // This will trigger the parent to set isAdPlaying=false, causing content video to load
       onAdComplete?.();
@@ -362,7 +401,7 @@ const TipTubeVideoPlayer: React.FC<TipTubeVideoPlayerProps> = ({
       setShowControls(true);
       onVideoEnd?.();
     }
-  }, [isAdPlaying, onAdEvent, onAdComplete, onVideoEnd, adCurrentTime, adDuration, creditAdReward]);
+  }, [isAdPlaying, onAdEvent, onAdComplete, onVideoEnd, adCurrentTime, adDuration, adData]);
 
   const handleError = useCallback((error: any) => {
     console.error('[TipTubeVideoPlayer] Video error:', error);
@@ -745,12 +784,105 @@ const TipTubeVideoPlayer: React.FC<TipTubeVideoPlayerProps> = ({
                   console.log('[TipTubeVideoPlayer]   Current time:', adCurrentTime);
                   console.log('[TipTubeVideoPlayer]   Skip offset:', adData.skipOffset);
                   
+                  // CRITICAL: Capture ad data BEFORE calling onAdSkip which may clear it
+                  const capturedAdData = adData;
+                  const capturedWatchDuration = adCurrentTime;
+                  
+                  console.log('[TipTubeVideoPlayer]   Captured ad data:', {
+                    campaignId: capturedAdData?.campaignId,
+                    creativeId: capturedAdData?.creative?.id,
+                    sessionId: capturedAdData?.sessionId
+                  });
+                  
                   if (onAdEvent) {
                     onAdEvent('skip');
                   }
+                  
                   // Credit reward for skipped ad (if they watched past skip offset)
                   console.log('[TipTubeVideoPlayer] 💰 Crediting reward for skipped ad...');
-                  await creditAdReward(adCurrentTime, true);
+                  
+                  // Use captured data to ensure it doesn't become null mid-execution
+                  if (capturedAdData && capturedAdData.campaignId && capturedAdData.creative.id) {
+                    try {
+                      const userId = await AsyncStorage.getItem('userId');
+                      console.log('[TipTubeVideoPlayer] 📋 User ID retrieved from storage:', !!userId);
+                      
+                      if (userId) {
+                        console.log('[TipTubeVideoPlayer] 🔍 Reward eligibility check:', {
+                          userId: userId,
+                          hasUserId: !!userId,
+                          capturedWatchDuration: capturedWatchDuration,
+                          skipOffset: capturedAdData.skipOffset,
+                          meetsRequirement: capturedWatchDuration >= capturedAdData.skipOffset
+                        });
+                        
+                        if (userId && capturedWatchDuration >= capturedAdData.skipOffset) {
+                          // PRODUCTION: Log API call details
+                          console.log('🎬 [ADREWARD-SKIP] API Call Started', JSON.stringify({
+                            timestamp: new Date().toISOString(),
+                            userId: userId,
+                            campaignId: capturedAdData.campaignId,
+                            creativeId: capturedAdData.creative.id,
+                            watchDuration: capturedWatchDuration,
+                            skipOffset: capturedAdData.skipOffset,
+                            sessionId: capturedAdData.sessionId,
+                            endpoint: '/api/v1/ads/credit-reward'
+                          }));
+                          
+                          const response = await VideoAdRewardService.creditReward(
+                            parseInt(userId, 10),
+                            capturedAdData.campaignId,
+                            capturedAdData.creative.id,
+                            capturedWatchDuration,
+                            capturedAdData.sessionId
+                          );
+                          
+                          // PRODUCTION: Log API response
+                          console.log('✅ [ADREWARD-SKIP] API Response Received', JSON.stringify({
+                            timestamp: new Date().toISOString(),
+                            status: response.status,
+                            credited: response.data?.credited,
+                            rewardAmount: response.data?.rewardAmount,
+                            message: response.message,
+                            userId: userId,
+                            campaignId: capturedAdData.campaignId
+                          }));
+                          
+                          if (response.status === 200 && response.data.credited) {
+                            Toast.show({
+                              type: 'success',
+                              text1: '🎉 Reward Earned!',
+                              text2: `You earned ₹${response.data.rewardAmount} for watching this ad!`,
+                              visibilityTime: 4000,
+                            });
+                          }
+                        } else {
+                          // Log why API wasn't called
+                          console.warn('⚠️ [ADREWARD-SKIP] API NOT Called - Eligibility Failed:', {
+                            userId: userId,
+                            hasUserId: !!userId,
+                            capturedWatchDuration: capturedWatchDuration,
+                            skipOffset: capturedAdData.skipOffset,
+                            reason: !userId ? 'No user ID' : 'Watch duration < skip offset'
+                          });
+                        }
+                      } else {
+                        console.warn('⚠️ [ADREWARD-SKIP] No user data in AsyncStorage');
+                      }
+                    } catch (error: any) {
+                      // PRODUCTION: Log API error
+                      console.error('❌ [ADREWARD-SKIP] API Error', JSON.stringify({
+                        timestamp: new Date().toISOString(),
+                        error: error?.message || 'Unknown error',
+                        status: error?.response?.status,
+                        errorData: error?.response?.data,
+                        campaignId: capturedAdData.campaignId,
+                        creativeId: capturedAdData.creative.id
+                      }));
+                    }
+                  }
+                  
+                  // Call onAdSkip AFTER attempting to credit reward
                   onAdSkip?.();
                 }}
                 activeOpacity={0.8}
