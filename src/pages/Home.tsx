@@ -16,6 +16,7 @@ import BannerCarousel from "../components/BannerCarousel";
 import CategorySelector from "../components/CategorySelector";
 import WalletBalance from "../components/WalletBalance";
 import { popularCategories } from "../components/CategorySelector";
+import { usePosts, usePost } from "@/hooks/api";
 
 // Define TypeScript interfaces
 interface User {
@@ -95,14 +96,37 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
   const [showLoginPrompt, setShowLoginPrompt] = useState<boolean>(false);
   const [postViewCount, setPostViewCount] = useState<number>(0);
   const { isAuthenticated, user, authLoading } = useAuth();
-  const [feedData, setFeedData] = useState<Post[]>([]);
-  const [loading, setLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
-  const [page, setPage] = useState<number>(1);
-  const [totalPages, setTotalPages] = useState<number>(1);
-  const [hasMore, setHasMore] = useState<boolean>(true);
-  const observerRef = useRef<IntersectionObserver | null>(null);
-  const loadingRef = useRef<HTMLDivElement | null>(null);
+
+  // Use React Query for data fetching
+  const categoryObj = popularCategories.find(cat => cat.name === selectedCategory);
+  const categoryId = categoryObj ? categoryObj.id : 0;
+
+  // Fetch posts using React Query
+  const {
+    data: postsData,
+    isLoading: loading,
+    error: postsError,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = usePosts({
+    category: categoryId,
+    user_id: user?.id || 0,
+    limit: 5,
+  });
+
+  // Fetch single post if postId is provided
+  const { data: singlePostData, isLoading: singlePostLoading } = usePost(
+    postId ? parseInt(postId) : 0,
+    !!postId
+  );
+
+  // Flatten posts data for easier handling
+  const feedData = postsData?.pages.flatMap(page => page.data) || [];
+  const error = postsError ? (postsError as Error).message : null;
+
+  // Handle single post view
+  const displayData = postId && singlePostData ? [singlePostData] : feedData;
 
   const userId = user?.id || null;
   const token = user?.accessToken || null;
@@ -132,217 +156,41 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
     }
   }, [isAuthenticated, userId, token]);
 
-  // Fetch posts with infinite scroll
- 
- const fetchPosts = useCallback(
-    async (shouldAppend = false) => {
-      // GUEST MODE — Only show premium posts when browsing normally (no postId)
-      if (!isAuthenticated && !postId) {
-        setLoading(true);
-        setError(null);
-        try {
-          const response = await axios.get(`${import.meta.env.VITE_API_URL}/api/list-premium-posts`);
-          if (response.data.status && Array.isArray(response.data.data)) {
-            setFeedData(response.data.data);
-            setPage(1);
-            setHasMore(false);
-          } else {
-            setFeedData([]);
-            setError("No premium posts available for guests.");
-            setHasMore(false);
-          }
-        } catch {
-          setFeedData([]);
-          setError("Failed to load premium posts. Please try again later.");
-          setHasMore(false);
-        } finally {
-          setLoading(false);
-        }
-        return;
-      }
-    if (!shouldAppend && loading) return; // Prevent multiple simultaneous initial loads
-    if (shouldAppend && (!hasMore || loading)) return; // Don't fetch if no more data or already loading
-
-
-
-      // Declare requestParams outside try block for error logging
-      let requestParams: {
-        category: number;
-        page: number;
-        limit: number;
-        loggined_user_id: number;
-      } | null = null;
-
-      try {
-        setLoading(true);
-        setError(null);
-
-        // --------------------------
-        // SINGLE POST MODE (/post/:id)
-        // --------------------------
-        if (postId) {
-          const response = await axios.get(`${import.meta.env.VITE_API_URL}/api/post/${postId}`, {
-            headers: isAuthenticated
-              ? { Authorization: `Bearer ${token}` }
-              : {},
-
-          });
-
-          if (response.data && response.data.status) {
-            // Unwrap array from API
-            const rawPost = Array.isArray(response.data.data)
-              ? response.data.data[0]
-              : response.data.data;
-
-            const sanitizedPost = {
-              ...rawPost,
-              media_url: rawPost.media_url || "",
-              user_name: rawPost.user_name || "Anonymous",
-              user_profile_image: rawPost.user_profile_image || null,
-              address: rawPost.address || "Location not provided",
-              title: rawPost.title || "Untitled",
-              content: rawPost.content || "No content",
-            };
-
-            setFeedData([sanitizedPost]); // Keep inside array for mapping in UI
-            setPage(1);
-            setHasMore(false);
-          } else {
-            setFeedData([]);
-            setError("Post not found.");
-            setHasMore(false);
-          }
-          return; // IMPORTANT: Stop here, don't load feed
-        }
-
-        // --------------------------
-        // MULTI POST MODE (Feed view)
-        // --------------------------
-        const categoryObj = popularCategories.find(
-          (cat) => cat.name === selectedCategory
-        );
-        const categoryId = categoryObj ? categoryObj.id : 0;
-
-        requestParams = {
-          category: categoryId,
-          page: shouldAppend ? page : 1,
-          limit: 5,
-          loggined_user_id: userId || 0,
-        };
-        
-        console.log('📤 Sending listPosts request:', requestParams);
-        console.log('📤 Request headers:', {
-          'Content-Type': 'application/json',
-          'Authorization': token ? `Bearer ${token}` : 'No token'
-        });
-        
-        const response = await contentAPI.listPosts(requestParams);
-
-        if (response.data.status) {
-          const sanitizedPosts = response.data.data.map((post) => ({
-            ...post,
-            media_url: post.media_url || "",
-            user_name: post.user_name || "Anonymous",
-            user_profile_image: post.user_profile_image || null,
-            address: post.address || "Location not provided",
-            title: post.title || "Untitled",
-            content: post.content || "No content",
-          }));
-
-          if (shouldAppend) {
-            setFeedData((prev) => [...prev, ...sanitizedPosts]);
-          } else {
-            setFeedData(sanitizedPosts);
-          }
-
-          setHasMore(page < response.data.pagination.total_page);
-
-          if (
-            sanitizedPosts.length > 0 &&
-            page < response.data.pagination.total_page
-          ) {
-            setPage((prevPage) => prevPage + 1);
-          } else {
-            setHasMore(false);
-          }
-        } else {
-          throw new Error(response.data.message || "Failed to fetch posts");
-        }
-      } catch (err: unknown) {
-        const error = err as AxiosError;
-        if (error.name === "AbortError") return;
-        
-        console.error('❌ listPosts error:', {
-          status: error.response?.status,
-          data: error.response?.data,
-          message: error.message,
-          requestParams: requestParams
-        });
-        
-        setError(
-          error.message === "Network Error"
-            ? "Unable to connect to the server. Please check your connection."
-            : (error.response?.data as ApiErrorResponse)?.message || error.message || "Failed to load posts"
-        );
-        setHasMore(false);
-      } finally {
-        setLoading(false);
-      }
-
-
-    },
-    [
-      isAuthenticated,
-      userId,
-      token,
-      postId,
-      selectedCategory
-    ]
-  );
-    useEffect(() => {
-    fetchPosts();
-  }, [fetchPosts]);
-
-  // Initial data load
-  useEffect(() => {
-    // Reset state when category changes
-    setFeedData([]);
-    setPage(1);
-    setHasMore(true);
-    fetchPosts(false);
-  }, [selectedCategory, isAuthenticated]); // Only reload on category change or auth change
+  // Intersection observer for infinite scroll
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  const loadingRef = useRef<HTMLDivElement | null>(null);
 
   // Set up intersection observer for infinite scroll
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
         // If the loading element is visible and we can load more
-        if (entries[0].isIntersecting && hasMore) {
-          fetchPosts(true); // Load more posts
+        if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
+          fetchNextPage(); // Load more posts
         }
       },
       { threshold: 0.5 } // Trigger when 50% of the loading element is visible
     );
-    
+
     observerRef.current = observer;
-    
+
     // Observe the loading element if it exists
     if (loadingRef.current) {
       observer.observe(loadingRef.current);
     }
-    
+
     return () => {
       if (observerRef.current) {
         observerRef.current.disconnect();
       }
     };
-  }, [fetchPosts, hasMore]); // Re-setup observer when fetchPosts or hasMore changes
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage]); // Re-setup observer when fetchNextPage or hasNextPage changes
 
   // Check if user is viewing posts and prompt login
   useEffect(() => {
     if (!isAuthenticated && postViewCount >= 2) {
       setShowLoginPrompt(true);
-    }
+    }2
   }, [postViewCount, isAuthenticated]);
 
   const handlePostClick = (id: number) => {
@@ -359,9 +207,7 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
         selectedCategory={selectedCategory}
         onCategoryChange={setSelectedCategory}
         onResetFeed={() => {
-          setPage(1);
-          setFeedData([]);
-          setHasMore(true);
+          // React Query will automatically refetch when selectedCategory changes
         }}
       />
 
@@ -389,26 +235,22 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
             {/* Carousel Banner 
             <BannerCarousel userId={userId} isAuthenticated={isAuthenticated} /> */}
 
-            {loading && feedData.length === 0 && (
+            {loading && displayData.length === 0 && (
               <div className="text-center py-10">
                 <p className="text-gray-500">Loading posts...</p>
               </div>
             )}
 
-            {error && feedData.length === 0 && (
+            {error && displayData.length === 0 && (
               <div className="text-center py-10">
                 <p className="text-red-500">{error}</p>
-                <Button onClick={() => {
-                  setPage(1);
-                  setHasMore(true);
-                  fetchPosts(false);
-                }} className="mt-4">
+                <Button onClick={() => refetch()} className="mt-4">
                   Retry
                 </Button>
               </div>
             )}
 
-            {!loading && !error && feedData.length === 0 && (
+            {!loading && !error && displayData.length === 0 && (
               <div className="text-center py-10">
                 <p className="text-gray-500">
                   {selectedCategory === "All"
@@ -424,9 +266,9 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
               </div>
             )}
 
-            {!error && feedData.length > 0 && (
+            {!error && displayData.length > 0 && (
               <div className="space-y-0">
-                {feedData.map((post) => (
+                {displayData.map((post) => (
                   <div
                     key={post.id}
                     className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 cursor-pointer mb-4 md:mb-6 md:rounded-lg md:border md:shadow-sm"
@@ -597,17 +439,17 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
             )}
             
             {/* Infinite scroll loading indicator */}
-            {isAuthenticated && hasMore && (
+            {isAuthenticated && hasNextPage && (
               <div 
                 ref={loadingRef}
                 className="flex justify-center py-8"
               >
-                {loading && <p className="text-gray-500">Loading more posts...</p>}
-                {!loading && <div className="h-8" />} {/* Invisible element for intersection observer */}
+                {isFetchingNextPage && <p className="text-gray-500">Loading more posts...</p>}
+                {!isFetchingNextPage && <div className="h-8" />} {/* Invisible element for intersection observer */}
               </div>
             )}
 
-            {isAuthenticated && !hasMore && feedData.length > 0 && (
+            {isAuthenticated && !hasNextPage && displayData.length > 0 && (
               <div className="text-center py-8">
                 <p className="text-gray-500">No more posts to load</p>
               </div>
