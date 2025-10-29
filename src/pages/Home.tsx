@@ -163,30 +163,40 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
   const loadingRef = useRef<HTMLDivElement | null>(null);
   const fetchNextPageRef = useRef(fetchNextPage);
+  const hasNextPageRef = useRef(hasNextPage);
+  const isFetchingNextPageRef = useRef(isFetchingNextPage);
 
-  // Update the ref when fetchNextPage changes
+  // Update refs when values change
   useEffect(() => {
     fetchNextPageRef.current = fetchNextPage;
   }, [fetchNextPage]);
 
+  useEffect(() => {
+    hasNextPageRef.current = hasNextPage;
+  }, [hasNextPage]);
+
+  useEffect(() => {
+    isFetchingNextPageRef.current = isFetchingNextPage;
+  }, [isFetchingNextPage]);
+
   // Stable callback for intersection observer
   const handleIntersection = useCallback((entries: IntersectionObserverEntry[]) => {
     // If the loading element is visible and we can load more
-    if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
+    if (entries[0].isIntersecting && hasNextPageRef.current && !isFetchingNextPageRef.current) {
       fetchNextPageRef.current(); // Load more posts
     }
-  }, [hasNextPage, isFetchingNextPage]);
+  }, []); // No dependencies - use refs for current values
 
   // Set up intersection observer for infinite scroll
   useEffect(() => {
     const observer = new IntersectionObserver(handleIntersection, {
-      threshold: 0.5 // Trigger when 50% of the loading element is visible
+      threshold: 0.1 // Lower threshold for better detection
     });
 
     observerRef.current = observer;
 
-    // Observe the loading element if it exists
-    if (loadingRef.current) {
+    // Observe the 4th last post if it exists and we have more than 4 posts
+    if (loadingRef.current && displayData.length >= 4) {
       observer.observe(loadingRef.current);
     }
 
@@ -195,7 +205,7 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
         observerRef.current.disconnect();
       }
     };
-  }, [handleIntersection]); // Only depend on the stable callback
+  }, [handleIntersection, displayData.length]); // Re-run when displayData length changes
 
   // Check if user is viewing posts and prompt login
   useEffect(() => {
@@ -279,9 +289,10 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
 
             {!error && displayData.length > 0 && (
               <div className="space-y-0">
-                {displayData.map((post) => (
+                {displayData.map((post, index) => (
                   <div
                     key={post.id}
+                    ref={index === displayData.length - 4 ? loadingRef : undefined} // Observe 4th last post
                     className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 cursor-pointer mb-4 md:mb-6 md:rounded-lg md:border md:shadow-sm"
                     onClick={() => handlePostClick(post.id)}
                   >
@@ -449,14 +460,10 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
               </div>
             )}
             
-            {/* Infinite scroll loading indicator */}
-            {isAuthenticated && hasNextPage && (
-              <div 
-                ref={loadingRef}
-                className="flex justify-center py-8"
-              >
-                {isFetchingNextPage && <p className="text-gray-500">Loading more posts...</p>}
-                {!isFetchingNextPage && <div className="h-8" />} {/* Invisible element for intersection observer */}
+            {/* Show loading indicator when fetching next page */}
+            {isAuthenticated && hasNextPage && isFetchingNextPage && (
+              <div className="flex justify-center py-8">
+                <p className="text-gray-500">Loading more posts...</p>
               </div>
             )}
 
