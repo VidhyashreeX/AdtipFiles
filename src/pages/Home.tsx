@@ -686,7 +686,7 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
                       
                       {/* Likes count */}
                       <div className="font-semibold text-sm text-gray-900 dark:text-gray-100 mb-1">
-                        {post.likeCount.toLocaleString()} likes
+                        {(post.likeCount || 0).toLocaleString()} likes
                       </div>
                       
                       {/* Caption */}
@@ -696,7 +696,7 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
                       </div>
                       
                       {/* View comments */}
-                      {post.commentCount > 0 && (
+                      {(post.commentCount || 0) > 0 && (
                         <button 
                           onClick={(e) => {
                             e.stopPropagation();
@@ -704,7 +704,7 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
                           }}
                           className="text-sm text-gray-500 dark:text-gray-400 mt-1"
                         >
-                          View all {post.commentCount} comments
+                          View all {(post.commentCount || 0)} comments
                         </button>
                       )}
                       
