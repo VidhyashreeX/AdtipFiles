@@ -45,13 +45,26 @@ export const usePosts = (params?: {
   return useInfiniteQuery({
     queryKey: postKeys.list(params || {}),
     queryFn: async ({ pageParam = 1 }) => {
-      const response = await api.post('/api/list-posts', {
-        category: params?.category ? parseInt(params.category) : 0,
-        page: pageParam as number,
-        limit: params?.limit || 10,
-        loggined_user_id: params?.user_id || 0
-      });
-      return response.data;
+      const isLoggedIn = !!localStorage.getItem("UserLoggedIn");
+      if (isLoggedIn) {
+        const response = await api.post('/api/list-posts', {
+          category: params?.category ? parseInt(params.category) : 0,
+          page: pageParam as number,
+          limit: params?.limit || 10,
+          loggined_user_id: params?.user_id || 0
+        });
+        return response.data;
+      } else {
+        // For guests, use the public API
+        const response = await api.get('/api/list-premium-posts', {
+          params: {
+            category: params?.category ? parseInt(params.category) : undefined,
+            page: pageParam as number,
+            limit: params?.limit || 10
+          }
+        });
+        return response.data;
+      }
     },
     getNextPageParam: (lastPage) => {
       const pagination = lastPage.pagination;

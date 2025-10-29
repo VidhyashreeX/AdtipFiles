@@ -108,6 +108,7 @@ const [selectedShort, setSelectedShort] = useState<{ id: number } | null>(null);
         const rawShorts = Array.isArray(page.data) ? page.data : [];
         return rawShorts
           .map((s: any): TipShort | null => {
+            if (!s || typeof s !== 'object') return null;
             if (!s.video_link) return null;
             return {
               id: s.id,
