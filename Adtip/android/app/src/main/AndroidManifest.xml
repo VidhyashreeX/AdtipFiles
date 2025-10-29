@@ -85,6 +85,7 @@
         android:theme="@style/AppTheme"
         android:supportsRtl="true"
         android:usesCleartextTraffic="true"
+        android:enableOnBackInvokedCallback="true"
         tools:replace="android:allowBackup">
 
         <meta-data
