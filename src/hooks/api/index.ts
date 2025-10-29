@@ -3,3 +3,4 @@ export * from './posts';
 export * from './users';
 export * from './products';
 export * from './ads';
+export * from './videos';

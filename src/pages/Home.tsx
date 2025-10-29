@@ -109,8 +109,9 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
+    refetch,
   } = usePosts({
-    category: categoryId,
+    category: categoryId.toString(),
     user_id: user?.id || 0,
     limit: 5,
   });
@@ -152,7 +153,7 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
         userId,
         token,
       });
-      setError("Please log in to view posts");
+      // Error handling is now managed by React Query
     }
   }, [isAuthenticated, userId, token]);
 
@@ -190,7 +191,7 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
   useEffect(() => {
     if (!isAuthenticated && postViewCount >= 2) {
       setShowLoginPrompt(true);
-    }2
+    }
   }, [postViewCount, isAuthenticated]);
 
   const handlePostClick = (id: number) => {

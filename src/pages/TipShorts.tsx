@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { useSidebar } from "../contexts/SidebarContext";
 import ShareModal from "@/components/ShareModal";
 import { useAuthModal } from "../contexts/AuthModalContext";
+import { useShortsInfinite } from "../hooks/api";
 
 
 interface TipShort {
@@ -85,6 +86,50 @@ const TipShorts = () => {
   }, [watchedCount]);
 const [selectedShort, setSelectedShort] = useState<{ id: number } | null>(null);
 
+  // React Query hook for shorts data
+  const {
+    data: shortsData,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading,
+    error: queryError
+  } = useShortsInfinite({
+    user_id: localStorage.getItem("userId") ? Number(localStorage.getItem("userId")) : undefined,
+    shortId: shortIdParam
+  });
+
+  // Transform React Query data to shorts format
+  const transformedShorts = React.useMemo(() => {
+    if (!shortsData?.pages) return [];
+
+    return shortsData.pages.flatMap(page => {
+      const rawShorts = Array.isArray(page.data) ? page.data : [];
+      return rawShorts
+        .map((s: any): TipShort | null => {
+          if (!s.video_link) return null;
+          return {
+            id: s.id,
+            user: {
+              name: s.channelName || "Unknown",
+              avatar: s.channel_profile && s.channel_profile !== "null" ? s.channel_profile : "/placeholder.svg",
+              isVerified: false,
+            },
+            content: {
+              video: s.video_link,
+              description: s.video_desciption || s.name || "No description",
+              likes: Number(s.total_likes || 0),
+              comments: Number(s.total_comments || 0),
+              shares: 0,
+              thumbnail: s.video_Thumbnail || s.channel_profile || "/placeholder.svg",
+            },
+            musicName: s.name || "Unknown",
+          };
+        })
+        .filter((s): s is TipShort => s !== null);
+    });
+  }, [shortsData]);
+
 
 
    const [showRewardPopup, setShowRewardPopup] = useState(false);
@@ -128,133 +173,21 @@ const handleShare = (short) => {
     setSidebarWidth(isCollapsed ? 64 : 256);
   }, [isCollapsed, isMobile]);
 
-const fetchShorts = useCallback(
-  async (pageNum: number) => {
-    setLoading(true);
-    setError(null);
-
-    const isPublic = !isAuthenticated && !localStorage.getItem("UserLoggedIn");
-    const userId = localStorage.getItem("userId") || "50816";
-
-    try {
-      let normalized: TipShort[] = [];
-
-      if (shortIdParam) {
-        // Deep link mode — one short only
-        const res = await fetch(`${BASE_URL}/getShortById/${userId}/${shortIdParam}`);
-        if (!res.ok) throw new Error(`Failed to load short: ${res.status}`);
-        const data = await res.json();
-        const s = data.data?.[0];
-        if (s && s.video_link) {
-          normalized = [
-            {
-              id: s.id,
-              user: {
-                name: s.channelName || "Unknown",
-                avatar: s.channel_profile && s.channel_profile !== "null" ? s.channel_profile : "/placeholder.svg",
-                isVerified: false,
-              },
-              content: {
-                video: s.video_link,
-                description: s.video_desciption || s.name || "No description",
-                likes: Number(s.total_likes || 0),
-                comments: Number(s.total_comments || 0),
-                shares: 0,
-                thumbnail: s.video_Thumbnail || s.channel_profile || "/placeholder.svg",
-              },
-              musicName: s.name || "Unknown",
-            },
-          ];
-        }
-        setHasMore(false); // no pagination for single mode
-      } else {
-        // Normal paginated feed
-        const apiUrl = isPublic
-          ? `${BASE_URL}/getpublicshots`
-          : `${BASE_URL}/getshots/${userId}`;
-
-        const res = await fetch(apiUrl);
-        if (!res.ok) throw new Error(`Failed to load tip shorts: ${res.status}`);
-        const data = await res.json();
-        const rawShorts = Array.isArray(data.data) ? data.data : [];
-
-        normalized = rawShorts
-          .map((s: any): TipShort | null => {
-            if (!s.video_link) return null;
-            return {
-              id: s.id,
-              user: {
-                name: s.channelName || "Unknown",
-                avatar: s.channel_profile && s.channel_profile !== "null" ? s.channel_profile : "/placeholder.svg",
-                isVerified: false,
-              },
-              content: {
-                video: s.video_link,
-                description: s.video_desciption || s.name || "No description",
-                likes: Number(s.total_likes || 0),
-                comments: Number(s.total_comments || 0),
-                shares: 0,
-                thumbnail: s.video_Thumbnail || s.channel_profile || "/placeholder.svg",
-              },
-              musicName: s.name || "Unknown",
-            };
-          })
-          .filter((s): s is TipShort => s !== null);
-
-        // Simulate pagination
-        const start = (pageNum - 1) * SHORTS_PAGE_SIZE;
-        const end = start + SHORTS_PAGE_SIZE;
-        const pageShorts = normalized.slice(start, end);
-        normalized = pageNum === 1 ? pageShorts : [...shorts, ...pageShorts];
-        setHasMore(pageShorts.length > 0);
-      }
-
-      setShorts(normalized);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unknown error");
-    } finally {
-      setLoading(false);
-    }
-  },
-  [isAuthenticated, BASE_URL, shortIdParam]
-);
-
-
-  // --- Initial Fetch & Pagination ---
+  // Infinite scroll loader observer
   useEffect(() => {
-    fetchShorts(1);
-    setPage(1);
-  }, [fetchShorts]);
-
-  // --- Infinite Scroll Loader Observer ---
-  useEffect(() => {
-    if (!hasMore || loading) return;
+    if (!hasNextPage || isFetchingNextPage) return;
     if (loaderObserverRef.current) loaderObserverRef.current.disconnect();
     loaderObserverRef.current = new window.IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && hasMore && !loading) {
-          fetchShorts(page + 1);
-          setPage(p => p + 1);
+        if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
+          fetchNextPage();
         }
       },
       { root: shortsListRef.current, threshold: 0.8 }
     );
     if (loaderRef.current) loaderObserverRef.current.observe(loaderRef.current);
     return () => loaderObserverRef.current?.disconnect();
-  }, [hasMore, loading, page, fetchShorts]);
-
-  // --- Preemptive Fetch: Fetch next set when user reaches 2nd last short ---
-  useEffect(() => {
-    if (
-      hasMore &&
-      !loading &&
-      shorts.length > 0 &&
-      currentIndex >= shorts.length - 2
-    ) {
-      fetchShorts(page + 1);
-      setPage(p => p + 1);
-    }
-  }, [currentIndex, shorts.length, hasMore, loading, page, fetchShorts]);
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   // --- Video Play/Pause & Preloading Logic ---
   const playVideo = useCallback((id: number) => {
@@ -294,7 +227,7 @@ const fetchShorts = useCallback(
 
   const preloadNext = useCallback((idx: number) => {
     for (let i = 1; i <= PRELOAD_COUNT; i++) {
-      const nextShort = shorts[idx + i];
+      const nextShort = transformedShorts[idx + i];
       if (nextShort) {
         const video = videoRefs.current.get(nextShort.id);
         if (video && video.preload !== "auto") {
@@ -304,17 +237,17 @@ const fetchShorts = useCallback(
         }
       }
     }
-  }, [shorts]);
+  }, [transformedShorts]);
 
   // --- Video Play/Pause/Scroll Snap Observer ---
   useEffect(() => {
-    if (!shorts.length || !shortsListRef.current) return;
+    if (!transformedShorts.length || !shortsListRef.current) return;
     if (observerRef.current) observerRef.current.disconnect();
     observerRef.current = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
           const videoId = Number(entry.target.getAttribute("data-video-id"));
-          const idx = shorts.findIndex(s => s.id === videoId);
+          const idx = transformedShorts.findIndex(s => s.id === videoId);
           const video = videoRefs.current.get(videoId);
           if (entry.isIntersecting && entry.intersectionRatio >= 0.95) {
             setCurrentIndex(idx);
@@ -346,20 +279,20 @@ const fetchShorts = useCallback(
       },
       { root: shortsListRef.current, threshold: 0.95 }
     );
-    shorts.forEach(short => {
+    transformedShorts.forEach(short => {
       const video = videoRefs.current.get(short.id);
       if (video) observerRef.current!.observe(video);
     });
     return () => observerRef.current?.disconnect();
-  }, [shorts, isGlobalMuted, isGlobalPlaying, preloadNext]);
+  }, [transformedShorts, isGlobalMuted, isGlobalPlaying, preloadNext]);
 
   // --- Fullscreen Toggle ---
   const toggleFullscreen = () => {
     const element = shortsListRef.current;
-    if (!element || !shorts[currentIndex]) return;
+    if (!element || !transformedShorts[currentIndex]) return;
     if (!document.fullscreenElement) {
       // Entering fullscreen: always scroll to currentIndex
-      const currentShortElement = shortContainerRefs.current.get(shorts[currentIndex].id);
+      const currentShortElement = shortContainerRefs.current.get(transformedShorts[currentIndex].id);
       if (currentShortElement) {
         currentShortElement.scrollIntoView({ behavior: 'instant', block: 'start' });
         const requestFs = async () => {
@@ -381,8 +314,8 @@ const fetchShorts = useCallback(
     const handler = () => {
       setIsFullscreen(!!document.fullscreenElement);
       // On exiting fullscreen, always scroll to the currentIndex short
-      if (!document.fullscreenElement && shortsListRef.current && shorts.length > 0) {
-        const currentShortElement = shortContainerRefs.current.get(shorts[currentIndex]?.id);
+      if (!document.fullscreenElement && shortsListRef.current && transformedShorts.length > 0) {
+        const currentShortElement = shortContainerRefs.current.get(transformedShorts[currentIndex]?.id);
         if (currentShortElement) {
           requestAnimationFrame(() => {
             currentShortElement.scrollIntoView({ behavior: 'instant', block: 'start' });
@@ -398,7 +331,7 @@ const fetchShorts = useCallback(
       document.removeEventListener("webkitfullscreenchange", handler);
       document.removeEventListener("msfullscreenchange", handler);
     };
-  }, [shorts, currentIndex]);
+  }, [transformedShorts, currentIndex]);
 
   // --- Like/Dislike Toggles ---
   const toggleLike = (id: number) => setLiked((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -408,7 +341,7 @@ const fetchShorts = useCallback(
     setIsGlobalPlaying((prev) => {
       const newState = !prev;
       // Pause or play the current video
-      const currentId = shorts[currentIndex]?.id;
+      const currentId = transformedShorts[currentIndex]?.id;
       const video = videoRefs.current.get(currentId);
       if (video) {
         if (newState) {
@@ -421,13 +354,13 @@ const fetchShorts = useCallback(
       }
       return newState;
     });
-  }, [shorts, currentIndex]);
+  }, [transformedShorts, currentIndex]);
 
   const handleMute = useCallback(() => {
     setIsGlobalMuted((prev) => {
       const newState = !prev;
       // Mute or unmute the current video
-      const currentId = shorts[currentIndex]?.id;
+      const currentId = transformedShorts[currentIndex]?.id;
       const video = videoRefs.current.get(currentId);
       if (video) {
         video.muted = newState;
@@ -435,7 +368,7 @@ const fetchShorts = useCallback(
       }
       return newState;
     });
-  }, [shorts, currentIndex]);
+  }, [transformedShorts, currentIndex]);
 
   // --- Keyboard Shortcuts ---
   useEffect(() => {
@@ -454,25 +387,25 @@ const fetchShorts = useCallback(
       }
       if (e.key === 'ArrowDown') {
         e.preventDefault();
-        if (currentIndex < shorts.length - 1) {
+        if (currentIndex < transformedShorts.length - 1) {
           const nextIndex = currentIndex + 1;
           setCurrentIndex(nextIndex);
           setTimeout(() => {
-            const nextShortElement = shortContainerRefs.current.get(shorts[nextIndex]?.id);
+            const nextShortElement = shortContainerRefs.current.get(transformedShorts[nextIndex]?.id);
             if (nextShortElement) {
               nextShortElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }
-            const nextVideo = videoRefs.current.get(shorts[nextIndex]?.id);
+            const nextVideo = videoRefs.current.get(transformedShorts[nextIndex]?.id);
             if (nextVideo) {
               if (isGlobalPlaying) {
                 nextVideo.play();
-                setIsPlaying(prev => ({ ...prev, [shorts[nextIndex].id]: true }));
+                setIsPlaying(prev => ({ ...prev, [transformedShorts[nextIndex].id]: true }));
               } else {
                 nextVideo.pause();
-                setIsPlaying(prev => ({ ...prev, [shorts[nextIndex].id]: false }));
+                setIsPlaying(prev => ({ ...prev, [transformedShorts[nextIndex].id]: false }));
               }
               nextVideo.muted = isGlobalMuted;
-              setIsMuted(prev => ({ ...prev, [shorts[nextIndex].id]: isGlobalMuted }));
+              setIsMuted(prev => ({ ...prev, [transformedShorts[nextIndex].id]: isGlobalMuted }));
             }
           }, 0);
         }
@@ -483,21 +416,21 @@ const fetchShorts = useCallback(
           const prevIndex = currentIndex - 1;
           setCurrentIndex(prevIndex);
           setTimeout(() => {
-            const prevShortElement = shortContainerRefs.current.get(shorts[prevIndex]?.id);
+            const prevShortElement = shortContainerRefs.current.get(transformedShorts[prevIndex]?.id);
             if (prevShortElement) {
               prevShortElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }
-            const prevVideo = videoRefs.current.get(shorts[prevIndex]?.id);
+            const prevVideo = videoRefs.current.get(transformedShorts[prevIndex]?.id);
             if (prevVideo) {
               if (isGlobalPlaying) {
                 prevVideo.play();
-                setIsPlaying(prev => ({ ...prev, [shorts[prevIndex].id]: true }));
+                setIsPlaying(prev => ({ ...prev, [transformedShorts[prevIndex].id]: true }));
               } else {
                 prevVideo.pause();
-                setIsPlaying(prev => ({ ...prev, [shorts[prevIndex].id]: false }));
+                setIsPlaying(prev => ({ ...prev, [transformedShorts[prevIndex].id]: false }));
               }
               prevVideo.muted = isGlobalMuted;
-              setIsMuted(prev => ({ ...prev, [shorts[prevIndex].id]: isGlobalMuted }));
+              setIsMuted(prev => ({ ...prev, [transformedShorts[prevIndex].id]: isGlobalMuted }));
             }
           }, 0);
         }
@@ -505,7 +438,7 @@ const fetchShorts = useCallback(
     };
     window.addEventListener('keydown', keyListener);
     return () => window.removeEventListener('keydown', keyListener);
-  }, [toggleFullscreen, shorts, currentIndex, handleMute, handlePlayPause, isGlobalMuted, isGlobalPlaying]);
+  }, [toggleFullscreen, transformedShorts, currentIndex, handleMute, handlePlayPause, isGlobalMuted, isGlobalPlaying]);
 
   // --- Update localStorage when global mute/play changes ---
   useEffect(() => {
@@ -516,8 +449,8 @@ const fetchShorts = useCallback(
   }, [isGlobalPlaying]);
 
   // --- Render Logic ---
-  if (loading && shorts.length === 0) return <div className="flex items-center justify-center h-screen bg-card text-foreground">Loading...</div>;
-  if (error) return <div className="flex items-center justify-center h-screen bg-card text-red-500">{error}</div>;
+  if (isLoading && shorts.length === 0) return <div className="flex items-center justify-center h-screen bg-card text-foreground">Loading...</div>;
+  if (queryError) return <div className="flex items-center justify-center h-screen bg-card text-red-500">{queryError.message || 'Error loading shorts'}</div>;
 
   return (
     <>
@@ -572,7 +505,7 @@ const fetchShorts = useCallback(
             maxWidth: '100vw',
           }}
         >
-          {shorts.map((short, idx) => (
+          {transformedShorts.map((short, idx) => (
             <div
               key={short.id}
               ref={el => el && shortContainerRefs.current.set(short.id, el)}
@@ -730,9 +663,9 @@ onClick={() => {
             </div>
           ))}
           {/* Loader at the end for infinite scroll */}
-          {hasMore && (
+          {hasNextPage && (
             <div ref={loaderRef} className="flex items-center justify-center w-full h-32 text-muted-foreground text-lg animate-pulse">
-              Loading more shorts...
+              {isFetchingNextPage ? 'Loading more shorts...' : 'Load more shorts'}
             </div>
           )}
         </div>

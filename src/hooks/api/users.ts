@@ -11,6 +11,10 @@ export const userKeys = {
   wallet: (id: number) => [...userKeys.all, 'wallet', id] as const,
   followers: (id: number) => [...userKeys.all, 'followers', id] as const,
   following: (id: number) => [...userKeys.all, 'following', id] as const,
+  channel: (id: number) => [...userKeys.all, 'channel', id] as const,
+  analytics: (id: number) => [...userKeys.all, 'analytics', id] as const,
+  videos: (id: number) => [...userKeys.all, 'videos', id] as const,
+  shorts: (id: number) => [...userKeys.all, 'shorts', id] as const,
 };
 
 // API base URL
@@ -145,6 +149,54 @@ export const useFollowUser = () => {
       queryClient.invalidateQueries({ queryKey: userKeys.followers(targetUserId) });
       queryClient.invalidateQueries({ queryKey: userKeys.following(Number(localStorage.getItem('UserId'))) });
     },
+  });
+};
+
+// Get user channel data
+export const useUserChannel = (userId: number, enabled = true) => {
+  return useQuery({
+    queryKey: userKeys.channel(userId),
+    queryFn: async () => {
+      const response = await api.get<ApiResponse<any>>(`/api/user/${userId}/channel`);
+      return response.data.data;
+    },
+    enabled: enabled && !!userId,
+  });
+};
+
+// Get user analytics/stats
+export const useUserAnalytics = (channelId: number, enabled = true) => {
+  return useQuery({
+    queryKey: userKeys.analytics(channelId),
+    queryFn: async () => {
+      const response = await api.get<ApiResponse<any>>(`/api/analytics/${channelId}`);
+      return response.data.data;
+    },
+    enabled: enabled && !!channelId,
+  });
+};
+
+// Get user videos
+export const useUserVideos = (userId: number, enabled = true) => {
+  return useQuery({
+    queryKey: userKeys.videos(userId),
+    queryFn: async () => {
+      const response = await api.get<ApiResponse<any[]>>(`/api/content/user/${userId}/videos`);
+      return response.data.data || [];
+    },
+    enabled: enabled && !!userId,
+  });
+};
+
+// Get user shorts
+export const useUserShorts = (userId: number, enabled = true) => {
+  return useQuery({
+    queryKey: userKeys.shorts(userId),
+    queryFn: async () => {
+      const response = await api.get<ApiResponse<any[]>>(`/api/content/user/${userId}/shorts`);
+      return response.data.data || [];
+    },
+    enabled: enabled && !!userId,
   });
 };
 

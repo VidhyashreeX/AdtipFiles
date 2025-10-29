@@ -19,6 +19,14 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { useAuthModal } from "../contexts/AuthModalContext";
+import {
+  useCurrentUser,
+  useUserChannel,
+  useUserAnalytics,
+  useUserVideos,
+  useUserShorts,
+  useUserPosts
+} from "../hooks/api";
 
 interface UserChannel {
   id: number;
@@ -36,109 +44,56 @@ const Profile = () => {
   const { user, isAuthenticated, logout } = useAuth();
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
-  const [userChannel, setUserChannel] = useState<UserChannel | null>(null);
-  const [userStats, setUserStats] = useState({
-    totalViews: 0,
-    totalViewEarnings: 0,
-    paidVideoEarnings: 0,
-    totalPaidEarnings: 0,
-    totalEarnings: 0,
-    totalWithdrawn: 0,
-    availableBalance: 0,
-    withdrawableBalance: 0
-  });
-  const [userVideos, setUserVideos] = useState<any[]>([]);
-  const [userShorts, setUserShorts] = useState<any[]>([]);
-  const [userPosts, setUserPosts] = useState<any[]>([]);
-  const [allContent, setAllContent] = useState<any[]>([]);
-  const [isLoadingVideos, setIsLoadingVideos] = useState(false);
-  const [isLoadingAnalytics, setIsLoadingAnalytics] = useState(false);
 
-  // Define fetchAllContent function to match mobile app behavior
-  const fetchAllContent = async () => {
-    if (!user?.id) return;
-    
-    setIsLoadingVideos(true);
-    try {
-      console.log('🔄 Refreshing all user content (posts, videos, shorts)...');
-      
-      // Fetch all content types like mobile app
-      const [postsResponse, videosResponse, shortsResponse] = await Promise.allSettled([
-        userAPI.getUserPosts(String(user.id), 1, 100, user.id),
-        contentAPI.getUserVideos(String(user.id)),
-        contentAPI.getUserShorts(String(user.id))
-      ]);
+  // React Query hooks for data fetching
+  const { data: currentUser } = useCurrentUser();
+  const { data: userChannel } = useUserChannel(user?.id || 0, !!user?.id);
+  const { data: userAnalytics } = useUserAnalytics(userChannel?.id || userChannel?.channelId || 0, !!userChannel?.id || !!userChannel?.channelId);
+  const { data: userVideos = [] } = useUserVideos(user?.id || 0, !!user?.id);
+  const { data: userShorts = [] } = useUserShorts(user?.id || 0, !!user?.id);
+  const { data: userPostsData } = useUserPosts(user?.id || 0, { limit: 100 });
 
-      // Handle posts
-      let posts: any[] = [];
-      if (postsResponse.status === 'fulfilled' && postsResponse.value.data?.data) {
-        posts = postsResponse.value.data.data.map((post: any) => ({
-          id: post.id,
-          media_url: post.media_url,
-          media_type: post.media_type || 'image',
-          content: post.content,
-          likeCount: post.likeCount || post.like_count || 0,
-          commentCount: post.commentCount || post.comment_count || 0,
-          created_at: post.created_at,
-          is_liked: post.is_liked,
-          user_id: post.user_id,
-          is_premium: post.is_premium,
-          contentType: 'post'
-        }));
-        console.log('📝 Loaded posts:', posts.length);
-        setUserPosts(posts);
-      } else {
-        console.warn('Failed to fetch posts:', postsResponse);
-      }
+  // Transform posts data from React Query
+  const userPosts = userPostsData?.pages?.flatMap(page => page.data || []) || [];
 
-      // Handle videos
-      let videos: any[] = [];
-      if (videosResponse.status === 'fulfilled' && videosResponse.value.data.status) {
-        videos = (videosResponse.value.data.data || []).map((video: any) => ({
-          ...video,
-          contentType: 'video',
-          media_type: 'video',
-          media_url: video.video_link || video.media_url
-        }));
-        console.log('📹 Loaded videos:', videos.length);
-        setUserVideos(videos);
-      } else {
-        console.warn('Failed to fetch videos:', videosResponse);
-      }
+  // Combine all content and sort by creation date (newest first) like mobile app
+  const allContent = React.useMemo(() => {
+    const posts = userPosts.map((post: any) => ({
+      id: post.id,
+      media_url: post.media_url,
+      media_type: post.media_type || 'image',
+      content: post.content,
+      likeCount: post.likeCount || post.like_count || 0,
+      commentCount: post.commentCount || post.comment_count || 0,
+      created_at: post.created_at,
+      is_liked: post.is_liked,
+      user_id: post.user_id,
+      is_premium: post.is_premium,
+      contentType: 'post'
+    }));
 
-      // Handle shorts
-      let shorts: any[] = [];
-      if (shortsResponse.status === 'fulfilled' && shortsResponse.value.data.status) {
-        shorts = (shortsResponse.value.data.data || []).map((short: any) => ({
-          ...short,
-          contentType: 'short',
-          media_type: 'video',
-          media_url: short.video_link || short.media_url
-        }));
-        console.log('🎬 Loaded shorts:', shorts.length);
-        setUserShorts(shorts);
-      } else {
-        console.warn('Failed to fetch shorts:', shortsResponse);
-      }
+    const videos = userVideos.map((video: any) => ({
+      ...video,
+      contentType: 'video',
+      media_type: 'video',
+      media_url: video.video_link || video.media_url
+    }));
 
-      // Combine all content and sort by creation date (newest first) like mobile app
-      const combinedContent = [...posts, ...videos, ...shorts].sort((a, b) => {
-        const dateA = new Date(a.created_at || 0).getTime();
-        const dateB = new Date(b.created_at || 0).getTime();
-        return dateB - dateA; // Newest first
-      });
-      
-      console.log('🔄 Combined content total:', combinedContent.length);
-      setAllContent(combinedContent);
-      
-    } catch (error) {
-      console.error("Error fetching user content:", error);
-    } finally {
-      setIsLoadingVideos(false);
-    }
-  };
+    const shorts = userShorts.map((short: any) => ({
+      ...short,
+      contentType: 'short',
+      media_type: 'video',
+      media_url: short.video_link || short.media_url
+    }));
 
-  // Check authentication and fetch user data
+    return [...posts, ...videos, ...shorts].sort((a, b) => {
+      const dateA = new Date(a.created_at || 0).getTime();
+      const dateB = new Date(b.created_at || 0).getTime();
+      return dateB - dateA; // Newest first
+    });
+  }, [userPosts, userVideos, userShorts]);
+
+  // Check authentication
   useEffect(() => {
     const token = localStorage.getItem("UserLoggedIn");
 
@@ -147,169 +102,7 @@ const Profile = () => {
       openLoginModal();
       return;
     }
-
-    const fetchUserData = async () => {
-      try {
-        console.log('🔄 Fetching consolidated profile data like mobile app...');
-        
-        // Use consolidated profile API first (matches mobile app)
-        try {
-          const consolidatedResponse = await userAPI.getConsolidatedProfile(String(user.id), user.id);
-          
-          if (consolidatedResponse.data?.status && consolidatedResponse.data?.data) {
-            const profileData = consolidatedResponse.data.data;
-            console.log('📊 Consolidated profile data:', profileData);
-            
-            // Set user channel data from consolidated response
-            if (profileData.channel) {
-              setUserChannel({
-                id: profileData.channel.id || profileData.channel.channelId,
-                name: profileData.channel.channelName || profileData.channel.name,
-                subscribers: profileData.channel.totalSubscribers || profileData.social_stats?.followers_count || 0,
-                followers_count: profileData.social_stats?.followers_count || 0,
-                following_count: profileData.social_stats?.following_count || 0,
-                posts_count: profileData.posts?.length || 0
-              });
-            }
-            
-            // Set posts from consolidated response
-            if (profileData.posts) {
-              // Transform posts data to match expected format
-              const transformedPosts = profileData.posts.map((post: any) => ({
-                id: post.id,
-                media_url: post.media_url,
-                media_type: post.media_type,
-                content: post.content,
-                likeCount: post.likeCount || post.like_count || 0,
-                commentCount: post.commentCount || post.comment_count || 0,
-                created_at: post.created_at,
-                is_liked: post.is_liked,
-                user_id: post.user_id
-              }));
-              // For now, we'll treat posts as user content
-            }
-            
-            // Fetch analytics for the channel if available
-            if (profileData.channel?.id || profileData.channel?.channelId) {
-              const channelId = profileData.channel.id || profileData.channel.channelId;
-              try {
-                const analyticsResponse = await userAPI.getAnalytics(String(channelId));
-                if (analyticsResponse.data.status) {
-                  console.log('📊 Analytics data:', analyticsResponse.data.data);
-                  setUserStats(analyticsResponse.data.data);
-                }
-              } catch (analyticsError) {
-                console.warn('Failed to fetch analytics:', analyticsError);
-              }
-            }
-            
-            return; // Success with consolidated API
-          }
-        } catch (consolidatedError) {
-          console.warn('Consolidated profile API failed, falling back to individual calls:', consolidatedError);
-        }
-        
-        // Fallback: Use the comprehensive data fetch method
-        const userData = await userAPI.getUserCompleteData(String(user.id));
-        
-        console.log('📊 Complete user data (fallback):', userData);
-
-        if (userData.channel) {
-          setUserChannel({
-            id: userData.channel.id || userData.channel.channelId,
-            name: userData.channel.channelName || userData.channel.name,
-            subscribers: userData.channel.totalSubscribers || userData.channel.followers_count || 0,
-            followers_count: userData.channel.totalSubscribers || userData.channel.followers_count || 0,
-            following_count: userData.channel.following_count || 0,
-            posts_count: userData.posts?.length || 0
-          });
-
-          // Fetch analytics for the channel
-          const channelId = userData.channel.id || userData.channel.channelId;
-          if (channelId) {
-            try {
-              const analyticsResponse = await userAPI.getAnalytics(String(channelId));
-              if (analyticsResponse.data.status) {
-                console.log('📊 Analytics data:', analyticsResponse.data.data);
-                setUserStats(analyticsResponse.data.data);
-              }
-            } catch (analyticsError) {
-              console.warn('Failed to fetch analytics:', analyticsError);
-            }
-          }
-        }
-
-        // Set video and content data
-        setUserVideos(userData.videos || []);
-        setUserShorts(userData.shorts || []);
-
-        if (userData.errors.length > 0) {
-          console.warn('Some data failed to load:', userData.errors);
-        }
-
-      } catch (error) {
-        console.error("Error fetching user data:", error);
-        // If we get a 401 unauthorized error, redirect to login
-        if (axios.isAxiosError(error) && error.response?.status === 401) {
-          openLoginModal();
-        }
-      }
-    };
-
-    fetchUserData();
-    // Also fetch all content when component first loads
-    if (user?.id) {
-      fetchAllContent();
-    }
   }, [isAuthenticated, user, navigate]);
-
-  // Fetch all content when user changes (e.g., after upload) and listen for live updates
-  useEffect(() => {
-    if (user?.id) {
-      fetchAllContent();
-    }
-
-    // Listen for content upload events to refresh immediately
-    const handleContentUploaded = () => {
-      console.log('🔄 Content uploaded event detected in Profile, refreshing...');
-      if (user?.id) {
-        fetchAllContent();
-      }
-    };
-
-    const handleFocus = () => {
-      console.log('🔄 Window focused in Profile, refreshing content...');
-      if (user?.id) {
-        fetchAllContent();
-      }
-    };
-
-    const handleVisibilityChange = () => {
-      if (!document.hidden && user?.id) {
-        console.log('🔄 Page became visible in Profile, refreshing content...');
-        fetchAllContent();
-      }
-    };
-
-    // Listen for multiple events to ensure real-time updates
-    window.addEventListener('contentUploaded', handleContentUploaded);
-    window.addEventListener('focus', handleFocus);
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    
-    // Set up periodic refresh every 45 seconds when page is visible
-    const refreshInterval = setInterval(() => {
-      if (!document.hidden && user?.id) {
-        fetchAllContent();
-      }
-    }, 45000);
-
-    return () => {
-      window.removeEventListener('contentUploaded', handleContentUploaded);
-      window.removeEventListener('focus', handleFocus);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      clearInterval(refreshInterval);
-    };
-  }, [user?.id]);
 
 
    const handleLogout = async () => {
@@ -432,21 +225,9 @@ const Profile = () => {
                          <TabsContent value="videos">
                <div className="flex justify-between items-center mb-4">
                  <h3 className="text-lg font-semibold">Your Videos</h3>
-                 <Button
-                   variant="outline"
-                   size="sm"
-                   onClick={fetchAllContent}
-                   disabled={isLoadingVideos}
-                 >
-                   {isLoadingVideos ? 'Refreshing...' : 'Refresh'}
-                 </Button>
                </div>
                <div className="grid grid-cols-3 gap-1 mt-4">
-                 {isLoadingVideos ? (
-                   <div className="col-span-3 text-center py-10 text-gray-400">
-                     Loading videos...
-                   </div>
-                 ) : userVideos.length === 0 && userShorts.length === 0 ? (
+                 {userVideos.length === 0 && userShorts.length === 0 ? (
                    <div className="col-span-3 text-center py-10 text-gray-400">
                      No videos yet. Upload your first video to get started!
                    </div>
@@ -577,8 +358,8 @@ const Profile = () => {
                  <p className="text-sm text-gray-600">Track your channel performance and earnings</p>
                </div>
                <ChannelAnalytics
-                 analytics={userStats}
-                 isLoading={isLoadingAnalytics}
+                 analytics={userAnalytics}
+                 isLoading={false}
                  demoMode={true}
                  onWithdraw={(amount) => {
                    console.log('Withdrawing amount:', amount);

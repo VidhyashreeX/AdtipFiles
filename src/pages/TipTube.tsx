@@ -3,6 +3,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import ShareModal from "@/components/ShareModal";
 import { Play, Clock, Eye, MoreVertical } from "lucide-react";
+import { useVideos, useShorts } from "@/hooks/api";
 
 const categories = [
   { name: "All", icon: "🏠" },
@@ -91,11 +92,6 @@ const formatTimeAgo = (dateString: string) => {
 
 const TipTube = () => {
   const [selectedCategory, setSelectedCategory] = useState("All");
-  const [videos, setVideos] = useState<Video[]>([]);
-  const [shorts, setShorts] = useState<Short[]>([]);
-  const [offset, setOffset] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
-  const [loading, setLoading] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [selectedVideo, setSelectedVideo] = useState<{ id: number } | null>(null);
   const [hoveredVideoId, setHoveredVideoId] = useState<number | null>(null);
@@ -108,11 +104,28 @@ const TipTube = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  const BASE_URL = import.meta.env.VITE_API_URL?.endsWith("/api")
-    ? import.meta.env.VITE_API_URL
-    : `${import.meta.env.VITE_API_URL}/api`;
-  const token = user?.accessToken || null;
-  const userId = user?.id || null;
+  // Use React Query for data fetching
+  const categoryId = categoryToIdMap[selectedCategory] || 0;
+
+  const {
+    data: videosData,
+    isLoading: videosLoading,
+    error: videosError,
+    fetchNextPage: fetchNextVideos,
+    hasNextPage: hasMoreVideos,
+    isFetchingNextPage: isFetchingNextVideos,
+  } = useVideos({
+    category: categoryId,
+    user_id: user?.id || 0,
+  });
+
+  const {
+    data: shortsData,
+    isLoading: shortsLoading,
+    error: shortsError,
+  } = useShorts({
+    user_id: user?.id || 0,
+  });
 
   const transformVideoData = (apiVideo: any): Video => ({
     id: apiVideo.id || 0,
@@ -138,91 +151,39 @@ const TipTube = () => {
     avatar: apiShort.channel_profile !== "null" ? apiShort.channel_profile : undefined,
   });
 
-  const fetchVideos = useCallback(
-    async (reset = false) => {
-      if (loading) return;
-      setLoading(true);
+  // Flatten videos data for easier handling
+  const videos = videosData?.pages.flatMap(page => page.data ? page.data.map(transformVideoData) : []) || [];
+  const shorts = shortsData?.data ? shortsData.data.map(transformShortData).slice(0, 10) : [];
 
-      try {
-        const usePublicApi = !localStorage.getItem("UserLoggedIn") || !userId || !token;
+  // Intersection observer for infinite scroll
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  const loadingRef = useRef<HTMLDivElement | null>(null);
 
-        const apiEndpoint = usePublicApi
-          ? `${BASE_URL}/getpublicvideos/${categoryToIdMap[selectedCategory] || 0}/${reset ? 1 : offset}`
-          : `${BASE_URL}/getvideos/${userId}/${categoryToIdMap[selectedCategory] || 0}/${reset ? 1 : offset}`;
+  // Set up intersection observer for infinite scroll
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        // If the loading element is visible and we can load more
+        if (entries[0].isIntersecting && hasMoreVideos && !isFetchingNextVideos) {
+          fetchNextVideos(); // Load more videos
+        }
+      },
+      { threshold: 0.5 } // Trigger when 50% of the loading element is visible
+    );
 
-        const res = await fetch(apiEndpoint, {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-            ...(usePublicApi ? {} : { Authorization: `Bearer ${token}` }),
-          },
-        });
+    observerRef.current = observer;
 
-        const data = await res.json();
-        const videoList = Array.isArray(data.data) ? data.data.map(transformVideoData) : [];
-
-        setVideos((prev) => (reset ? videoList : [...prev, ...videoList]));
-        setHasMore(videoList.length > 0);
-      } catch (err) {
-        console.error("Error fetching videos", err);
-        setHasMore(false);
-      } finally {
-        setLoading(false);
-      }
-    },
-    [selectedCategory, offset, BASE_URL, userId, token, loading]
-  );
-
-  const fetchShorts = useCallback(async () => {
-    try {
-      const usePublicApi = !localStorage.getItem("UserLoggedIn") || !userId || !token;
-
-      const apiEndpoint = usePublicApi
-        ? `${BASE_URL}/getpublicshots`
-        : `${BASE_URL}/getshots/${userId}`;
-
-      const res = await fetch(apiEndpoint, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          ...(usePublicApi ? {} : { Authorization: `Bearer ${token}` }),
-        },
-      });
-
-      const data = await res.json();
-      const shortsList = Array.isArray(data.data) ? data.data.map(transformShortData).slice(0, 10) : [];
-
-      setShorts(shortsList);
-    } catch (err) {
-      console.error("Error fetching shorts", err);
+    // Observe the loading element if it exists
+    if (loadingRef.current) {
+      observer.observe(loadingRef.current);
     }
-  }, [BASE_URL, userId, token]);
 
-  useEffect(() => {
-    setOffset(1);
-    setVideos([]);
-    fetchVideos(true);
-    fetchShorts();
-  }, [selectedCategory]);
-
-  useEffect(() => {
-    const handleScroll = () => {
-      if (!feedRef.current || loading || !hasMore) return;
-      const { scrollTop, scrollHeight, clientHeight } = feedRef.current;
-      if (scrollHeight - scrollTop - clientHeight < 400) {
-        setOffset((prev) => prev + 1);
+    return () => {
+      if (observerRef.current) {
+        observerRef.current.disconnect();
       }
     };
-    const ref = feedRef.current;
-    if (ref) ref.addEventListener("scroll", handleScroll);
-    return () => {
-      if (ref) ref.removeEventListener("scroll", handleScroll);
-    };
-  }, [loading, hasMore]);
-
-  useEffect(() => {
-    if (offset > 1) fetchVideos();
-  }, [offset]);
+  }, [fetchNextVideos, hasMoreVideos, isFetchingNextVideos]); // Re-setup observer when fetchNextVideos or hasMoreVideos changes
 
   const handleVideoClick = (video: Video) => {
     navigate(`/watch/${video.id}`);
@@ -517,8 +478,11 @@ const TipTube = () => {
 
 
 
-        {loading && (
-          <div className="flex justify-center py-12">
+        {isFetchingNextVideos && (
+          <div 
+            ref={loadingRef}
+            className="flex justify-center py-12"
+          >
             <div className="flex flex-col items-center gap-4">
               <div className="w-16 h-16 border-4 border-adtip-teal border-t-transparent rounded-full animate-spin"></div>
               <p className="text-muted-foreground font-medium">Loading more videos...</p>
@@ -526,13 +490,23 @@ const TipTube = () => {
           </div>
         )}
 
-        {!loading && !hasMore && videos.length > 0 && (
+        {!isFetchingNextVideos && !hasMoreVideos && videos.length > 0 && (
           <div className="text-center py-12">
             <p className="text-muted-foreground">No more videos to load</p>
           </div>
         )}
 
-        {!loading && videos.length === 0 && (
+        {videosLoading && videos.length === 0 && (
+          <div className="text-center py-20">
+            <div className="w-24 h-24 rounded-full bg-muted mx-auto mb-4 flex items-center justify-center">
+              <div className="w-16 h-16 border-4 border-adtip-teal border-t-transparent rounded-full animate-spin"></div>
+            </div>
+            <h3 className="text-xl font-bold text-foreground mb-2">Loading videos...</h3>
+            <p className="text-muted-foreground">Please wait while we fetch the latest content</p>
+          </div>
+        )}
+
+        {!videosLoading && videos.length === 0 && (
           <div className="text-center py-20">
             <div className="w-24 h-24 rounded-full bg-muted mx-auto mb-4 flex items-center justify-center">
               <Play className="w-12 h-12 text-muted-foreground" />
