@@ -18,6 +18,7 @@ import CategorySelector from "../components/CategorySelector";
 import WalletBalance from "../components/WalletBalance";
 import { popularCategories } from "../components/CategorySelector";
 import { usePosts, usePost, useLikePost } from "@/hooks/api";
+import { Heart, MessageCircle, Send, Bookmark } from "lucide-react";
 
 // Define TypeScript interfaces
 interface User {
@@ -90,6 +91,7 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
     user_name: string;
     content: string;
   } | null>(null);
+  const [doubleTapTimers, setDoubleTapTimers] = useState<{ [key: number]: NodeJS.Timeout }>({});
 
   const handlePostShare = (post: { id: number }) => {
   if (!post?.id) {
@@ -120,6 +122,32 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
       console.error("Like error:", error);
     }
   };
+
+  const handleDoubleTapLike = useCallback((post: Post) => {
+    // Clear existing timer for this post
+    if (doubleTapTimers[post.id]) {
+      clearTimeout(doubleTapTimers[post.id]);
+      delete doubleTapTimers[post.id];
+      // Double tap detected - like the post
+      handlePostLike(post);
+      return;
+    }
+
+    // Set timer for double tap detection
+    const timer = setTimeout(() => {
+      // Single tap - just clear the timer
+      setDoubleTapTimers(prev => {
+        const newTimers = { ...prev };
+        delete newTimers[post.id];
+        return newTimers;
+      });
+    }, 300); // 300ms window for double tap
+
+    setDoubleTapTimers(prev => ({
+      ...prev,
+      [post.id]: timer
+    }));
+  }, [doubleTapTimers, handlePostLike]);
 
   const [showLoginPrompt, setShowLoginPrompt] = useState<boolean>(false);
   const [postViewCount, setPostViewCount] = useState<number>(0);
@@ -319,7 +347,7 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
             )}
 
             {!error && displayData.length > 0 && (
-              <div className="space-y-0">
+              <div className="space-y-4">
                 {displayData.map((post, index) => (
                   <div
                     key={post.id}
@@ -366,7 +394,10 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
                       </button>
                     </div>
                     {/* Media */}
-                    <div className="relative bg-black cursor-pointer" onClick={() => handlePostClick(post.id)}>
+                    <div
+                      className="relative bg-black cursor-pointer"
+                      onClick={() => handleDoubleTapLike(post)}
+                    >
                       {post.media_type === "video" && post.media_url ? (
                         <div className="aspect-square bg-gray-100 dark:bg-gray-800">
                           <video
@@ -416,22 +447,15 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
                             className="group relative"
                             disabled={likePostMutation.isPending}
                           >
-                            <svg
+                            <Heart
                               className={`w-6 h-6 transition-all duration-200 ${
                                 post.is_liked
                                   ? 'text-red-500 fill-red-500'
                                   : 'text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-gray-100'
                               }`}
-                              viewBox="0 0 24 24"
-                              stroke="currentColor"
+                              fill={post.is_liked ? "currentColor" : "none"}
                               strokeWidth={post.is_liked ? "0" : "1.5"}
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z"
-                              />
-                            </svg>
+                            />
                           </button>
 
                           {/* Comment Button */}
@@ -446,19 +470,10 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
                             }}
                             className="group"
                           >
-                            <svg
+                            <MessageCircle
                               className="w-6 h-6 text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-gray-100 transition-colors"
-                              fill="none"
-                              stroke="currentColor"
                               strokeWidth="1.5"
-                              viewBox="0 0 24 24"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                d="M12 20.25c4.97 0 9-3.694 9-8.25s-4.03-8.25-9-8.25S3 7.444 3 12c0 2.104.859 4.023 2.273 5.48.432.447.74 1.04.586 1.641a4.483 4.483 0 01-.923 1.785A5.969 5.969 0 006 21c1.282 0 2.47-.402 3.445-1.087.81.22 1.668.337 2.555.337z"
-                              />
-                            </svg>
+                            />
                           </button>
 
                           {/* Share Button */}
@@ -469,37 +484,19 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
                             }}
                             className="group"
                           >
-                            <svg
+                            <Send
                               className="w-6 h-6 text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-gray-100 transition-colors"
-                              fill="none"
-                              stroke="currentColor"
                               strokeWidth="1.5"
-                              viewBox="0 0 24 24"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                d="M6 12L3.269 3.126A59.768 59.768 0 0120.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5"
-                              />
-                            </svg>
+                            />
                           </button>
                         </div>
 
                         {/* Bookmark */}
                         <button className="group">
-                          <svg
+                          <Bookmark
                             className="w-6 h-6 text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-gray-100 transition-colors"
-                            fill="none"
-                            stroke="currentColor"
                             strokeWidth="1.5"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z"
-                            />
-                          </svg>
+                          />
                         </button>
                       </div>
 

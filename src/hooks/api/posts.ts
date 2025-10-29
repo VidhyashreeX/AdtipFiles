@@ -163,9 +163,14 @@ export const useLikePost = () => {
 
   return useMutation({
     mutationFn: async ({ postId, isLiked }: { postId: number; isLiked: boolean }) => {
+      const userId = localStorage.getItem('UserId');
+      if (!userId) {
+        throw new Error('User not authenticated');
+      }
+
       const response = await api.post('/api/save-user-post-like', {
         postId,
-        userId: localStorage.getItem('UserId') || 0,
+        userId: parseInt(userId),
         is_liked: !isLiked // Toggle the like status
       });
       return { ...response.data, newIsLiked: !isLiked };
@@ -187,6 +192,9 @@ export const useLikePost = () => {
       // Invalidate lists to update like counts
       queryClient.invalidateQueries({ queryKey: postKeys.lists() });
     },
+    onError: (error) => {
+      console.error('Like post error:', error);
+    },
   });
 };
 
@@ -195,11 +203,17 @@ export const useAddComment = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ postId, content }: { postId: number; content: string }) => {
+    mutationFn: async ({ postId, content, parentId }: { postId: number; content: string; parentId?: number | null }) => {
+      const userId = localStorage.getItem('UserId');
+      if (!userId) {
+        throw new Error('User not authenticated');
+      }
+
       const response = await api.post('/api/save-user-post-comment', {
+        userId: parseInt(userId),
         postId,
-        userId: localStorage.getItem('UserId') || 0,
-        comment: content
+        content,
+        parentId
       });
       return response.data;
     },
@@ -209,6 +223,9 @@ export const useAddComment = () => {
       queryClient.invalidateQueries({ queryKey: postKeys.lists() });
       // Invalidate comments for this post
       queryClient.invalidateQueries({ queryKey: ['comments', postId] });
+    },
+    onError: (error) => {
+      console.error('Add comment error:', error);
     },
   });
 };
