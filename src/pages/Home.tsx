@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useAuth } from "../contexts/AuthContext";
+import { useAuthUser, useIsAuthenticated, useAuthLoading } from "../stores/auth.store";
 import VideoLoginPrompt from "../components/VideoLoginPrompt";
 import { useParams } from 'react-router-dom';
 import { FiShare2 } from "react-icons/fi"; // Feather's clean share icon
@@ -11,7 +11,7 @@ import RandomAvatar, { getRandomAvatar } from "../components/RandomAvatar";
 import ShareModal from "@/components/ShareModal";
 import { getSafeImageUrl, handleImageError, createPlaceholderImage } from "../utils/imageUtils";
 import { contentAPI, userAPI } from "../services/api";
-import { useAuthModal } from "../contexts/AuthModalContext";
+import { useUIStore } from "../stores/ui.store";
 import BannerCarousel from "../components/BannerCarousel";
 import CategorySelector from "../components/CategorySelector";
 import WalletBalance from "../components/WalletBalance";
@@ -76,7 +76,7 @@ interface ApiErrorResponse {
 }
 
 const Home = () => {
-  const { openLoginModal } = useAuthModal();
+  const openAuthModal = useUIStore((state) => state.openAuthModal);
   const { id: postId } = useParams<{ id?: string }>();
   const [activeTab, setActiveTab] = useState<"for-you" | "following">("for-you");
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
@@ -95,7 +95,9 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
 
   const [showLoginPrompt, setShowLoginPrompt] = useState<boolean>(false);
   const [postViewCount, setPostViewCount] = useState<number>(0);
-  const { isAuthenticated, user, authLoading } = useAuth();
+  const user = useAuthUser();
+  const isAuthenticated = useIsAuthenticated();
+  const authLoading = useAuthLoading();
 
   // Use React Query for data fetching
   const categoryObj = popularCategories.find(cat => cat.name === selectedCategory);
@@ -160,18 +162,26 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
   // Intersection observer for infinite scroll
   const observerRef = useRef<IntersectionObserver | null>(null);
   const loadingRef = useRef<HTMLDivElement | null>(null);
+  const fetchNextPageRef = useRef(fetchNextPage);
+
+  // Update the ref when fetchNextPage changes
+  useEffect(() => {
+    fetchNextPageRef.current = fetchNextPage;
+  }, [fetchNextPage]);
+
+  // Stable callback for intersection observer
+  const handleIntersection = useCallback((entries: IntersectionObserverEntry[]) => {
+    // If the loading element is visible and we can load more
+    if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
+      fetchNextPageRef.current(); // Load more posts
+    }
+  }, [hasNextPage, isFetchingNextPage]);
 
   // Set up intersection observer for infinite scroll
   useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        // If the loading element is visible and we can load more
-        if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
-          fetchNextPage(); // Load more posts
-        }
-      },
-      { threshold: 0.5 } // Trigger when 50% of the loading element is visible
-    );
+    const observer = new IntersectionObserver(handleIntersection, {
+      threshold: 0.5 // Trigger when 50% of the loading element is visible
+    });
 
     observerRef.current = observer;
 
@@ -185,7 +195,7 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
         observerRef.current.disconnect();
       }
     };
-  }, [fetchNextPage, hasNextPage, isFetchingNextPage]); // Re-setup observer when fetchNextPage or hasNextPage changes
+  }, [handleIntersection]); // Only depend on the stable callback
 
   // Check if user is viewing posts and prompt login
   useEffect(() => {

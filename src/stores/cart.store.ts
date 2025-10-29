@@ -17,9 +17,19 @@ interface CartItem {
   maxQuantity?: number;
 }
 
+interface Order {
+  id: string;
+  date: string;
+  total: number;
+  status: string;
+  items: CartItem[];
+}
+
 interface CartState {
   // State
   items: CartItem[];
+  favorites: CartItem[];
+  orders: Order[];
   isOpen: boolean;
   isLoading: boolean;
 
@@ -28,6 +38,8 @@ interface CartState {
   totalPrice: number;
   totalSavings: number;
   hasItems: boolean;
+  hasFavorites: boolean;
+  hasOrders: boolean;
 
   // Actions
   addItem: (item: Omit<CartItem, 'id' | 'quantity'> & { quantity?: number }) => void;
@@ -38,6 +50,15 @@ interface CartState {
   openCart: () => void;
   closeCart: () => void;
   setLoading: (loading: boolean) => void;
+
+  // Favorites actions
+  addToFavorites: (item: Omit<CartItem, 'id' | 'quantity'>) => void;
+  removeFromFavorites: (productId: number) => void;
+  clearFavorites: () => void;
+
+  // Orders actions
+  createOrder: () => string;
+  buyAgain: (productId: number) => void;
 
   // Advanced actions
   addMultipleItems: (items: (Omit<CartItem, 'id' | 'quantity'> & { quantity?: number })[]) => void;
@@ -82,6 +103,8 @@ export const useCartStore = create<CartState>()(
       (set, get) => ({
         // Initial state
         items: [],
+        favorites: [],
+        orders: [],
         isOpen: false,
         isLoading: false,
 
@@ -103,6 +126,14 @@ export const useCartStore = create<CartState>()(
 
         get hasItems() {
           return get().items.length > 0;
+        },
+
+        get hasFavorites() {
+          return get().favorites.length > 0;
+        },
+
+        get hasOrders() {
+          return get().orders.length > 0;
         },
 
         // Actions
@@ -226,12 +257,75 @@ export const useCartStore = create<CartState>()(
             errors
           };
         },
+
+        // Favorites actions
+        addToFavorites: (itemData) => {
+          const itemId = `fav-${itemData.productId}-${Date.now()}`;
+          const newItem: CartItem = {
+            id: itemId,
+            quantity: 1,
+            ...itemData,
+          };
+
+          set((state) => {
+            const existingItem = state.favorites.find(item => item.productId === itemData.productId);
+            if (!existingItem) {
+              return { favorites: [...state.favorites, newItem] };
+            }
+            return state;
+          }, false, 'cart/addToFavorites');
+        },
+
+        removeFromFavorites: (productId) =>
+          set((state) => ({
+            favorites: state.favorites.filter(item => item.productId !== productId)
+          }), false, 'cart/removeFromFavorites'),
+
+        clearFavorites: () => set({ favorites: [] }, false, 'cart/clearFavorites'),
+
+        // Orders actions
+        createOrder: () => {
+          const items = get().items;
+          if (items.length === 0) {
+            throw new Error("Cannot place an empty order");
+          }
+
+          const subtotal = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+          const shipping = 5.99;
+          const total = subtotal + shipping;
+
+          const orderId = `ORD-${Math.floor(10000 + Math.random() * 90000)}`;
+          const newOrder: Order = {
+            id: orderId,
+            date: new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
+            total,
+            status: "Processing",
+            items: [...items]
+          };
+
+          set((state) => ({
+            orders: [newOrder, ...state.orders],
+            items: [] // Clear cart after order
+          }), false, 'cart/createOrder');
+
+          return orderId;
+        },
+
+        buyAgain: (productId) => {
+          const favorites = get().favorites;
+          const item = favorites.find(item => item.productId === productId);
+          if (item) {
+            get().addItem(item);
+          }
+        },
       }),
       {
         name: 'cart-storage',
         storage: createJSONStorage(() => cartStorage),
         partialize: (state) => ({
           items: state.items,
+          favorites: state.favorites,
+          orders: state.orders,
         }),
       }
     ),
@@ -250,6 +344,10 @@ export const useCartTotalItems = () => useCartStore((state) => state.totalItems)
 export const useCartTotalPrice = () => useCartStore((state) => state.totalPrice);
 export const useCartTotalSavings = () => useCartStore((state) => state.totalSavings);
 export const useCartHasItems = () => useCartStore((state) => state.hasItems);
+export const useCartFavorites = () => useCartStore((state) => state.favorites);
+export const useCartOrders = () => useCartStore((state) => state.orders);
+export const useCartHasFavorites = () => useCartStore((state) => state.hasFavorites);
+export const useCartHasOrders = () => useCartStore((state) => state.hasOrders);
 
 // Actions
 export const useCartActions = () => useCartStore((state) => ({
@@ -264,4 +362,9 @@ export const useCartActions = () => useCartStore((state) => ({
   addMultipleItems: state.addMultipleItems,
   mergeCart: state.mergeCart,
   validateCart: state.validateCart,
+  addToFavorites: state.addToFavorites,
+  removeFromFavorites: state.removeFromFavorites,
+  clearFavorites: state.clearFavorites,
+  createOrder: state.createOrder,
+  buyAgain: state.buyAgain,
 }));

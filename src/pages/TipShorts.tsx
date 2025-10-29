@@ -103,31 +103,36 @@ const [selectedShort, setSelectedShort] = useState<{ id: number } | null>(null);
   const transformedShorts = React.useMemo(() => {
     if (!shortsData?.pages) return [];
 
-    return shortsData.pages.flatMap(page => {
-      const rawShorts = Array.isArray(page.data) ? page.data : [];
-      return rawShorts
-        .map((s: any): TipShort | null => {
-          if (!s.video_link) return null;
-          return {
-            id: s.id,
-            user: {
-              name: s.channelName || "Unknown",
-              avatar: s.channel_profile && s.channel_profile !== "null" ? s.channel_profile : "/placeholder.svg",
-              isVerified: false,
-            },
-            content: {
-              video: s.video_link,
-              description: s.video_desciption || s.name || "No description",
-              likes: Number(s.total_likes || 0),
-              comments: Number(s.total_comments || 0),
-              shares: 0,
-              thumbnail: s.video_Thumbnail || s.channel_profile || "/placeholder.svg",
-            },
-            musicName: s.name || "Unknown",
-          };
-        })
-        .filter((s): s is TipShort => s !== null);
-    });
+    try {
+      return shortsData.pages.flatMap(page => {
+        const rawShorts = Array.isArray(page.data) ? page.data : [];
+        return rawShorts
+          .map((s: any): TipShort | null => {
+            if (!s.video_link) return null;
+            return {
+              id: s.id,
+              user: {
+                name: s.channelName || "Unknown",
+                avatar: s.channel_profile && s.channel_profile !== "null" ? s.channel_profile : "/placeholder.svg",
+                isVerified: false,
+              },
+              content: {
+                video: s.video_link,
+                description: s.video_desciption || s.name || "No description",
+                likes: Number(s.total_likes || 0),
+                comments: Number(s.total_comments || 0),
+                shares: 0,
+                thumbnail: s.video_Thumbnail || s.channel_profile || "/placeholder.svg",
+              },
+              musicName: s.name || "Unknown",
+            };
+          })
+          .filter((s): s is TipShort => s !== null);
+      });
+    } catch (error) {
+      console.error('Error transforming shorts data:', error);
+      return [];
+    }
   }, [shortsData]);
 
 
@@ -160,6 +165,13 @@ const handleShare = (short) => {
   const observerRef = useRef<IntersectionObserver | null>(null);
   const loaderRef = useRef<HTMLDivElement>(null);
   const loaderObserverRef = useRef<IntersectionObserver | null>(null);
+  const fetchNextPageRef = useRef(fetchNextPage);
+
+  // Update the ref when fetchNextPage changes
+  useEffect(() => {
+    fetchNextPageRef.current = fetchNextPage;
+  }, [fetchNextPage]);
+
   const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const { isCollapsed, isMobile } = useSidebar();
@@ -180,14 +192,14 @@ const handleShare = (short) => {
     loaderObserverRef.current = new window.IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
-          fetchNextPage();
+          fetchNextPageRef.current();
         }
       },
       { root: shortsListRef.current, threshold: 0.8 }
     );
     if (loaderRef.current) loaderObserverRef.current.observe(loaderRef.current);
     return () => loaderObserverRef.current?.disconnect();
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+  }, [hasNextPage]); // Only depend on hasNextPage to prevent recreation during fetch
 
   // --- Video Play/Pause & Preloading Logic ---
   const playVideo = useCallback((id: number) => {
@@ -241,7 +253,7 @@ const handleShare = (short) => {
 
   // --- Video Play/Pause/Scroll Snap Observer ---
   useEffect(() => {
-    if (!transformedShorts.length || !shortsListRef.current) return;
+    if (!transformedShorts || !transformedShorts.length || !shortsListRef.current) return;
     if (observerRef.current) observerRef.current.disconnect();
     observerRef.current = new IntersectionObserver(
       (entries) => {
@@ -289,7 +301,7 @@ const handleShare = (short) => {
   // --- Fullscreen Toggle ---
   const toggleFullscreen = () => {
     const element = shortsListRef.current;
-    if (!element || !transformedShorts[currentIndex]) return;
+    if (!element || !transformedShorts || !transformedShorts[currentIndex]) return;
     if (!document.fullscreenElement) {
       // Entering fullscreen: always scroll to currentIndex
       const currentShortElement = shortContainerRefs.current.get(transformedShorts[currentIndex].id);
@@ -314,7 +326,7 @@ const handleShare = (short) => {
     const handler = () => {
       setIsFullscreen(!!document.fullscreenElement);
       // On exiting fullscreen, always scroll to the currentIndex short
-      if (!document.fullscreenElement && shortsListRef.current && transformedShorts.length > 0) {
+      if (!document.fullscreenElement && shortsListRef.current && transformedShorts && transformedShorts.length > 0) {
         const currentShortElement = shortContainerRefs.current.get(transformedShorts[currentIndex]?.id);
         if (currentShortElement) {
           requestAnimationFrame(() => {
@@ -341,7 +353,7 @@ const handleShare = (short) => {
     setIsGlobalPlaying((prev) => {
       const newState = !prev;
       // Pause or play the current video
-      const currentId = transformedShorts[currentIndex]?.id;
+      const currentId = transformedShorts && transformedShorts[currentIndex]?.id;
       const video = videoRefs.current.get(currentId);
       if (video) {
         if (newState) {
@@ -360,7 +372,7 @@ const handleShare = (short) => {
     setIsGlobalMuted((prev) => {
       const newState = !prev;
       // Mute or unmute the current video
-      const currentId = transformedShorts[currentIndex]?.id;
+      const currentId = transformedShorts && transformedShorts[currentIndex]?.id;
       const video = videoRefs.current.get(currentId);
       if (video) {
         video.muted = newState;
@@ -387,7 +399,7 @@ const handleShare = (short) => {
       }
       if (e.key === 'ArrowDown') {
         e.preventDefault();
-        if (currentIndex < transformedShorts.length - 1) {
+        if (transformedShorts && currentIndex < transformedShorts.length - 1) {
           const nextIndex = currentIndex + 1;
           setCurrentIndex(nextIndex);
           setTimeout(() => {
@@ -412,7 +424,7 @@ const handleShare = (short) => {
       }
       if (e.key === 'ArrowUp') {
         e.preventDefault();
-        if (currentIndex > 0) {
+        if (transformedShorts && currentIndex > 0) {
           const prevIndex = currentIndex - 1;
           setCurrentIndex(prevIndex);
           setTimeout(() => {

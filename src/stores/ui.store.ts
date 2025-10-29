@@ -5,8 +5,11 @@ import { devtools, persist, createJSONStorage } from 'zustand/middleware';
 interface UIState {
   // Modal states
   authModal: {
-    isOpen: boolean;
-    mode: 'login' | 'register' | 'forgot-password';
+    showLogin: boolean;
+    showOTP: boolean;
+    phoneNumber: string;
+    email: string;
+    tempUserId: string;
   };
   shareModal: {
     isOpen: boolean;
@@ -22,9 +25,11 @@ interface UIState {
 
   // Layout states
   sidebar: {
-    isOpen: boolean;
-    isCollapsed: boolean;
+    state: 'expanded' | 'collapsed';
+    open: boolean;
+    openMobile: boolean;
     width: number;
+    isCollapsed: boolean;
   };
 
   // Global UI states
@@ -33,8 +38,12 @@ interface UIState {
   notifications: NotificationItem[];
 
   // Actions
-  openAuthModal: (mode?: 'login' | 'register' | 'forgot-password') => void;
+  openAuthModal: () => void;
   closeAuthModal: () => void;
+  openOTPModal: (phone: string, userId: string) => void;
+  closeOTPModal: () => void;
+  setPhoneNumber: (phone: string) => void;
+  setEmail: (email: string) => void;
   openShareModal: (url: string, title: string) => void;
   closeShareModal: () => void;
   openSettingsModal: () => void;
@@ -44,6 +53,8 @@ interface UIState {
 
   toggleSidebar: () => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
+  setSidebarOpen: (open: boolean) => void;
+  setSidebarOpenMobile: (openMobile: boolean) => void;
   setSidebarWidth: (width: number) => void;
 
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
@@ -84,8 +95,11 @@ export const useUIStore = create<UIState>()(
       (set, get) => ({
         // Initial state
         authModal: {
-          isOpen: false,
-          mode: 'login',
+          showLogin: false,
+          showOTP: false,
+          phoneNumber: '',
+          email: '',
+          tempUserId: '',
         },
         shareModal: {
           isOpen: false,
@@ -99,24 +113,58 @@ export const useUIStore = create<UIState>()(
           isOpen: false,
         },
         sidebar: {
-          isOpen: true,
-          isCollapsed: false,
+          state: 'expanded',
+          open: true,
+          openMobile: false,
           width: 256,
+          isCollapsed: false,
         },
         theme: 'system',
         isLoading: false,
         notifications: [],
 
         // Modal actions
-        openAuthModal: (mode = 'login') =>
+        openAuthModal: () =>
           set((state) => ({
-            authModal: { isOpen: true, mode }
+            authModal: { ...state.authModal, showLogin: true }
           }), false, 'ui/openAuthModal'),
 
         closeAuthModal: () =>
           set((state) => ({
-            authModal: { ...state.authModal, isOpen: false }
+            authModal: { ...state.authModal, showLogin: false }
           }), false, 'ui/closeAuthModal'),
+
+        openOTPModal: (phone: string, userId: string) =>
+          set((state) => ({
+            authModal: {
+              ...state.authModal,
+              phoneNumber: phone,
+              tempUserId: userId,
+              showLogin: false,
+              showOTP: true
+            }
+          }), false, 'ui/openOTPModal'),
+
+        closeOTPModal: () =>
+          set((state) => ({
+            authModal: {
+              ...state.authModal,
+              showOTP: false,
+              phoneNumber: '',
+              email: '',
+              tempUserId: ''
+            }
+          }), false, 'ui/closeOTPModal'),
+
+        setPhoneNumber: (phone: string) =>
+          set((state) => ({
+            authModal: { ...state.authModal, phoneNumber: phone }
+          }), false, 'ui/setPhoneNumber'),
+
+        setEmail: (email: string) =>
+          set((state) => ({
+            authModal: { ...state.authModal, email }
+          }), false, 'ui/setEmail'),
 
         openShareModal: (url, title) =>
           set({
@@ -145,7 +193,9 @@ export const useUIStore = create<UIState>()(
           set((state) => ({
             sidebar: {
               ...state.sidebar,
-              isOpen: !state.sidebar.isOpen
+              state: state.sidebar.state === 'expanded' ? 'collapsed' : 'expanded',
+              open: state.sidebar.state === 'expanded' ? false : true,
+              isCollapsed: state.sidebar.state === 'expanded'
             }
           }), false, 'ui/toggleSidebar'),
 
@@ -153,10 +203,27 @@ export const useUIStore = create<UIState>()(
           set((state) => ({
             sidebar: {
               ...state.sidebar,
+              state: isCollapsed ? 'collapsed' : 'expanded',
+              open: !isCollapsed,
               isCollapsed,
               width: isCollapsed ? 64 : 256
             }
           }), false, 'ui/setSidebarCollapsed'),
+
+        setSidebarOpen: (open: boolean) =>
+          set((state) => ({
+            sidebar: {
+              ...state.sidebar,
+              open,
+              state: open ? 'expanded' : 'collapsed',
+              isCollapsed: !open
+            }
+          }), false, 'ui/setSidebarOpen'),
+
+        setSidebarOpenMobile: (openMobile: boolean) =>
+          set((state) => ({
+            sidebar: { ...state.sidebar, openMobile }
+          }), false, 'ui/setSidebarOpenMobile'),
 
         setSidebarWidth: (width) =>
           set((state) => ({
@@ -228,6 +295,10 @@ export const useUINotifications = () => useUIStore((state) => state.notification
 export const useUIActions = () => useUIStore((state) => ({
   openAuthModal: state.openAuthModal,
   closeAuthModal: state.closeAuthModal,
+  openOTPModal: state.openOTPModal,
+  closeOTPModal: state.closeOTPModal,
+  setPhoneNumber: state.setPhoneNumber,
+  setEmail: state.setEmail,
   openShareModal: state.openShareModal,
   closeShareModal: state.closeShareModal,
   openSettingsModal: state.openSettingsModal,
@@ -236,6 +307,8 @@ export const useUIActions = () => useUIStore((state) => ({
   closeLogoutModal: state.closeLogoutModal,
   toggleSidebar: state.toggleSidebar,
   setSidebarCollapsed: state.setSidebarCollapsed,
+  setSidebarOpen: state.setSidebarOpen,
+  setSidebarOpenMobile: state.setSidebarOpenMobile,
   setSidebarWidth: state.setSidebarWidth,
   setTheme: state.setTheme,
   setLoading: state.setLoading,

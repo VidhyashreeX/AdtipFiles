@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useAuth } from "../contexts/AuthContext";
+import { useAuthUser } from "../stores/auth.store";
 import { useNavigate } from "react-router-dom";
 import ShareModal from "@/components/ShareModal";
 import { Play, Clock, Eye, MoreVertical } from "lucide-react";
@@ -101,7 +101,7 @@ const TipTube = () => {
   const categoryScrollRef = useRef<HTMLDivElement>(null);
   const shortsScrollRef = useRef<HTMLDivElement>(null);
 
-  const { user } = useAuth();
+  const user = useAuthUser();
   const navigate = useNavigate();
 
   // Use React Query for data fetching
@@ -158,6 +158,12 @@ const TipTube = () => {
   // Intersection observer for infinite scroll
   const observerRef = useRef<IntersectionObserver | null>(null);
   const loadingRef = useRef<HTMLDivElement | null>(null);
+  const fetchNextVideosRef = useRef(fetchNextVideos);
+
+  // Update the ref when fetchNextVideos changes
+  useEffect(() => {
+    fetchNextVideosRef.current = fetchNextVideos;
+  }, [fetchNextVideos]);
 
   // Set up intersection observer for infinite scroll
   useEffect(() => {
@@ -165,7 +171,7 @@ const TipTube = () => {
       (entries) => {
         // If the loading element is visible and we can load more
         if (entries[0].isIntersecting && hasMoreVideos && !isFetchingNextVideos) {
-          fetchNextVideos(); // Load more videos
+          fetchNextVideosRef.current(); // Load more videos
         }
       },
       { threshold: 0.5 } // Trigger when 50% of the loading element is visible
@@ -183,7 +189,7 @@ const TipTube = () => {
         observerRef.current.disconnect();
       }
     };
-  }, [fetchNextVideos, hasMoreVideos, isFetchingNextVideos]); // Re-setup observer when fetchNextVideos or hasMoreVideos changes
+  }, [hasMoreVideos, isFetchingNextVideos]); // Only depend on boolean values, not functions
 
   const handleVideoClick = (video: Video) => {
     navigate(`/watch/${video.id}`);
