@@ -300,7 +300,18 @@ const Navbar = () => {
 
   return (
     <>
-    <nav className={`fixed top-0 z-50 w-full h-20 transition-all duration-200 ${(openMobile || (!isCollapsed && !isMobile)) ? 'bg-transparent' : ''}`}>
+    <nav className="fixed top-0 z-50 w-full h-20 transition-all duration-200">
+      {/* Background with enhanced liquid glass effect */}
+      {!isCollapsed && !isMobile && (
+        <div
+          className="absolute inset-0 bg-white/15 dark:bg-gray-900/20 backdrop-blur-2xl border-b border-white/25 dark:border-gray-600/35"
+          style={{
+            backdropFilter: 'blur(16px) saturate(200%) contrast(110%)',
+            WebkitBackdropFilter: 'blur(16px) saturate(200%) contrast(110%)',
+            boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0)',
+          }}
+        />
+      )}
       <div className="relative max-w-screen-2xl mx-auto h-full flex items-center justify-between px-3 sm:px-4 md:px-6 gap-2 sm:gap-3">
         {/* Left: Hamburger and Logo - Liquid Glass Island */}
         <div className="flex items-center gap-2 sm:gap-3 bg-white/20 dark:bg-gray-900/25 backdrop-blur-2xl rounded-2xl px-4 sm:px-5 py-2.5 shadow-2xl border border-white/30 dark:border-gray-600/40 transition-all duration-300 hover:scale-[1.02] hover:bg-white/25 dark:hover:bg-gray-900/30" style={{
