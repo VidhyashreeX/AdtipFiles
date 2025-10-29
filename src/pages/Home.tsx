@@ -6,12 +6,16 @@ import { useAuth } from "../contexts/AuthContext";
 import VideoLoginPrompt from "../components/VideoLoginPrompt";
 import { useParams } from 'react-router-dom';
 import { FiShare2 } from "react-icons/fi"; // Feather's clean share icon
-import axios from "axios";
+import axios, { AxiosError } from "axios";
 import RandomAvatar, { getRandomAvatar } from "../components/RandomAvatar";
 import ShareModal from "@/components/ShareModal";
 import { getSafeImageUrl, handleImageError, createPlaceholderImage } from "../utils/imageUtils";
 import { contentAPI, userAPI } from "../services/api";
 import { useAuthModal } from "../contexts/AuthModalContext";
+import BannerCarousel from "../components/BannerCarousel";
+import CategorySelector from "../components/CategorySelector";
+import WalletBalance from "../components/WalletBalance";
+import { popularCategories } from "../components/CategorySelector";
 
 // Define TypeScript interfaces
 interface User {
@@ -65,93 +69,14 @@ interface WalletResponse {
   availableBalance: string;
 }
 
-
-
-const popularCategories = [
-  { name: "All", id: 0 },
-  { name: "Art", id: 9 },
-  { name: "Beauty", id: 10 },
-  { name: "Business", id: 11 },
-  { name: "Fashion", id: 12 },
-  { name: "Fitness", id: 14 },
-  { name: "Food", id: 15 },
-  { name: "Gaming", id: 16 },
-  { name: "Music", id: 17 },
-  { name: "Tech", id: 20 },
-  { name: "Travel", id: 21 },
-];
-
-const bannerData = [
-  {
-    title: "Watch & Earn",
-    description: "Earn rewards by watching videos",
-    gradient: "from-[#7F7FD5] via-[#86A8E7] to-[#91EAE4]",
-    icon: "🎬",
-  },
-  {
-    title: "Play & Earn",
-    description: "Earn money by playing games",
-    gradient: "from-[#43e97b] via-[#38f9d7] to-[#38f9d7]",
-    icon: "🎮",
-  },
-  {
-    title: "Refer & Earn",
-    description: "Invite friends and earn bonuses",
-    gradient: "from-[#f7971e] via-[#ffd200] to-[#f7971e]",
-    icon: "🤝",
-  },
-];
-
-/*const BannerCarousel = ({ userId, isAuthenticated }: { userId: string | number | null, isAuthenticated: boolean }) => {
-  const [current, setCurrent] = useState(0);
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  useEffect(() => {
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    timeoutRef.current = setTimeout(() => {
-      setCurrent((prev) => (prev + 1) % bannerData.length);
-    }, 4000);
-    return () => { if (timeoutRef.current) clearTimeout(timeoutRef.current); };
-  }, [current]);
-  const handleEarnClick = () => {
-    if (isAuthenticated && userId) {
-      window.open(`https://wow.pubscale.com/?app_id=39604779&user_id=${userId}`, "_blank");
-    } else {
-      openLoginModal();
-    }
-  };
-
-  return (
-    <div className="relative w-full max-w-2xl mx-auto mb-6">
-      <div
-        className={`rounded-2xl p-6 flex items-center justify-between shadow-lg bg-gradient-to-r ${bannerData[current].gradient} transition-all duration-700`}
-      >
-        <div>
-          <div className="text-3xl mb-2">{bannerData[current].icon}</div>
-          <h3 className="font-bold text-lg mb-1 text-white drop-shadow">{bannerData[current].title}</h3>
-          <p className="text-white/90 text-sm mb-3 drop-shadow">{bannerData[current].description}</p>
-          <button
-            onClick={handleEarnClick}
-            className="px-6 py-2 rounded-full font-bold text-white bg-gradient-to-r from-[#ff512f] to-[#dd2476] shadow-lg hover:scale-105 active:scale-95 transition-transform"
-          >
-            Earn
-          </button>
-        </div>
-      </div>
-      <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-2">
-        {bannerData.map((_, idx) => (
-          <span
-            key={idx}
-            className={`w-2 h-2 rounded-full ${idx === current ? "bg-white/90" : "bg-white/40"}`}
-          />
-        ))}
-      </div>
-    </div>
-  );
-};*/
+interface ApiErrorResponse {
+  message?: string;
+  [key: string]: unknown;
+}
 
 const Home = () => {
   const { openLoginModal } = useAuthModal();
+  const { id: postId } = useParams<{ id?: string }>();
   const [activeTab, setActiveTab] = useState<"for-you" | "following">("for-you");
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
   const [showCopied, setShowCopied] = useState(false);
@@ -175,8 +100,6 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState<number>(1);
   const [totalPages, setTotalPages] = useState<number>(1);
-  const [walletBalance, setWalletBalance] = useState<string | null>(null);
-  const { postId } = useParams();
   const [hasMore, setHasMore] = useState<boolean>(true);
   const observerRef = useRef<IntersectionObserver | null>(null);
   const loadingRef = useRef<HTMLDivElement | null>(null);
@@ -208,43 +131,6 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
       setError("Please log in to view posts");
     }
   }, [isAuthenticated, userId, token]);
-
-  // Fetch wallet balance
-  const fetchWalletBalance = useCallback(async () => {
-    if (!isAuthenticated || !userId || !token) {
-      return;
-    }
-
-    try {
-
-      const response = await userAPI.getWalletBalance(String(userId!));
-
-      // console.info("getfunds response:", {
-      //   status: response.data.status,
-      //   message: response.data.message,
-      //   balance: response.data.availableBalance,
-      // });
-
-      if (response.data.status === 200) {
-        setWalletBalance(response.data.availableBalance);
-      } else {
-        throw new Error(response.data.message || "Failed to fetch wallet balance");
-      }
-    } catch (err: any) {
-      if (err.name === "AbortError") return;
-      console.error("getfunds error:", {
-        message: err.message,
-        status: err.response?.status,
-        data: err.response?.data,
-      });
-      setWalletBalance(null);
-    }
-
-  }, [isAuthenticated, userId, token]);
-
-  useEffect(() => {
-    fetchWalletBalance();
-  }, [fetchWalletBalance]);
 
   // Fetch posts with infinite scroll
  
@@ -280,7 +166,12 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
 
 
       // Declare requestParams outside try block for error logging
-      let requestParams: any = null;
+      let requestParams: {
+        category: number;
+        page: number;
+        limit: number;
+        loggined_user_id: number;
+      } | null = null;
 
       try {
         setLoading(true);
@@ -377,20 +268,21 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
         } else {
           throw new Error(response.data.message || "Failed to fetch posts");
         }
-      } catch (err: any) {
-        if (err.name === "AbortError") return;
+      } catch (err: unknown) {
+        const error = err as AxiosError;
+        if (error.name === "AbortError") return;
         
         console.error('❌ listPosts error:', {
-          status: err.response?.status,
-          data: err.response?.data,
-          message: err.message,
+          status: error.response?.status,
+          data: error.response?.data,
+          message: error.message,
           requestParams: requestParams
         });
         
         setError(
-          err.message === "Network Error"
+          error.message === "Network Error"
             ? "Unable to connect to the server. Please check your connection."
-            : err.response?.data?.message || err.message || "Failed to load posts"
+            : (error.response?.data as ApiErrorResponse)?.message || error.message || "Failed to load posts"
         );
         setHasMore(false);
       } finally {
@@ -463,38 +355,22 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
   return (
     <div className="pb-20 md:pb-0 bg-gray-50 dark:bg-gray-950 min-h-screen">
       {/* Categories Bar - Floating Glassmorphic Chips */}
-      <div className="fixed left-0 right-0 z-30 py-4 overflow-x-auto no-scrollbar md:flex md:justify-center"
-        style={{ top: 'calc(var(--navbar-height, 56px) + 8px)', background: 'transparent' }}
-      >
-        <div className="flex gap-2 px-4 min-w-max">
-          {popularCategories.map((category) => (
-            <button
-              key={category.name}
-              onClick={() => {
-                setSelectedCategory(category.name);
-                setPage(1);
-                setFeedData([]);
-                setHasMore(true);
-              }}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-all backdrop-blur-xl border shadow-lg hover:scale-105 ${
-                selectedCategory === category.name
-                  ? "bg-gradient-to-r from-[#00dcaa] to-[#00b894] text-white border-white/20"
-                  : "bg-white/70 dark:bg-gray-800/70 text-gray-700 dark:text-gray-200 border-white/30 dark:border-gray-700/30 hover:bg-white/90 dark:hover:bg-gray-800/90"
-              }`}
-              style={{
-                backdropFilter: 'blur(16px) saturate(180%)',
-                WebkitBackdropFilter: 'blur(16px) saturate(180%)',
-              }}
-            >
-              {category.name}
-            </button>
-          ))}
-        </div>
-      </div>
+      <CategorySelector
+        selectedCategory={selectedCategory}
+        onCategoryChange={setSelectedCategory}
+        onResetFeed={() => {
+          setPage(1);
+          setFeedData([]);
+          setHasMore(true);
+        }}
+      />
+
+      {/* Banner Carousel - Hidden */}
+      {/* <BannerCarousel userId={userId} isAuthenticated={isAuthenticated} /> */}
 
       {/* Main scrollable content below fixed bars */}
       <div className="max-w-[480px] lg:max-w-[640px] mx-auto px-0 md:px-4"
-        style={{ paddingTop: 'calc(var(--navbar-height, 56px) + 72px)' }}
+        style={{ paddingTop: 'calc(var(--navbar-height, 56px) + 24px)' }}
       >
         <Tabs defaultValue="for-you" className="mb-6">
           <TabsList className="grid grid-cols-2 w-full">

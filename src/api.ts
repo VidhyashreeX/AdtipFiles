@@ -1,4 +1,20 @@
-import axios from "axios";
+import axios, { AxiosError } from "axios";
+import type {
+  User,
+  ApiResponse,
+  Post,
+  Product,
+  AdCampaign,
+  VideoData,
+  LiveStream,
+  ApiError,
+  CompanyData,
+  AdModelData,
+  ProductData,
+  OrderData,
+  PaymentData,
+  ApiErrorResponse
+} from "./types";
 
 // Use environment variable for API base URL
 //const BASE_URL = 'http://10.229.24.8:7082';
@@ -63,17 +79,17 @@ api.interceptors.response.use(
 );
 
 // Company Registration API
-export const apiCreateCompany = async (companyData: any) => {
+export const apiCreateCompany = async (companyData: CompanyData): Promise<any> => {
   const token = localStorage.getItem('UserLoggedIn');
-  
+
   // Try multiple localStorage keys to find user data
-  let userData = {};
+  let userData: Partial<User> = {};
   try {
     userData = JSON.parse(localStorage.getItem('user') || '{}');
-    if (!userData || !(userData as any).id) {
+    if (!userData || !userData.id) {
       userData = JSON.parse(localStorage.getItem('UserData') || '{}');
     }
-    if (!userData || !(userData as any).id) {
+    if (!userData || !userData.id) {
       userData = JSON.parse(localStorage.getItem('userData') || '{}');
     }
   } catch (e) {
@@ -82,7 +98,7 @@ export const apiCreateCompany = async (companyData: any) => {
   }
 
   // Ensure we have a valid user ID
-  const userId = (userData as any).id;
+  const userId = userData.id;
   if (!userId) {
     throw new Error('User not logged in. Please log in again and try registering your company.');
   }
@@ -122,13 +138,14 @@ export const apiCreateCompany = async (companyData: any) => {
       }
     });
     return response;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Company registration error:', error);
-    
+
     // Handle duplicate entry error by adding timestamp to name
-    if (error.response?.data?.message?.includes('ER_DUP_ENTRY') || 
-        error.response?.data?.message?.includes('Duplicate entry') ||
-        error.response?.data?.message?.includes('unique_comany_user_id')) {
+    const axiosError = error as AxiosError<ApiErrorResponse>;
+    if (axiosError.response?.data?.message?.includes('ER_DUP_ENTRY') ||
+        axiosError.response?.data?.message?.includes('Duplicate entry') ||
+        axiosError.response?.data?.message?.includes('unique_comany_user_id')) {
       
       console.log('Duplicate entry detected, retrying with unique name...');
       const uniqueName = `${baseCompanyName}_${timestamp}`;
@@ -195,7 +212,7 @@ export const apiGetButtons = async () => {
 };
 
 // Ad Campaign Creation APIs - First Page (Basic Setup)
-export const apiSaveFirstPageAdModel = async (adData: any) => {
+export const apiSaveFirstPageAdModel = async (adData: AdModelData): Promise<any> => {
   const token = localStorage.getItem('UserLoggedIn');
   return axios.post(`${BASE_URL}/api/savefirstpageadmodel`, adData, {
     headers: {
@@ -206,7 +223,7 @@ export const apiSaveFirstPageAdModel = async (adData: any) => {
 };
 
 // Ad Campaign Creation APIs - Second Page (with media upload)
-export const apiSaveSecondPageAdModel = async (adData: any, mediaFile?: File) => {
+export const apiSaveSecondPageAdModel = async (adData: AdModelData, mediaFile?: File): Promise<any> => {
   const token = localStorage.getItem('UserLoggedIn');
   const formData = new FormData();
   
@@ -231,7 +248,7 @@ export const apiSaveSecondPageAdModel = async (adData: any, mediaFile?: File) =>
 };
 
 // Ad Campaign Creation APIs - Third Page (Final Configuration)
-export const apiSaveThirdPageAdModel = async (adData: any) => {
+export const apiSaveThirdPageAdModel = async (adData: AdModelData): Promise<any> => {
   const token = localStorage.getItem('UserLoggedIn');
   return axios.post(`${BASE_URL}/api/savethirdpageadmodel`, adData, {
     headers: {
@@ -312,12 +329,13 @@ export async function apiSendOtp(mobileNumber: string) {
     localStorage.setItem("otpCountdown", (Math.floor(Date.now() / 1000) + 30).toString());
 
     return response;
-  } catch (error: any) {
-    console.error("apiSendOtp error:", error);
+  } catch (error: unknown) {
+    const axiosError = error as AxiosError<ApiErrorResponse>;
+    console.error("apiSendOtp error:", axiosError);
     throw new Error(
-      error.response?.data?.message ||
-      error.response?.data?.error ||
-      error.message ||
+      axiosError.response?.data?.message ||
+      axiosError.response?.data?.error ||
+      axiosError.message ||
       "Failed to send OTP. Please try again."
     );
   }
@@ -350,12 +368,13 @@ export async function apiVerifyOtp(mobile_number: string, otp: string, id: strin
     }
 
     return response;
-  } catch (error: any) {
-    console.error("apiVerifyOtp error:", error);
+  } catch (error: unknown) {
+    const axiosError = error as AxiosError<ApiErrorResponse>;
+    console.error("apiVerifyOtp error:", axiosError);
     throw new Error(
-      error.response?.data?.message ||
-      error.response?.data?.error ||
-      error.message ||
+      axiosError.response?.data?.message ||
+      axiosError.response?.data?.error ||
+      axiosError.message ||
       "Failed to verify OTP. Please try again."
     );
   }
@@ -408,16 +427,17 @@ export async function apiSaveUserDetails(payload: {
     }
 
     return response;
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const axiosError = error as AxiosError<ApiErrorResponse>;
     console.error('apiSaveUserDetails error:', {
-      message: error.message,
-      response: error.response?.data,
-      status: error.response?.status,
+      message: axiosError.message,
+      response: axiosError.response?.data,
+      status: axiosError.response?.status,
       payload: JSON.stringify(payload, null, 2)
     });
     throw new Error(
-      error.response?.data?.message ||
-      error.message ||
+      axiosError.response?.data?.message ||
+      axiosError.message ||
       'Failed to save user details. Server error occurred.'
     );
   }
@@ -433,12 +453,13 @@ export async function apiPing() {
     }
 
     return response.data;
-  } catch (error: any) {
-    console.error("apiPing error:", error);
+  } catch (error: unknown) {
+    const axiosError = error as AxiosError<ApiErrorResponse>;
+    console.error("apiPing error:", axiosError);
     throw new Error(
-      error.response?.data?.message ||
-      error.response?.data?.error ||
-      error.message ||
+      axiosError.response?.data?.message ||
+      axiosError.response?.data?.error ||
+      axiosError.message ||
       "Failed to ping server. Please try again."
     );
   }
@@ -477,12 +498,13 @@ export async function apiSendEmailOtp(email: string) {
     localStorage.setItem("email", userData.email);
 
     return response;
-  } catch (error: any) {
-    console.error("apiSendEmailOtp error:", error);
+  } catch (error: unknown) {
+    const axiosError = error as AxiosError<ApiErrorResponse>;
+    console.error("apiSendEmailOtp error:", axiosError);
     throw new Error(
-      error.response?.data?.message ||
-      error.response?.data?.error ||
-      error.message ||
+      axiosError.response?.data?.message ||
+      axiosError.response?.data?.error ||
+      axiosError.message ||
       "Failed to send OTP. Please try again."
     );
   }
@@ -509,12 +531,13 @@ export async function apiVerifyEmailOtp(email: string, otp: string, id: string) 
     }
 
     return response;
-  } catch (error: any) {
-    console.error("apiVerifyEmailOtp error:", error);
+  } catch (error: unknown) {
+    const axiosError = error as AxiosError<ApiErrorResponse>;
+    console.error("apiVerifyEmailOtp error:", axiosError);
     throw new Error(
-      error.response?.data?.message ||
-      error.response?.data?.error ||
-      error.message ||
+      axiosError.response?.data?.message ||
+      axiosError.response?.data?.error ||
+      axiosError.message ||
       "Failed to verify OTP. Please try again."
     );
   }
@@ -535,12 +558,13 @@ export async function apiGoogleSSO(token: string) {
     }
 
     return response;
-  } catch (error: any) {
-    console.error("apiGoogleSSO error:", error);
+  } catch (error: unknown) {
+    const axiosError = error as AxiosError<ApiErrorResponse>;
+    console.error("apiGoogleSSO error:", axiosError);
     throw new Error(
-      error.response?.data?.message ||
-      error.response?.data?.error ||
-      error.message ||
+      axiosError.response?.data?.message ||
+      axiosError.response?.data?.error ||
+      axiosError.message ||
       "Failed to authenticate with Google. Please try again."
     );
   }
@@ -588,7 +612,7 @@ export const apiGetCompany = async (companyId: string, userId: string) => {
 };
 
 // Update company details
-export const apiUpdateCompany = async (companyData: any) => {
+export const apiUpdateCompany = async (companyData: CompanyData) => {
   const token = localStorage.getItem('UserLoggedIn');
   const formData = new FormData();
   
@@ -628,10 +652,10 @@ export const apiGetAllProducts = async () => {
 };
 
 // Add new product
-export const apiAddProduct = async (productData: any) => {
+export const apiAddProduct = async (productData: Record<string, unknown>) => {
   const token = localStorage.getItem('UserLoggedIn');
 
-  const sanitizeText = (value: any, fallback = ''): string => {
+  const sanitizeText = (value: unknown, fallback = ''): string => {
     if (value === undefined || value === null) {
       return fallback;
     }
@@ -646,17 +670,17 @@ export const apiAddProduct = async (productData: any) => {
       .replace(/\r?\n/g, ' ');
   };
 
-  const toIntSafe = (value: any, fallback = 0): number => {
-    const parsed = typeof value === 'number' ? value : Number.parseInt(value, 10);
+  const toIntSafe = (value: unknown, fallback = 0): number => {
+    const parsed = typeof value === 'number' ? value : Number.parseInt(String(value), 10);
     return Number.isFinite(parsed) ? parsed : fallback;
   };
 
-  const toFloatSafe = (value: any, fallback = 0): number => {
-    const parsed = typeof value === 'number' ? value : Number.parseFloat(value);
+  const toFloatSafe = (value: unknown, fallback = 0): number => {
+    const parsed = typeof value === 'number' ? value : Number.parseFloat(String(value));
     return Number.isFinite(parsed) ? parsed : fallback;
   };
 
-  const toCsv = (value: any): string => {
+  const toCsv = (value: unknown): string => {
     if (Array.isArray(value)) {
       return value
         .filter((item) => item !== undefined && item !== null && String(item).trim() !== '')
@@ -852,17 +876,18 @@ export const apiAddProduct = async (productData: any) => {
       },
       timeout: 15000
     });
-  } catch (error: any) {
-    const errorData = error.response?.data;
+  } catch (error: unknown) {
+    const axiosError = error as AxiosError<ApiErrorResponse>;
+    const errorData = axiosError.response?.data;
     console.error('apiAddProduct error:', {
-      message: error.message,
-      status: error.response?.status,
+      message: axiosError.message,
+      status: axiosError.response?.status,
       data: errorData,
-      sqlError: errorData?.sqlMessage || errorData?.message,
+      sqlError: (errorData as any)?.sqlMessage || errorData?.message,
       payload: productData
     });
 
-    if (errorData?.sqlMessage && errorData.sqlMessage.includes('Unknown column')) {
+    if ((errorData as any)?.sqlMessage && (errorData as any).sqlMessage.includes('Unknown column')) {
       console.error('SQL COLUMN ERROR: Backend schema mismatch suspected.');
     }
 
@@ -871,7 +896,7 @@ export const apiAddProduct = async (productData: any) => {
 };
 
 // Update product
-export const apiUpdateProduct = async (productData: any) => {
+export const apiUpdateProduct = async (productData: Record<string, unknown>) => {
   const token = localStorage.getItem('UserLoggedIn');
 
   return axios.post(`${BASE_URL}/api/updateproduct`, productData, {
@@ -883,7 +908,7 @@ export const apiUpdateProduct = async (productData: any) => {
 };
 
 // Delete product
-export const apiDeleteProduct = async (productData: any) => {
+export const apiDeleteProduct = async (productData: Record<string, unknown>) => {
   const token = localStorage.getItem('UserLoggedIn');
   return axios.post(`${BASE_URL}/api/deleteProduct`, productData, {
     headers: {
@@ -913,11 +938,11 @@ export const apiGetCompanyButtons = async () => {
 };
 
 // Save company post
-export const apiSavePost = async (postData: any) => {
+export const apiSavePost = async (postData: Record<string, unknown>) => {
   const token = localStorage.getItem('UserLoggedIn');
   
   try {
-    const sanitizeText = (value: any, fallback = ''): string => {
+    const sanitizeText = (value: unknown, fallback = ''): string => {
       if (value === undefined || value === null) {
         return fallback;
       }
@@ -932,12 +957,12 @@ export const apiSavePost = async (postData: any) => {
         .replace(/\r?\n/g, ' ');
     };
 
-    const toIntSafe = (value: any, fallback = 0): number => {
-      const parsed = typeof value === 'number' ? value : Number.parseInt(value, 10);
+    const toIntSafe = (value: unknown, fallback = 0): number => {
+      const parsed = typeof value === 'number' ? value : Number.parseInt(String(value), 10);
       return Number.isFinite(parsed) ? parsed : fallback;
     };
 
-    const normalizedData: Record<string, any> = {
+    const normalizedData: Record<string, unknown> = {
       company_id: toIntSafe(postData.company_id ?? postData.companyId),
       createdby: toIntSafe(postData.createdby ?? postData.createdBy ?? postData.userId),
       PostName: sanitizeText(postData.PostName ?? postData.title),
@@ -969,7 +994,7 @@ export const apiSavePost = async (postData: any) => {
     }
 
     // Use default button id if none provided
-    if (!normalizedData.buttonid || normalizedData.buttonid < 0) {
+    if (!normalizedData.buttonid || (typeof normalizedData.buttonid === 'number' && normalizedData.buttonid < 0)) {
       normalizedData.buttonid = 0;
     }
 
@@ -983,7 +1008,7 @@ export const apiSavePost = async (postData: any) => {
       company_id: normalizedData.company_id
     };
 
-    if (normalizedData.id > 0) {
+    if (typeof normalizedData.id === 'number' && normalizedData.id > 0) {
       payload.id = normalizedData.id;
     }
 
@@ -1010,19 +1035,20 @@ export const apiSavePost = async (postData: any) => {
       // Add timeout to prevent long-hanging requests
       timeout: 15000
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     // Enhanced error handling with SQL error diagnosis
-    const errorData = error.response?.data;
+    const axiosError = error as AxiosError<ApiErrorResponse>;
+    const errorData = axiosError.response?.data;
     console.error('apiSavePost error:', {
-      message: error.message,
-      status: error.response?.status,
+      message: axiosError.message,
+      status: axiosError.response?.status,
       data: errorData,
-      sqlError: errorData?.sqlMessage || errorData?.message,
+      sqlError: (errorData as any)?.sqlMessage || errorData?.message,
       requiredFields: ['PostName', 'PostDescription', 'company_id', 'createdby'],
     });
     
     // Special handling for SQL column errors
-    if (errorData?.sqlMessage && errorData.sqlMessage.includes('Unknown column')) {
+    if ((errorData as any)?.sqlMessage && (errorData as any).sqlMessage.includes('Unknown column')) {
       console.error('SQL COLUMN ERROR: The backend database schema might not match the mapped fields');
       console.error('Original frontend fields:', Object.keys(postData));
       console.error('Mapped backend fields were sent to API');
@@ -1107,7 +1133,7 @@ export const apiGetProductDetails = async (productId: string | number, userId: s
   });
 };
 
-export const apiSaveProductDetails = async (details: any) => {
+export const apiSaveProductDetails = async (details: Record<string, unknown>) => {
   const token = localStorage.getItem('UserLoggedIn');
   return axios.post(`${BASE_URL}/api/savevproductsdetails`, details, {
     headers: {
@@ -1200,7 +1226,7 @@ export const apiGetCompanyButtonList = async () => {
 };
 
 // Save celebration ads
-export const apiSaveCelebrationAd = async (adData: any, mediaFile?: File) => {
+export const apiSaveCelebrationAd = async (adData: Record<string, unknown>, mediaFile?: File) => {
   const token = localStorage.getItem('UserLoggedIn');
   const formData = new FormData();
   
@@ -1223,7 +1249,7 @@ export const apiSaveCelebrationAd = async (adData: any, mediaFile?: File) => {
 };
 
 // Save business ad
-export const apiSaveBusinessAd = async (adData: any, mediaFile?: File) => {
+export const apiSaveBusinessAd = async (adData: Record<string, unknown>, mediaFile?: File) => {
   const token = localStorage.getItem('UserLoggedIn');
   const formData = new FormData();
   

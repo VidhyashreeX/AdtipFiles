@@ -1,80 +1,83 @@
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
-import Analytics from './pages/Analytics';
-import App from "./App";
-import Index from "./pages/Index";
-import Home from "./pages/Home";
-import Login from "./pages/Login";
-import OTPVerification from "./pages/OTPVerification";
-import Profile from "./pages/Profile";
-import EditProfile from "./pages/EditProfile";
-import TipTube from "./pages/TipTube";
-import WatchPage from "./pages/WatchPage";
-import TipShorts from "./pages/TipShorts";
-import NotFound from "./pages/NotFound";
-import Onboarding from "./pages/Onboarding";
-import PersonalDetails from "./pages/PersonalDetails";
-import Interests from "./pages/Interests";
-import CreatePost from "./pages/CreatePost";
-import LiveStream from "./pages/LiveStream";
-import StartStream from "./pages/StartStream";
-import LiveStreaming from "./pages/LiveStreaming";
-import TipCall from "./pages/TipCall";
-import Refer from "./pages/Refer";
-import Premium from "./pages/Premium";
-import TipShop from "./pages/marketplace/TipShop";
-import BecomeSeller from "./pages/marketplace/BecomeSeller";
-import ProductDetail from "./pages/marketplace/ProductDetail";
-import ProductDetailView from "./pages/ProductDetailView";
-import ListProductsPage from "./pages/ListProductsPage";
-import ListProductFinish from "./pages/marketplace/ListProductFinish";
-import AddProduct from "./pages/marketplace/AddProduct";
-import AddService from "./pages/marketplace/AddService";
-import Checkout from "./pages/marketplace/Checkout";
-import OrderConfirmation from "./pages/marketplace/OrderConfirmation";
-import BecomeSellerFullPage from "./pages/BecomeSellerFullPage";
-import PremiumContent from "./pages/marketplace/PremiumContent";
-import PostAds from "./pages/marketplace/PostAds";
-import Analysis from "./pages/marketplace/Analysis";
-import ContactUs from "./pages/ContactUs";
-import Settings from "./pages/Settings";
-import TermsAndConditions from "./pages/TermsAndConditions";
-import AdsTracker from "./pages/AdsTracker";
-import HowToEarnCreator from "./pages/HowToEarnCreator";
-import HowToEarnUser from "./pages/HowToEarnUser";
-import PrivacyPolicy from "./pages/PrivacyPolicy";
-import EarnOpportunities from "./pages/EarnOpportunities";
-import Cart from "./pages/marketplace/Cart";
-import MyOrders from "./pages/marketplace/MyOrders";
-import Favorites from "./pages/marketplace/Favorites";
-import CompleteProfile from "./pages/CompleteProfile";
-import PricingOffers from "./pages/PricingOffers";
-import ChoosePlan from "./pages/ChoosePlan";
-import RazorpayCheckout from "@/pages/RazorpayCheckout";
-import Wallet from "./components/Wallet";
-import ChannelPage from "./pages/ChannelPage";
-import SearchResults from "./pages/SearchResults";
-import SellerDashboard from "./pages/SellerDashboard";
-import SellerAddProduct from "./pages/AddProduct";
-import SellerAddPost from "./pages/AddPost";
-import ViewAllProducts from "./pages/ViewAllProducts";
-import ViewAllPosts from "./pages/ViewAllPosts";
-import AdModel from "./pages/AdModel";
-import ViewAllReviews from "./pages/ViewAllReviews";
-import ConfigureCampaign from "./pages/ConfigureCampaign";
-import UploadCreative from "./pages/UploadCreative";
-import PreviewAd from "./pages/PreviewAd";
-import AdsCart from "./pages/AdsCart";
-import PaymentGateway from "./pages/PaymentGateway";
-import AdOrders from "./pages/AdOrders";
-import AdAnalytics from "./pages/AdAnalytics";
-import AdDashboard from "./pages/AdDashboard";
-import AdOrderDetail from "./pages/AdOrderDetail";
-import SellerRegistration from "./components/SellerRegistration";
-import EditSellerInfo from "./components/EditSellerInfo";
-import BecomeAdvertiserRedirect from "./components/BecomeAdvertiserRedirect";
-import BecomeAdvertiserLanding from "./pages/BecomeAdvertiserLanding";
-import Publisher from "./pages/Publisher";
-import PublisherDashboard from "./pages/PublisherDashboard";
+import { lazy, Suspense } from "react";
+
+// Lazy load all page components for code splitting
+const Analytics = lazy(() => import('./pages/Analytics'));
+const App = lazy(() => import("./App"));
+const Index = lazy(() => import("./pages/Index"));
+const Home = lazy(() => import("./pages/Home"));
+const Login = lazy(() => import("./pages/Login"));
+const OTPVerification = lazy(() => import("./pages/OTPVerification"));
+const Profile = lazy(() => import("./pages/Profile"));
+const EditProfile = lazy(() => import("./pages/EditProfile"));
+const TipTube = lazy(() => import("./pages/TipTube"));
+const WatchPage = lazy(() => import("./pages/WatchPage"));
+const TipShorts = lazy(() => import("./pages/TipShorts"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+const Onboarding = lazy(() => import("./pages/Onboarding"));
+const PersonalDetails = lazy(() => import("./pages/PersonalDetails"));
+const Interests = lazy(() => import("./pages/Interests"));
+const CreatePost = lazy(() => import("./pages/CreatePost"));
+const LiveStream = lazy(() => import("./pages/LiveStream"));
+const StartStream = lazy(() => import("./pages/StartStream"));
+const LiveStreaming = lazy(() => import("./pages/LiveStreaming"));
+const TipCall = lazy(() => import("./pages/TipCall"));
+const Refer = lazy(() => import("./pages/Refer"));
+const Premium = lazy(() => import("./pages/Premium"));
+const TipShop = lazy(() => import("./pages/marketplace/TipShop"));
+const BecomeSeller = lazy(() => import("./pages/marketplace/BecomeSeller"));
+const ProductDetail = lazy(() => import("./pages/marketplace/ProductDetail"));
+const ProductDetailView = lazy(() => import("./pages/ProductDetailView"));
+const ListProductsPage = lazy(() => import("./pages/ListProductsPage"));
+const ListProductFinish = lazy(() => import("./pages/marketplace/ListProductFinish"));
+const AddProduct = lazy(() => import("./pages/marketplace/AddProduct"));
+const AddService = lazy(() => import("./pages/marketplace/AddService"));
+const Checkout = lazy(() => import("./pages/marketplace/Checkout"));
+const OrderConfirmation = lazy(() => import("./pages/marketplace/OrderConfirmation"));
+const BecomeSellerFullPage = lazy(() => import("./pages/BecomeSellerFullPage"));
+const PremiumContent = lazy(() => import("./pages/marketplace/PremiumContent"));
+const PostAds = lazy(() => import("./pages/marketplace/PostAds"));
+const Analysis = lazy(() => import("./pages/marketplace/Analysis"));
+const ContactUs = lazy(() => import("./pages/ContactUs"));
+const Settings = lazy(() => import("./pages/Settings"));
+const TermsAndConditions = lazy(() => import("./pages/TermsAndConditions"));
+const AdsTracker = lazy(() => import("./pages/AdsTracker"));
+const HowToEarnCreator = lazy(() => import("./pages/HowToEarnCreator"));
+const HowToEarnUser = lazy(() => import("./pages/HowToEarnUser"));
+const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
+const EarnOpportunities = lazy(() => import("./pages/EarnOpportunities"));
+const Cart = lazy(() => import("./pages/marketplace/Cart"));
+const MyOrders = lazy(() => import("./pages/marketplace/MyOrders"));
+const Favorites = lazy(() => import("./pages/marketplace/Favorites"));
+const CompleteProfile = lazy(() => import("./pages/CompleteProfile"));
+const PricingOffers = lazy(() => import("./pages/PricingOffers"));
+const ChoosePlan = lazy(() => import("./pages/ChoosePlan"));
+const RazorpayCheckout = lazy(() => import("@/pages/RazorpayCheckout"));
+const Wallet = lazy(() => import("./components/Wallet"));
+const ChannelPage = lazy(() => import("./pages/ChannelPage"));
+const SearchResults = lazy(() => import("./pages/SearchResults"));
+const SellerDashboard = lazy(() => import("./pages/SellerDashboard"));
+const SellerAddProduct = lazy(() => import("./pages/AddProduct"));
+const SellerAddPost = lazy(() => import("./pages/AddPost"));
+const ViewAllProducts = lazy(() => import("./pages/ViewAllProducts"));
+const ViewAllPosts = lazy(() => import("./pages/ViewAllPosts"));
+const AdModel = lazy(() => import("./pages/AdModel"));
+const ViewAllReviews = lazy(() => import("./pages/ViewAllReviews"));
+const ConfigureCampaign = lazy(() => import("./pages/ConfigureCampaign"));
+const UploadCreative = lazy(() => import("./pages/UploadCreative"));
+const PreviewAd = lazy(() => import("./pages/PreviewAd"));
+const AdsCart = lazy(() => import("./pages/AdsCart"));
+const PaymentGateway = lazy(() => import("./pages/PaymentGateway"));
+const AdOrders = lazy(() => import("./pages/AdOrders"));
+const AdAnalytics = lazy(() => import("./pages/AdAnalytics"));
+const AdDashboard = lazy(() => import("./pages/AdDashboard"));
+const AdOrderDetail = lazy(() => import("./pages/AdOrderDetail"));
+const SellerRegistration = lazy(() => import("./components/SellerRegistration"));
+const EditSellerInfo = lazy(() => import("./components/EditSellerInfo"));
+const BecomeAdvertiserRedirect = lazy(() => import("./components/BecomeAdvertiserRedirect"));
+const BecomeAdvertiserLanding = lazy(() => import("./pages/BecomeAdvertiserLanding"));
+const Publisher = lazy(() => import("./pages/Publisher"));
+const PublisherDashboard = lazy(() => import("./pages/PublisherDashboard"));
 
 const router = createBrowserRouter([
 	{
@@ -388,4 +391,21 @@ const router = createBrowserRouter([
 	},
 ]);
 
-export default router;
+// Loading component for Suspense fallback
+const LoadingFallback = () => (
+	<div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950">
+		<div className="text-center">
+			<div className="animate-spin rounded-full h-12 w-12 border-b-2 border-adtip-teal mx-auto mb-4"></div>
+			<p className="text-gray-600 dark:text-gray-400">Loading...</p>
+		</div>
+	</div>
+);
+
+// Wrap router with Suspense for lazy loading
+const AppRouter = () => (
+	<Suspense fallback={<LoadingFallback />}>
+		<RouterProvider router={router} />
+	</Suspense>
+);
+
+export default AppRouter;

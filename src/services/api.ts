@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { triggerLoginModal } from '../utils/authRedirect';
+import { UpdateChannelRequest, UserCompleteData, ChannelData, VideoData, Post } from '../types';
 
 // Use environment variable for API base URL
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:7082';
@@ -278,7 +279,7 @@ export const userAPI = {
     api.get(`/api/channel/${channelId}/earnings`),
 
   // Add channel update endpoint
-  updateChannel: (channelId: string, data: any) =>
+  updateChannel: (channelId: string, data: UpdateChannelRequest) =>
     api.post(`/api/channel/${channelId}/update`, data),
 
   // Get user's posts using the proper endpoint (matches mobile app)
@@ -301,7 +302,7 @@ export const userAPI = {
         api.get(`/api/users/${userId}/posts`)
       ]);
 
-      const result: any = {
+      const result: UserCompleteData = {
         channel: null,
         videos: [],
         shorts: [],

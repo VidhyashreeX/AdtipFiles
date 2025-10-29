@@ -5,6 +5,7 @@ import CountrySelect from "../components/CountrySelect";
 import countryData from "../components/countryData.json";
 import { authAPI } from "../services/api";
 import toast from "react-hot-toast";
+import type { User } from "../types";
 
 const PhoneLogin: React.FC = () => {
   const navigate = useNavigate();
@@ -157,16 +158,16 @@ const PhoneLogin: React.FC = () => {
       const response = await authAPI.verifyOTP(countryCode + phone, otp, String(userId));
       if (response.status === 200) {
         const { accessToken, data } = response.data;
-        const userData = {
+        const userData: User = {
           ...data[0],
           accessToken,
-          channelId: (data[0] as any).channelId || null
+          channelId: (data[0] as User).channelId || null
         };
         localStorage.setItem('UserLoggedIn', accessToken);
         localStorage.setItem('user', JSON.stringify(userData));
         setUserId(userData.id);
         setName(userData.name || "");
-        setProfileImage(userData.profileImage || "");
+        setProfileImage(userData.profile_image || "");
 
         // Save to localStorage
         localStorage.setItem("UserLoggedIn", accessToken);
@@ -416,12 +417,13 @@ const PhoneLogin: React.FC = () => {
                 const response = await authAPI.sendOTP('+911234567890');
                 console.log('OTP Test Response:', response);
                 toast.success('OTP endpoint working');
-              } catch (error: any) {
-                console.error('OTP Test Error:', error);
-                if (error.response?.status === 404) {
+              } catch (error: unknown) {
+                const axiosError = error as { response?: { status?: number } };
+                console.error('OTP Test Error:', axiosError);
+                if (axiosError.response?.status === 404) {
                   toast.error('OTP endpoint not found - check backend');
                 } else {
-                  toast.error(`OTP endpoint error: ${error.response?.status}`);
+                  toast.error(`OTP endpoint error: ${axiosError.response?.status}`);
                 }
               }
             }}
@@ -439,12 +441,13 @@ const PhoneLogin: React.FC = () => {
                 const response = await authAPI.verifyOTP('+911234567890', '123456', '123');
                 console.log('OTP Verification Test Response:', response);
                 toast.success('OTP verification endpoint working');
-              } catch (error: any) {
-                console.error('OTP Verification Test Error:', error);
-                if (error.response?.status === 400) {
+              } catch (error: unknown) {
+                const axiosError = error as { response?: { status?: number } };
+                console.error('OTP Verification Test Error:', axiosError);
+                if (axiosError.response?.status === 400) {
                   toast.error('OTP verification format issue - check payload');
                 } else {
-                  toast.error(`OTP verification error: ${error.response?.status}`);
+                  toast.error(`OTP verification error: ${axiosError.response?.status}`);
                 }
               }
             }}
