@@ -90,7 +90,6 @@ const App = () => {
             </AuthModalProvider>
           </AuthProvider>
         </ThemeProvider>
-        <ReactQueryDevtools initialIsOpen={false} />
       </QueryClientProvider>
     </ErrorBoundary>
   );
