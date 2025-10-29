@@ -525,14 +525,14 @@ const AdTipSidebar = () => {
                       if (!isMobile && !isCollapsed) toggleSidebar();
                     }}
                     className={cn(
-                      "flex items-center gap-3 rounded-xl px-3 py-3 text-gray-700 dark:text-gray-300 transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-800/60 w-full text-left group",
-                      isActive(item.to) && "bg-gradient-to-r from-[#00dcaa]/10 to-[#00b894]/10 text-[#00dcaa] dark:text-[#00dcaa] font-semibold shadow-sm"
+                      "flex items-center gap-4 rounded-2xl px-4 py-3.5 text-gray-700 dark:text-gray-300 transition-all duration-200 hover:bg-white/20 dark:hover:bg-gray-800/25 hover:backdrop-blur-sm hover:shadow-xl hover:scale-[1.02] w-full text-left group border border-transparent hover:border-white/20 dark:hover:border-gray-600/30 mx-2",
+                      isActive(item.to) && "bg-white/25 dark:bg-gray-800/30 text-[#00dcaa] dark:text-[#00dcaa] font-semibold shadow-xl border-white/30 dark:border-gray-600/40 backdrop-blur-sm"
                     )}
                   >
                     {React.cloneElement(item.icon, {
                       className: cn(
                         "h-5 w-5 transition-all duration-200 group-hover:scale-110 group-hover:rotate-3",
-                        isActive(item.to) && "text-[#00dcaa]"
+                        isActive(item.to) && "text-[#00dcaa] scale-110"
                       )
                     })}
                     <span className="text-sm font-medium select-none">{item.label}</span>
