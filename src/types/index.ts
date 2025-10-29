@@ -94,6 +94,27 @@ export interface Post {
   views?: number;
 }
 
+// Comment Types
+export interface Comment {
+  id: number;
+  post_id: number;
+  user_id: number;
+  comment: string;
+  created_at: string;
+  updated_at: string;
+  user_name: string | null;
+  user_profile_image: string | null;
+  like_count: number;
+  is_liked: boolean;
+}
+
+export interface CommentsResponse {
+  status: boolean;
+  message: string;
+  data: Comment[];
+  pagination: Pagination;
+}
+
 // Product and Marketplace Types
 export interface Product {
   id: number;

@@ -1,7 +1,7 @@
 // src/hooks/api/posts.ts - React Query hooks for posts-related API calls
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
 import axios from 'axios';
-import { ApiResponse, Post, Pagination } from '@/types';
+import { ApiResponse, Post, Pagination, Comment, CommentsResponse } from '@/types';
 
 // Query keys for consistent caching
 export const postKeys = {
@@ -162,22 +162,25 @@ export const useLikePost = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (postId: number) => {
+    mutationFn: async ({ postId, isLiked }: { postId: number; isLiked: boolean }) => {
       const response = await api.post('/api/save-user-post-like', {
         postId,
         userId: localStorage.getItem('UserId') || 0,
-        is_liked: true
+        is_liked: !isLiked // Toggle the like status
       });
-      return response.data;
+      return { ...response.data, newIsLiked: !isLiked };
     },
-    onSuccess: (result, postId) => {
+    onSuccess: (result, { postId, isLiked }) => {
+      const newIsLiked = !isLiked;
+      const likeCountChange = newIsLiked ? 1 : -1;
+
       // Update the post's like status in cache
       queryClient.setQueryData(postKeys.detail(postId), (oldData: Post | undefined) => {
         if (!oldData) return oldData;
         return {
           ...oldData,
-          is_liked: result.data?.is_liked ?? true,
-          likeCount: (oldData.likeCount || 0) + 1,
+          is_liked: newIsLiked,
+          likeCount: Math.max(0, (oldData.likeCount || 0) + likeCountChange),
         };
       });
 
@@ -204,7 +207,21 @@ export const useAddComment = () => {
       // Invalidate post details and lists to refresh comment counts
       queryClient.invalidateQueries({ queryKey: postKeys.detail(postId) });
       queryClient.invalidateQueries({ queryKey: postKeys.lists() });
+      // Invalidate comments for this post
+      queryClient.invalidateQueries({ queryKey: ['comments', postId] });
     },
+  });
+};
+
+// Fetch comments for a post
+export const useComments = (postId: number, enabled = true) => {
+  return useQuery({
+    queryKey: ['comments', postId],
+    queryFn: async (): Promise<CommentsResponse> => {
+      const response = await api.get(`/api/posts/${postId}/comments`);
+      return response.data;
+    },
+    enabled: enabled && !!postId,
   });
 };
 

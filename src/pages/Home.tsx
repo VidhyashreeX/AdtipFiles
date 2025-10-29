@@ -9,6 +9,7 @@ import { FiShare2 } from "react-icons/fi"; // Feather's clean share icon
 import axios, { AxiosError } from "axios";
 import RandomAvatar, { getRandomAvatar } from "../components/RandomAvatar";
 import ShareModal from "@/components/ShareModal";
+import CommentsModal from "@/components/modals/CommentsModal";
 import { getSafeImageUrl, handleImageError, createPlaceholderImage } from "../utils/imageUtils";
 import { contentAPI, userAPI } from "../services/api";
 import { useUIStore } from "../stores/ui.store";
@@ -16,7 +17,7 @@ import BannerCarousel from "../components/BannerCarousel";
 import CategorySelector from "../components/CategorySelector";
 import WalletBalance from "../components/WalletBalance";
 import { popularCategories } from "../components/CategorySelector";
-import { usePosts, usePost } from "@/hooks/api";
+import { usePosts, usePost, useLikePost } from "@/hooks/api";
 
 // Define TypeScript interfaces
 interface User {
@@ -83,8 +84,14 @@ const Home = () => {
   const [showCopied, setShowCopied] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
 const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
+  const [commentsOpen, setCommentsOpen] = useState(false);
+  const [selectedPostForComments, setSelectedPostForComments] = useState<{
+    id: number;
+    user_name: string;
+    content: string;
+  } | null>(null);
 
- const handlePostShare = (post: { id: number }) => {
+  const handlePostShare = (post: { id: number }) => {
   if (!post?.id) {
     console.error("Cannot share: post ID is missing or invalid", post);
     return;
@@ -92,6 +99,27 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
   setSelectedPost(post);
   setShareOpen(true);
 };
+
+  const handlePostComments = (post: { id: number; user_name: string; content: string }) => {
+    setSelectedPostForComments(post);
+    setCommentsOpen(true);
+  };
+
+  const handlePostLike = async (post: Post) => {
+    if (!user?.id) {
+      openAuthModal();
+      return;
+    }
+
+    try {
+      await likePostMutation.mutateAsync({
+        postId: post.id,
+        isLiked: post.is_liked
+      });
+    } catch (error) {
+      console.error("Like error:", error);
+    }
+  };
 
   const [showLoginPrompt, setShowLoginPrompt] = useState<boolean>(false);
   const [postViewCount, setPostViewCount] = useState<number>(0);
@@ -117,6 +145,9 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
     user_id: user?.id || 0,
     limit: 5,
   });
+
+  // Like mutation
+  const likePostMutation = useLikePost();
 
   // Fetch single post if postId is provided
   const { data: singlePostData, isLoading: singlePostLoading } = usePost(
@@ -293,40 +324,41 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
                   <div
                     key={post.id}
                     ref={index === displayData.length - 4 ? loadingRef : undefined} // Observe 4th last post
-                    className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 cursor-pointer mb-4 md:mb-6 md:rounded-lg md:border md:shadow-sm"
-                    onClick={() => handlePostClick(post.id)}
+                    className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 mb-6 rounded-lg shadow-sm overflow-hidden"
                   >
                     {/* Header */}
-                    <div className="flex items-center px-3 py-2.5">
-                      {post.user_profile_image ? (
-                        <img
-                          src={getSafeImageUrl(post.user_profile_image)}
-                          alt={post.user_name || "User"}
-                          className="w-9 h-9 rounded-full object-cover ring-2 ring-gray-100 dark:ring-gray-800"
-                          onError={(e) => {
-                            handleImageError(e);
-                          }}
-                        />
-                      ) : (
-                        <RandomAvatar
-                          seed={post.user_id || post.user_name || post.id}
-                          alt={post.user_name || "User"}
-                          className="w-9 h-9 rounded-full object-cover ring-2 ring-gray-100 dark:ring-gray-800"
-                        />
-                      )}
-                      <div className="ml-3 flex-1">
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-semibold text-sm text-gray-900 dark:text-gray-100">{post.user_name}</span>
-                          {post.is_promoted && (
-                            <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">• Sponsored</span>
+                    <div className="flex items-center justify-between px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        {post.user_profile_image ? (
+                          <img
+                            src={getSafeImageUrl(post.user_profile_image)}
+                            alt={post.user_name || "User"}
+                            className="w-8 h-8 rounded-full object-cover ring-1 ring-gray-200 dark:ring-gray-700"
+                            onError={(e) => {
+                              handleImageError(e);
+                            }}
+                          />
+                        ) : (
+                          <RandomAvatar
+                            seed={post.user_id || post.user_name || post.id}
+                            alt={post.user_name || "User"}
+                            className="w-8 h-8 rounded-full object-cover ring-1 ring-gray-200 dark:ring-gray-700"
+                          />
+                        )}
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-sm text-gray-900 dark:text-gray-100">{post.user_name}</span>
+                            {post.is_promoted && (
+                              <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">• Sponsored</span>
+                            )}
+                          </div>
+                          {post.address && (
+                            <span className="text-xs text-gray-500 dark:text-gray-400">{post.address}</span>
                           )}
                         </div>
-                        {post.address && (
-                          <span className="text-xs text-gray-500 dark:text-gray-400">{post.address}</span>
-                        )}
                       </div>
-                      <button className="ml-auto text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 p-2">
-                        <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                      <button className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 p-1">
+                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                           <circle cx="12" cy="5" r="2"/>
                           <circle cx="12" cy="12" r="2"/>
                           <circle cx="12" cy="19" r="2"/>
@@ -334,120 +366,171 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
                       </button>
                     </div>
                     {/* Media */}
-                    <div className="relative bg-black">
+                    <div className="relative bg-black cursor-pointer" onClick={() => handlePostClick(post.id)}>
                       {post.media_type === "video" && post.media_url ? (
-                        <div className="aspect-[4/5] bg-muted">
+                        <div className="aspect-square bg-gray-100 dark:bg-gray-800">
                           <video
                             className="w-full h-full object-cover"
                             controls
                             preload="metadata"
-                            poster={post.thumbnail || "thumbnail.png"}
-                            style={{ borderRadius: 0 }}
+                            poster={post.thumbnail || undefined}
                           >
                             <source src={post.media_url} type="video/mp4" />
                             Your browser does not support the video tag.
                           </video>
-                          <div className="absolute bottom-2 right-2 bg-black/60 text-white px-2 py-0.5 rounded text-xs">
-                            {post.duration || "00:00"}
-                          </div>
+                          {post.duration && (
+                            <div className="absolute bottom-3 right-3 bg-black/70 text-white px-2 py-1 rounded text-xs font-medium">
+                              {post.duration}
+                            </div>
+                          )}
                         </div>
                       ) : post.media_type === "image" && post.media_url ? (
-                        <div className="aspect-square bg-muted">
+                        <div className="aspect-square bg-gray-100 dark:bg-gray-800">
                           <img
-                            src={post.media_url}
+                            src={getSafeImageUrl(post.media_url)}
                             alt={post.title}
                             className="w-full h-full object-cover"
-                            style={{ borderRadius: 0 }}
+                            onError={(e) => {
+                              handleImageError(e);
+                            }}
                           />
                         </div>
                       ) : (
-                        <div className="aspect-square bg-muted flex items-center justify-center text-muted-foreground">
-                          No media available
+                        <div className="aspect-square bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-400">
+                          <svg className="w-12 h-12" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zM4 7v10h16V7H4zm8 2l5 4H7l5-4z"/>
+                          </svg>
                         </div>
                       )}
                     </div>
                     {/* Action bar - Instagram Style */}
-                    <div className="px-3 py-2">
-                      <div className="flex items-center justify-between mb-2">
+                    <div className="px-4 py-3">
+                      <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-4">
                           {/* Like Button */}
-                          <button 
+                          <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              // Like functionality here
+                              handlePostLike(post);
                             }}
-                            className="hover:text-gray-500 dark:hover:text-gray-400 transition-colors"
+                            className="group relative"
+                            disabled={likePostMutation.isPending}
                           >
-                            <svg className="w-7 h-7" fill={post.is_liked ? "red" : "none"} stroke={post.is_liked ? "red" : "currentColor"} strokeWidth="2" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                            <svg
+                              className={`w-6 h-6 transition-all duration-200 ${
+                                post.is_liked
+                                  ? 'text-red-500 fill-red-500'
+                                  : 'text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-gray-100'
+                              }`}
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                              strokeWidth={post.is_liked ? "0" : "1.5"}
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z"
+                              />
                             </svg>
                           </button>
-                          
+
                           {/* Comment Button */}
-                          <button 
+                          <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              // Comment functionality here
+                              handlePostComments({
+                                id: post.id,
+                                user_name: post.user_name || "User",
+                                content: post.content
+                              });
                             }}
-                            className="hover:text-gray-500 dark:hover:text-gray-400 transition-colors"
+                            className="group"
                           >
-                            <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 12a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0zm0 0H8.25m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0zm0 0H12m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 0 1-2.555-.337A5.972 5.972 0 0 1 5.41 20.97a5.969 5.969 0 0 1-.474-.065 4.48 4.48 0 0 0 .978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z"/>
+                            <svg
+                              className="w-6 h-6 text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-gray-100 transition-colors"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="1.5"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                d="M12 20.25c4.97 0 9-3.694 9-8.25s-4.03-8.25-9-8.25S3 7.444 3 12c0 2.104.859 4.023 2.273 5.48.432.447.74 1.04.586 1.641a4.483 4.483 0 01-.923 1.785A5.969 5.969 0 006 21c1.282 0 2.47-.402 3.445-1.087.81.22 1.668.337 2.555.337z"
+                              />
                             </svg>
                           </button>
-                          
+
                           {/* Share Button */}
-                          <button 
+                          <button
                             onClick={(e) => {
                               e.stopPropagation();
                               handlePostShare(post);
                             }}
-                            className="hover:text-gray-500 dark:hover:text-gray-400 transition-colors"
+                            className="group"
                           >
-                            <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0 1 21.485 12 59.77 59.77 0 0 1 3.27 20.876L5.999 12zm0 0h7.5"/>
+                            <svg
+                              className="w-6 h-6 text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-gray-100 transition-colors"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="1.5"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                d="M6 12L3.269 3.126A59.768 59.768 0 0120.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5"
+                              />
                             </svg>
                           </button>
                         </div>
-                        
+
                         {/* Bookmark */}
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            // Bookmark functionality here
-                          }}
-                          className="hover:text-gray-500 dark:hover:text-gray-400 transition-colors"
-                        >
-                          <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0 1 11.186 0z"/>
+                        <button className="group">
+                          <svg
+                            className="w-6 h-6 text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-gray-100 transition-colors"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.5"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z"
+                            />
                           </svg>
                         </button>
                       </div>
-                      
+
                       {/* Likes count */}
-                      <div className="font-semibold text-sm text-gray-900 dark:text-gray-100 mb-1">
+                      <div className="font-semibold text-sm text-gray-900 dark:text-gray-100 mb-2">
                         {(post.likeCount || 0).toLocaleString()} likes
                       </div>
-                      
+
                       {/* Caption */}
-                      <div className="text-sm">
+                      <div className="text-sm mb-2">
                         <span className="font-semibold text-gray-900 dark:text-gray-100 mr-2">{post.user_name}</span>
                         <span className="text-gray-900 dark:text-gray-100">{post.content}</span>
                       </div>
-                      
+
                       {/* View comments */}
                       {(post.commentCount || 0) > 0 && (
-                        <button 
+                        <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            // View comments functionality
+                            handlePostComments({
+                              id: post.id,
+                              user_name: post.user_name || "User",
+                              content: post.content
+                            });
                           }}
-                          className="text-sm text-gray-500 dark:text-gray-400 mt-1"
+                          className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
                         >
                           View all {(post.commentCount || 0)} comments
                         </button>
                       )}
-                      
+
                       {/* Views count */}
                       {post.views && (
                         <div className="text-xs text-gray-400 dark:text-gray-500 mt-1">
@@ -539,6 +622,16 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
     shareUrl={`${window.location.origin}/post/${selectedPost.id}`}
     open={shareOpen}
     onClose={() => setShareOpen(false)}
+  />
+)}
+
+{selectedPostForComments && (
+  <CommentsModal
+    postId={selectedPostForComments.id}
+    open={commentsOpen}
+    onClose={() => setCommentsOpen(false)}
+    postAuthor={selectedPostForComments.user_name}
+    postContent={selectedPostForComments.content}
   />
 )}
 
