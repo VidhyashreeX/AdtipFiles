@@ -300,59 +300,59 @@ const Navbar = () => {
 
   return (
     <>
-    <nav className={`fixed top-0 z-50 w-full h-20 transition-all duration-300 ${(openMobile || (!isCollapsed && !isMobile)) ? 'bg-white/70 dark:bg-gray-900/80 backdrop-blur-xl shadow-lg' : ''}`} style={(openMobile || (!isCollapsed && !isMobile)) ? {
-      backdropFilter: 'blur(24px) saturate(180%)',
-      WebkitBackdropFilter: 'blur(24px) saturate(180%)',
-    } : {}}>
+    <nav className={`fixed top-0 z-50 w-full h-20 transition-all duration-200 ${(openMobile || (!isCollapsed && !isMobile)) ? 'bg-transparent' : ''}`}>
       <div className="relative max-w-screen-2xl mx-auto h-full flex items-center justify-between px-3 sm:px-4 md:px-6 gap-2 sm:gap-3">
         {/* Left: Hamburger and Logo - Liquid Glass Island */}
-        <div className="flex items-center gap-2 sm:gap-3 bg-white/60 dark:bg-gray-900/60 backdrop-blur-xl rounded-full px-3 sm:px-4 py-2 shadow-lg border border-white/20 dark:border-gray-700/30" style={{
-          backdropFilter: 'blur(20px) saturate(180%)',
-          WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+        <div className="flex items-center gap-2 sm:gap-3 bg-white/20 dark:bg-gray-900/25 backdrop-blur-2xl rounded-2xl px-4 sm:px-5 py-2.5 shadow-2xl border border-white/30 dark:border-gray-600/40 transition-all duration-300 hover:scale-[1.02] hover:bg-white/25 dark:hover:bg-gray-900/30" style={{
+          backdropFilter: 'blur(16px) saturate(200%) contrast(110%)',
+          WebkitBackdropFilter: 'blur(16px) saturate(200%) contrast(110%)',
+          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
         }}>
           <button
             onClick={toggleSidebar}
-            className="p-1 hover:bg-white/40 dark:hover:bg-gray-800/40 rounded-lg transition-colors"
+            className="p-1.5 hover:bg-white/20 dark:hover:bg-gray-700/30 rounded-xl transition-all duration-200 hover:scale-110"
             aria-label="Toggle sidebar"
           >
             <Menu className="h-5 w-5 sm:h-6 sm:w-6 text-foreground" />
           </button>
-          <Link to="/home" className="flex items-center">
-            <img src="/logo.png" alt="AdTip Logo" className="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8" />
-            <span className="text-base sm:text-lg md:text-xl font-bold text-adtip-teal ml-1.5 sm:ml-2">AdTip</span>
+          <Link to="/home" className="flex items-center group">
+            <img src="/logo.png" alt="AdTip Logo" className="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8 transition-transform duration-200 group-hover:scale-105" />
+            <span className="text-base sm:text-lg md:text-xl font-bold text-adtip-teal ml-1.5 sm:ml-2 transition-all duration-200 group-hover:text-adtip-teal/90">AdTip</span>
           </Link>
         </div>
 
         {/* Center: Search Bar - Hidden on mobile - Liquid Glass Island */}
         <div className="hidden md:flex flex-1 max-w-3xl mx-2 sm:mx-4">
           <form onSubmit={handleSearchSubmit} className="relative w-full">
-            <div className="relative bg-white/60 dark:bg-gray-900/60 backdrop-blur-xl rounded-full shadow-lg border border-white/20 dark:border-gray-700/30" style={{
-              backdropFilter: 'blur(20px) saturate(180%)',
-              WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+            <div className="relative bg-white/15 dark:bg-gray-900/20 backdrop-blur-2xl rounded-2xl shadow-2xl border border-white/25 dark:border-gray-600/35 transition-all duration-300 focus-within:bg-white/20 dark:focus-within:bg-gray-900/25 focus-within:shadow-3xl focus-within:scale-[1.01]" style={{
+              backdropFilter: 'blur(16px) saturate(200%) contrast(110%)',
+              WebkitBackdropFilter: 'blur(16px) saturate(200%) contrast(110%)',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.08)',
             }}>
               <input
                 type="text"
                 placeholder="Search users or content..."
-                className="w-full px-3 sm:px-4 md:px-5 py-2 sm:py-2.5 pr-10 text-sm md:text-base rounded-full bg-transparent border-0 focus:outline-none focus:ring-2 focus:ring-adtip-teal/50 transition-all text-foreground placeholder:text-muted-foreground"
+                className="w-full px-4 sm:px-5 md:px-6 py-3 sm:py-3.5 pr-12 text-sm md:text-base rounded-2xl bg-transparent border-0 focus:outline-none transition-all duration-200 text-foreground placeholder:text-muted-foreground/70"
                 value={searchQuery}
                 onChange={handleSearchInputChange}
                 onBlur={handleSearchInputBlur}
                 onFocus={() => setShowSearchSuggestions(searchQuery.length > 0)}
               />
-              <button type="submit" className="absolute right-3 sm:right-4 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-adtip-teal transition-colors">
+              <button type="submit" className="absolute right-4 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-adtip-teal transition-all duration-200 hover:scale-110 p-1 rounded-lg hover:bg-white/10 dark:hover:bg-gray-700/20">
                 <Search className="h-4 w-4 sm:h-5 sm:w-5" />
               </button>
             </div>
             
             {/* Search Suggestions */}
             {showSearchSuggestions && searchQuery && (
-              <div className="absolute top-full left-0 right-0 mt-2 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl rounded-2xl shadow-2xl z-50 max-h-60 overflow-y-auto border border-white/20 dark:border-gray-700/30" style={{
-                backdropFilter: 'blur(20px) saturate(180%)',
-                WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+              <div className="absolute top-full left-0 right-0 mt-3 bg-white/10 dark:bg-gray-900/15 backdrop-blur-2xl rounded-2xl shadow-2xl z-50 max-h-60 overflow-y-auto border border-white/20 dark:border-gray-600/30" style={{
+                backdropFilter: 'blur(16px) saturate(200%) contrast(110%)',
+                WebkitBackdropFilter: 'blur(16px) saturate(200%) contrast(110%)',
+                boxShadow: '0 12px 40px rgba(0, 0, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.05)',
               }}>
                 <div className="p-2">
                   <div 
-                    className="px-3 py-2 hover:bg-white/60 dark:hover:bg-gray-800/60 rounded-xl cursor-pointer flex items-center gap-2 transition-colors"
+                    className="px-4 py-3 hover:bg-white/15 dark:hover:bg-gray-700/20 rounded-xl cursor-pointer flex items-center gap-3 transition-all duration-200 hover:scale-[1.01]"
                     onClick={() => {
                       navigate(`/search?q=${encodeURIComponent(searchQuery)}`);
                       setShowSearchSuggestions(false);
@@ -368,8 +368,8 @@ const Navbar = () => {
         </div>
 
       {/* Right: Icons, Toggle, and Profile - Individual Liquid Glass Islands */}
-      <div className="flex items-center gap-2 sm:gap-3">
-        {/* Premium Toggle - Liquid Glass Island - Standardized Height */}
+      <div className="flex items-center gap-3 sm:gap-4">
+        {/* Premium Toggle - Liquid Glass Island */}
         <button
           onClick={() => {
             if (!user) {
@@ -382,10 +382,11 @@ const Navbar = () => {
               setIsToggleOn(false);
             }
           }}
-          className="flex items-center justify-center bg-white/60 dark:bg-gray-900/60 backdrop-blur-xl rounded-full shadow-lg border border-white/20 dark:border-gray-700/30 transition-all hover:scale-105 h-10 w-10 sm:h-11 sm:w-11"
+          className="flex items-center justify-center bg-white/20 dark:bg-gray-900/25 backdrop-blur-2xl rounded-2xl shadow-2xl border border-white/30 dark:border-gray-600/40 transition-all duration-300 hover:scale-110 hover:bg-white/25 dark:hover:bg-gray-900/30 h-11 w-11 sm:h-12 sm:w-12"
           style={{
-            backdropFilter: 'blur(20px) saturate(180%)',
-            WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+            backdropFilter: 'blur(16px) saturate(200%) contrast(110%)',
+            WebkitBackdropFilter: 'blur(16px) saturate(200%) contrast(110%)',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
           }}
           aria-label="Toggle premium status"
         >
@@ -396,18 +397,19 @@ const Navbar = () => {
           )}
         </button>
 
-        {/* Wallet - Liquid Glass Island - Standardized Height */}
+        {/* Wallet - Liquid Glass Island */}
         {user ? (
           <Link
             to="/wallet"
-            className="flex items-center text-foreground hover:text-adtip-teal transition-all bg-white/60 dark:bg-gray-900/60 backdrop-blur-xl rounded-full px-3 sm:px-4 shadow-lg border border-white/20 dark:border-gray-700/30 hover:scale-105 h-10 sm:h-11"
+            className="flex items-center text-foreground hover:text-adtip-teal transition-all duration-300 bg-white/20 dark:bg-gray-900/25 backdrop-blur-2xl rounded-2xl px-4 sm:px-5 shadow-2xl border border-white/30 dark:border-gray-600/40 hover:scale-105 hover:bg-white/25 dark:hover:bg-gray-900/30 h-11 sm:h-12"
             style={{
-              backdropFilter: 'blur(20px) saturate(180%)',
-              WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-              minWidth: 70
+              backdropFilter: 'blur(16px) saturate(200%) contrast(110%)',
+              WebkitBackdropFilter: 'blur(16px) saturate(200%) contrast(110%)',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+              minWidth: 80
             }}
           >
-            <Wallet className="h-5 w-5 sm:h-6 sm:w-6 mr-1.5" />
+            <Wallet className="h-5 w-5 sm:h-6 sm:w-6 mr-2" />
             <span className="text-sm sm:text-base font-medium tabular-nums">
               {isLoading
                 ? "..."
@@ -419,30 +421,33 @@ const Navbar = () => {
         ) : (
           <button
             onClick={openLoginModal}
-            className="flex items-center text-foreground hover:text-adtip-teal transition-all bg-white/60 dark:bg-gray-900/60 backdrop-blur-xl rounded-full px-3 sm:px-4 shadow-lg border border-white/20 dark:border-gray-700/30 hover:scale-105 h-10 sm:h-11"
+            className="flex items-center text-foreground hover:text-adtip-teal transition-all duration-300 bg-white/20 dark:bg-gray-900/25 backdrop-blur-2xl rounded-2xl px-4 sm:px-5 shadow-2xl border border-white/30 dark:border-gray-600/40 hover:scale-105 hover:bg-white/25 dark:hover:bg-gray-900/30 h-11 sm:h-12"
             style={{
-              backdropFilter: 'blur(20px) saturate(180%)',
-              WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-              minWidth: 70
+              backdropFilter: 'blur(16px) saturate(200%) contrast(110%)',
+              WebkitBackdropFilter: 'blur(16px) saturate(200%) contrast(110%)',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+              minWidth: 80
             }}
           >
-            <Wallet className="h-5 w-5 sm:h-6 sm:w-6 mr-1.5" />
+            <Wallet className="h-5 w-5 sm:h-6 sm:w-6 mr-2" />
             <span className="text-sm sm:text-base font-medium">Login</span>
           </button>
         )}
 
-        {/* Theme Toggle - Liquid Glass Island - Standardized Height */}
-        <div className="flex items-center justify-center bg-white/60 dark:bg-gray-900/60 backdrop-blur-xl rounded-full shadow-lg border border-white/20 dark:border-gray-700/30 hover:scale-105 transition-all h-10 w-10 sm:h-11 sm:w-11" style={{
-          backdropFilter: 'blur(20px) saturate(180%)',
-          WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+        {/* Theme Toggle - Liquid Glass Island */}
+        <div className="flex items-center justify-center bg-white/20 dark:bg-gray-900/25 backdrop-blur-2xl rounded-2xl shadow-2xl border border-white/30 dark:border-gray-600/40 hover:scale-110 transition-all duration-300 hover:bg-white/25 dark:hover:bg-gray-900/30 h-11 w-11 sm:h-12 sm:w-12" style={{
+          backdropFilter: 'blur(16px) saturate(200%) contrast(110%)',
+          WebkitBackdropFilter: 'blur(16px) saturate(200%) contrast(110%)',
+          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
         }}>
           <ThemeToggle />
         </div>
 
-        {/* Profile Avatar - Liquid Glass Island - Standardized Height */}
-        <Link to="/profile" className="hidden md:flex items-center justify-center bg-white/60 dark:bg-gray-900/60 backdrop-blur-xl rounded-full shadow-lg border border-white/20 dark:border-gray-700/30 hover:scale-105 transition-all h-10 w-10 sm:h-11 sm:w-11" style={{
-          backdropFilter: 'blur(20px) saturate(180%)',
-          WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+        {/* Profile Avatar - Liquid Glass Island */}
+        <Link to="/profile" className="hidden md:flex items-center justify-center bg-white/20 dark:bg-gray-900/25 backdrop-blur-2xl rounded-2xl shadow-2xl border border-white/30 dark:border-gray-600/40 hover:scale-110 transition-all duration-300 hover:bg-white/25 dark:hover:bg-gray-900/30 h-11 w-11 sm:h-12 sm:w-12" style={{
+          backdropFilter: 'blur(16px) saturate(200%) contrast(110%)',
+          WebkitBackdropFilter: 'blur(16px) saturate(200%) contrast(110%)',
+          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
         }}>
           <UserAvatar user={user} />
         </Link>
@@ -632,43 +637,46 @@ const Navbar = () => {
     </nav>
 
     {/* Mobile Bottom Navigation - Separate from main nav */}
-    <div className="md:hidden fixed inset-x-0 bottom-0 bg-background/80 dark:bg-gray-900/90 backdrop-blur-xl shadow-lg border-t border-border/60 z-50 mobile-bottom-nav" style={{
-      backdropFilter: 'blur(24px) saturate(180%)',
-      WebkitBackdropFilter: 'blur(24px) saturate(180%)',
+    <div className="md:hidden fixed inset-x-0 bottom-0 bg-white/15 dark:bg-gray-900/20 backdrop-blur-2xl shadow-2xl border-t border-white/25 dark:border-gray-600/35 z-50 mobile-bottom-nav" style={{
+      backdropFilter: 'blur(16px) saturate(200%) contrast(110%)',
+      WebkitBackdropFilter: 'blur(16px) saturate(200%) contrast(110%)',
+      boxShadow: '0 -8px 32px rgba(0, 0, 0, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.08)',
     }}>
-      <div className="flex justify-around items-center px-2 py-2 sm:py-3 pb-[calc(env(safe-area-inset-bottom)+0.25rem)]">
+      <div className="flex justify-around items-center px-2 py-3 sm:py-4 pb-[calc(env(safe-area-inset-bottom)+0.5rem)]">
         <Link
           to="/home"
-          className={`flex flex-col items-center ${isActive("/home") ? "text-adtip-teal" : "text-muted-foreground"}`}
+          className={`flex flex-col items-center transition-all duration-200 hover:scale-110 ${isActive("/home") ? "text-adtip-teal" : "text-muted-foreground"}`}
         >
           <Home className="h-5 w-5 sm:h-6 sm:w-6" />
           <span className="text-[10px] sm:text-xs mt-1">Home</span>
         </Link>
         <Link
          to="/watch"
-          className={`flex flex-col items-center ${isActive("/watch") ? "text-adtip-teal" : "text-muted-foreground"}`}
+          className={`flex flex-col items-center transition-all duration-200 hover:scale-110 ${isActive("/watch") ? "text-adtip-teal" : "text-muted-foreground"}`}
         >
           <Video className="h-5 w-5 sm:h-6 sm:w-6" />
           <span className="text-[10px] sm:text-xs mt-1">TipTube</span>
         </Link>
         <Link
           to="/create-post"
-          className="flex flex-col items-center justify-center"
+          className="flex flex-col items-center justify-center transition-all duration-200 hover:scale-110"
         >
-          <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-full teal-gradient flex items-center justify-center">
-            <Plus className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+          <div className="h-12 w-12 sm:h-14 sm:w-14 rounded-2xl bg-gradient-to-br from-[#00dcaa] to-[#00b894] flex items-center justify-center shadow-xl border border-white/30" style={{
+            boxShadow: '0 8px 32px rgba(0, 220, 170, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2)',
+          }}>
+            <Plus className="h-6 w-6 sm:h-7 sm:w-7 text-white" />
           </div>
         </Link>
         <Link
           to="/short"
-          className={`flex flex-col items-center ${isActive("/short") ? "text-adtip-teal" : "text-muted-foreground"}`}
+          className={`flex flex-col items-center transition-all duration-200 hover:scale-110 ${isActive("/short") ? "text-adtip-teal" : "text-muted-foreground"}`}
         >
           <CirclePlay className="h-5 w-5 sm:h-6 sm:w-6" />
           <span className="text-[10px] sm:text-xs mt-1">TipShort</span>
         </Link>
         <Link
           to="/livestream"
-          className={`flex flex-col items-center ${isActive("/livestream") ? "text-adtip-teal" : "text-muted-foreground"}`}
+          className={`flex flex-col items-center transition-all duration-200 hover:scale-110 ${isActive("/livestream") ? "text-adtip-teal" : "text-muted-foreground"}`}
         >
           <Radio className="h-5 w-5 sm:h-6 sm:w-6" />
           <span className="text-[10px] sm:text-xs mt-1">LiveStream</span>

@@ -25,7 +25,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import {
   SidebarGroup,
   SidebarGroupContent,
-} from "./sidebar-components";
+} from "./sidebar";
 import SubmissionForm from "./SubmissionForm";
 import { useAuthModal } from "../../contexts/AuthModalContext";
 import { triggerLoginModal } from "../../utils/authRedirect";
@@ -334,9 +334,12 @@ const AdTipSidebar = () => {
         <DialogTrigger asChild>
           <Button
             className={cn(
-              "mb-6 w-full bg-gradient-to-r from-[#00dcaa] to-[#00b894] hover:from-[#00b894] hover:to-[#00a085] shadow-md hover:shadow-lg transition-all duration-300 text-white font-semibold",
-              "px-4 py-3 rounded-xl flex items-center justify-center gap-2"
+              "mb-8 w-full bg-gradient-to-r from-[#00dcaa] to-[#00b894] hover:from-[#00b894] hover:to-[#00a085] shadow-2xl hover:shadow-3xl transition-all duration-300 text-white font-semibold backdrop-blur-sm border border-white/30 rounded-2xl",
+              "px-5 py-4 flex items-center justify-center gap-3 hover:scale-[1.02]"
             )}
+            style={{
+              boxShadow: '0 12px 40px rgba(0, 220, 170, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2)',
+            }}
             onClick={() => {
               if (!user || user.channelId === undefined) return;
               const hasChannel = !!(channelData?.channelId || user.channelId);
@@ -452,7 +455,11 @@ const AdTipSidebar = () => {
       </Dialog>
       <div className="space-y-6">
         <SidebarGroup>
-          <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+          <div className="px-4 py-2.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider bg-white/20 dark:bg-gray-800/25 backdrop-blur-xl rounded-xl border border-white/20 dark:border-gray-600/30 mx-2 mb-2 shadow-lg" style={{
+            backdropFilter: 'blur(12px) saturate(180%)',
+            WebkitBackdropFilter: 'blur(12px) saturate(180%)',
+            boxShadow: '0 4px 16px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.05)',
+          }}>
             Menu
           </div>
           <SidebarGroupContent>
@@ -465,14 +472,14 @@ const AdTipSidebar = () => {
                   if (!isMobile && !isCollapsed) toggleSidebar();
                 }}
                 className={cn(
-                  "flex items-center gap-3 rounded-xl px-3 py-3 text-gray-700 dark:text-gray-300 transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-800/60 group",
-                  isActive(item.to) && "bg-gradient-to-r from-[#00dcaa]/10 to-[#00b894]/10 text-[#00dcaa] dark:text-[#00dcaa] font-semibold shadow-sm"
+                  "flex items-center gap-4 rounded-2xl px-4 py-3.5 text-gray-700 dark:text-gray-300 transition-all duration-200 hover:bg-white/20 dark:hover:bg-gray-800/25 hover:backdrop-blur-sm hover:shadow-xl hover:scale-[1.02] group border border-transparent hover:border-white/20 dark:hover:border-gray-600/30 mx-2",
+                  isActive(item.to) && "bg-white/25 dark:bg-gray-800/30 text-[#00dcaa] dark:text-[#00dcaa] font-semibold shadow-xl border-white/30 dark:border-gray-600/40 backdrop-blur-sm"
                 )}
               >
                 {React.cloneElement(item.icon, {
                   className: cn(
-                    "h-5 w-5 transition-transform duration-200 group-hover:scale-110",
-                    isActive(item.to) && "text-[#00dcaa]"
+                    "h-5 w-5 transition-all duration-200 group-hover:scale-110 group-hover:rotate-3",
+                    isActive(item.to) && "text-[#00dcaa] scale-110"
                   )
                 })}
                 <span className="text-sm font-medium select-none">{item.label}</span>
@@ -481,7 +488,11 @@ const AdTipSidebar = () => {
           </SidebarGroupContent>
         </SidebarGroup>
         <SidebarGroup>
-          <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+          <div className="px-4 py-2.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider bg-white/20 dark:bg-gray-800/25 backdrop-blur-xl rounded-xl border border-white/20 dark:border-gray-600/30 mx-2 mb-2 shadow-lg" style={{
+            backdropFilter: 'blur(12px) saturate(180%)',
+            WebkitBackdropFilter: 'blur(12px) saturate(180%)',
+            boxShadow: '0 4px 16px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.05)',
+          }}>
             E-commerce
           </div>
           <SidebarGroupContent>
@@ -496,10 +507,10 @@ const AdTipSidebar = () => {
                       if (!isMobile && !isCollapsed) toggleSidebar();
                     }}
                     className={cn(
-                      "flex items-center gap-3 rounded-xl px-3 py-3 text-gray-700 dark:text-gray-300 transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-800/60 w-full text-left group"
+                      "flex items-center gap-4 rounded-2xl px-4 py-3.5 text-gray-700 dark:text-gray-300 transition-all duration-200 hover:bg-white/20 dark:hover:bg-gray-800/25 hover:backdrop-blur-sm hover:shadow-xl hover:scale-[1.02] w-full text-left group border border-transparent hover:border-white/20 dark:hover:border-gray-600/30 mx-2"
                     )}
                   >
-                    {React.cloneElement(item.icon, { className: "h-5 w-5 transition-transform duration-200 group-hover:scale-110" })}
+                    {React.cloneElement(item.icon, { className: "h-5 w-5 transition-all duration-200 group-hover:scale-110 group-hover:rotate-3" })}
                     <span className="text-sm font-medium select-none">{item.label}</span>
                   </button>
                 );
@@ -520,7 +531,7 @@ const AdTipSidebar = () => {
                   >
                     {React.cloneElement(item.icon, {
                       className: cn(
-                        "h-5 w-5 transition-transform duration-200 group-hover:scale-110",
+                        "h-5 w-5 transition-all duration-200 group-hover:scale-110 group-hover:rotate-3",
                         isActive(item.to) && "text-[#00dcaa]"
                       )
                     })}
@@ -537,13 +548,13 @@ const AdTipSidebar = () => {
                     if (!isMobile && !isCollapsed) toggleSidebar();
                   }}
                   className={cn(
-                    "flex items-center gap-3 rounded-xl px-3 py-3 text-gray-700 dark:text-gray-300 transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-800/60 group",
-                    isActive(item.to) && "bg-gradient-to-r from-[#00dcaa]/10 to-[#00b894]/10 text-[#00dcaa] dark:text-[#00dcaa] font-semibold shadow-sm"
+                    "flex items-center gap-4 rounded-2xl px-4 py-3.5 text-gray-700 dark:text-gray-300 transition-all duration-200 hover:bg-white/20 dark:hover:bg-gray-800/25 hover:backdrop-blur-sm hover:shadow-xl hover:scale-[1.02] group border border-transparent hover:border-white/20 dark:hover:border-gray-600/30 mx-2",
+                    isActive(item.to) && "bg-white/25 dark:bg-gray-800/30 text-[#00dcaa] dark:text-[#00dcaa] font-semibold shadow-xl border-white/30 dark:border-gray-600/40 backdrop-blur-sm"
                   )}
                 >
                   {React.cloneElement(item.icon, {
                     className: cn(
-                      "h-5 w-5 transition-transform duration-200 group-hover:scale-110",
+                      "h-5 w-5 transition-all duration-200 group-hover:scale-110 group-hover:rotate-3",
                       isActive(item.to) && "text-[#00dcaa]"
                     )
                   })}
@@ -555,7 +566,11 @@ const AdTipSidebar = () => {
         </SidebarGroup>
         {user && (
           <SidebarGroup>
-            <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+            <div className="px-4 py-2.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider bg-white/20 dark:bg-gray-800/25 backdrop-blur-xl rounded-xl border border-white/20 dark:border-gray-600/30 mx-2 mb-2 shadow-lg" style={{
+              backdropFilter: 'blur(12px) saturate(180%)',
+              WebkitBackdropFilter: 'blur(12px) saturate(180%)',
+              boxShadow: '0 4px 16px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.05)',
+            }}>
               Support
             </div>
             <SidebarGroupContent>
@@ -568,13 +583,13 @@ const AdTipSidebar = () => {
                     if (!isMobile && !isCollapsed) toggleSidebar();
                   }}
                   className={cn(
-                    "flex items-center gap-3 rounded-xl px-3 py-3 text-gray-700 dark:text-gray-300 transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-800/60 group",
-                    isActive(item.to) && "bg-gradient-to-r from-[#00dcaa]/10 to-[#00b894]/10 text-[#00dcaa] dark:text-[#00dcaa] font-semibold shadow-sm"
+                    "flex items-center gap-4 rounded-2xl px-4 py-3.5 text-gray-700 dark:text-gray-300 transition-all duration-200 hover:bg-white/20 dark:hover:bg-gray-800/25 hover:backdrop-blur-sm hover:shadow-xl hover:scale-[1.02] group border border-transparent hover:border-white/20 dark:hover:border-gray-600/30 mx-2",
+                    isActive(item.to) && "bg-white/25 dark:bg-gray-800/30 text-[#00dcaa] dark:text-[#00dcaa] font-semibold shadow-xl border-white/30 dark:border-gray-600/40 backdrop-blur-sm"
                   )}
                 >
                   {React.cloneElement(item.icon, {
                     className: cn(
-                      "h-5 w-5 transition-transform duration-200 group-hover:scale-110",
+                      "h-5 w-5 transition-all duration-200 group-hover:scale-110 group-hover:rotate-3",
                       isActive(item.to) && "text-[#00dcaa]"
                     )
                   })}
@@ -584,10 +599,10 @@ const AdTipSidebar = () => {
               <button
                 onClick={() => setShowLogoutDialog(true)}
                 className={cn(
-                  "flex items-center gap-3 rounded-xl px-3 py-3 w-full text-gray-700 dark:text-gray-300 transition-all duration-200 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400 group"
+                  "flex items-center gap-4 rounded-2xl px-4 py-3.5 w-full text-gray-700 dark:text-gray-300 transition-all duration-200 hover:bg-red-50/30 dark:hover:bg-red-900/40 hover:text-red-600 dark:hover:text-red-400 hover:backdrop-blur-sm hover:shadow-xl hover:scale-[1.02] group border border-transparent hover:border-red-200/30 dark:hover:border-red-800/30 mx-2"
                 )}
               >
-                <LogOut className="h-5 w-5 transition-transform duration-200 group-hover:scale-110" />
+                <LogOut className="h-5 w-5 transition-all duration-200 group-hover:scale-110 group-hover:rotate-3" />
                 <span className="text-sm font-medium select-none">Logout</span>
               </button>
             </SidebarGroupContent>
@@ -687,15 +702,16 @@ const AdTipSidebar = () => {
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
           >
-            {/* Background with blur effect */}
+            {/* Background with enhanced liquid glass effect */}
             <div
-              className="absolute inset-0 bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl border-r border-gray-200/50 dark:border-gray-800/50"
+              className="absolute inset-0 bg-white/15 dark:bg-gray-900/20 backdrop-blur-2xl border-r border-white/25 dark:border-gray-600/35"
               style={{
-                backdropFilter: 'blur(24px) saturate(180%)',
-                WebkitBackdropFilter: 'blur(24px) saturate(180%)',
+                backdropFilter: 'blur(16px) saturate(200%) contrast(110%)',
+                WebkitBackdropFilter: 'blur(16px) saturate(200%) contrast(110%)',
+                boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.08)',
               }}
             />
-            <div className="absolute inset-y-0 right-0 w-[1px] bg-gradient-to-b from-transparent via-gray-200 dark:via-gray-700 to-transparent opacity-60" />
+            <div className="absolute inset-y-0 right-0 w-[1px] bg-gradient-to-b from-transparent via-white/20 dark:via-gray-600/30 to-transparent opacity-60" />
 
             {/* Scrollable Content Container */}
             <div
@@ -728,15 +744,16 @@ const AdTipSidebar = () => {
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
           >
-            {/* Background with blur effect */}
+            {/* Background with enhanced liquid glass effect */}
             <div
-              className="absolute inset-0 bg-white/70 dark:bg-gray-900/80 backdrop-blur-xl border-r border-gray-200/50 dark:border-gray-800/50"
+              className="absolute inset-0 bg-white/15 dark:bg-gray-900/20 backdrop-blur-2xl border-r border-white/25 dark:border-gray-600/35"
               style={{
-                backdropFilter: 'blur(24px) saturate(180%)',
-                WebkitBackdropFilter: 'blur(24px) saturate(180%)',
+                backdropFilter: 'blur(16px) saturate(200%) contrast(110%)',
+                WebkitBackdropFilter: 'blur(16px) saturate(200%) contrast(110%)',
+                boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.08)',
               }}
             />
-            <div className="absolute inset-y-0 right-0 w-[1px] bg-gradient-to-b from-transparent via-gray-200 dark:via-gray-700 to-transparent opacity-60" />
+            <div className="absolute inset-y-0 right-0 w-[1px] bg-gradient-to-b from-transparent via-white/20 dark:via-gray-600/30 to-transparent opacity-60" />
 
             {/* Scrollable Content Container */}
             <div
