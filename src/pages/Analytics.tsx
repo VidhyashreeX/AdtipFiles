@@ -98,9 +98,9 @@ const Analytics = () => {
         console.log('📊 Found channel ID:', channelId);
         
         if (channelId) {
-          // Use the correct analytics endpoint that matches mobile app: /api/analytics/:channelId
+          // Use user ID for analytics endpoint since backend uses authenticated user ID
           const analyticsResponse = await axios.get(
-            `${import.meta.env.VITE_API_URL}/api/analytics/${channelId}`,
+            `${import.meta.env.VITE_API_URL}/api/analytics/${storedUserId}`,
             {
               headers: {
                 Authorization: token,
