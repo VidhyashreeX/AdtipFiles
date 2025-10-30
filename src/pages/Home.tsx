@@ -103,7 +103,7 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
 };
 
   const handlePostComments = (post: { id: number; user_name: string; content: string }) => {
-    if (!user?.id) {
+    if (!user) {
       openLoginModal();
       return;
     }
@@ -112,7 +112,7 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
   };
 
   const handlePostLike = async (post: Post) => {
-    if (!user?.id) {
+    if (!user) {
       openLoginModal();
       return;
     }
@@ -583,17 +583,17 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
           href="https://play.google.com/store/apps/details?id=com.adtip.app.adtip_app&hl=en_IN"
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center group"
+          className="flex items-center group transition-all duration-300 hover:scale-105"
           style={{ textDecoration: 'none' }}
         >
           <div
-            className="rounded-l-2xl pl-5 pr-4 py-3 flex items-center bg-gradient-to-r from-[#e0e7ef] via-[#d1f1e6] to-[#f7e7fa] dark:from-gray-800 dark:via-gray-700 dark:to-gray-800 shadow-lg border border-border hover:from-[#d1e7f7] hover:to-[#e7f7e7] dark:hover:from-gray-700 dark:hover:to-gray-600 transition-colors duration-300"
+            className="rounded-l-2xl pl-5 pr-4 py-3 flex items-center backdrop-blur-xl bg-white/70 dark:bg-gray-800/70 border-2 border-[#00dcaa]/50 shadow-lg shadow-[#00dcaa]/20 hover:bg-white/90 dark:hover:bg-gray-800/90 hover:border-[#00dcaa]/70 hover:shadow-[#00dcaa]/30 transition-all duration-300"
             style={{ minWidth: 120 }}
           >
-            <span className="font-semibold text-foreground text-base tracking-wide drop-shadow-sm mr-2">Install now</span>
+            <span className="font-semibold text-gray-900 dark:text-gray-100 text-base tracking-wide drop-shadow-sm mr-2">Install now</span>
           </div>
           <div
-            className="rounded-r-2xl bg-card p-2 pl-1 pr-3 flex items-center shadow-lg border-t border-b border-r border-border hover:bg-muted transition-colors duration-300"
+            className="rounded-r-2xl backdrop-blur-xl bg-white/80 dark:bg-gray-800/80 p-2 pl-1 pr-3 flex items-center shadow-lg border-t-2 border-b-2 border-r-2 border-[#00dcaa]/50 shadow-[#00dcaa]/20 hover:bg-white/90 dark:hover:bg-gray-800/90 hover:border-[#00dcaa]/70 hover:shadow-[#00dcaa]/30 transition-all duration-300"
           >
             <img
               src="/playstore.png"
@@ -610,14 +610,17 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
         href="https://play.google.com/store/apps/details?id=com.adtip.app.adtip_app&hl=en_IN"
         target="_blank"
         rel="noopener noreferrer"
-        className="flex md:hidden fixed z-40 right-5 items-center select-none"
+        className="flex md:hidden fixed z-40 right-5 items-center select-none transition-all duration-300 hover:scale-105"
         style={{ pointerEvents: 'auto', bottom: '10%' }}
       >
-        <img
-          src="/playstore.png"
-          alt="Google Play Store"
-          className="w-14 h-14 object-contain drop-shadow-lg rounded-2xl border border-border bg-card p-2 dark:brightness-90"
-        />
+        <div className="backdrop-blur-xl bg-white/80 dark:bg-gray-800/80 p-3 rounded-2xl border-2 border-[#00dcaa]/50 shadow-lg shadow-[#00dcaa]/20 hover:bg-white/90 dark:hover:bg-gray-800/90 hover:border-[#00dcaa]/70 hover:shadow-[#00dcaa]/30 transition-all duration-300">
+          <img
+            src="/playstore.png"
+            alt="Google Play Store"
+            className="w-10 h-10 object-contain dark:brightness-90"
+            style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.08))' }}
+          />
+        </div>
       </a>
 {selectedPost && (
   <ShareModal
