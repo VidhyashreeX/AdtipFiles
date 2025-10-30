@@ -38,8 +38,8 @@ const Analytics = () => {
 
   // Check if user has premium access
   const hasContentPremium = () => {
-    const isPremium = user?.is_premium === true;
-    console.log('🎯 Premium check:', isPremium, 'user.is_premium:', user?.is_premium);
+    const isPremium = user?.content_creator_premium_status === 1;
+    console.log('🎯 Content Creator Premium check:', isPremium, 'user.content_creator_premium_status:', user?.content_creator_premium_status);
     return isPremium;
   };
 
@@ -196,17 +196,18 @@ const Analytics = () => {
           <div className="p-4 bg-blue-100 dark:bg-blue-900/30 rounded-full mb-6">
             <BarChart3 className="h-12 w-12 text-blue-600 dark:text-blue-400" />
           </div>
-          <h3 className="text-2xl font-semibold text-foreground mb-4">Premium Required</h3>
+          <h3 className="text-2xl font-semibold text-foreground mb-4">Content Creator Premium Required</h3>
           <p className="text-muted-foreground mb-8 max-w-md leading-relaxed">
-            Channel analytics are only available for premium users. Upgrade to premium to access detailed insights about your content performance and earnings.
+            Channel analytics are only available for content creator premium users. Upgrade to content creator premium to access detailed insights about your content performance and earnings.
           </p>
           <div className="bg-card border border-border rounded-xl p-6 mb-8 max-w-md">
-            <h4 className="font-semibold text-foreground mb-2">Premium Benefits:</h4>
+            <h4 className="font-semibold text-foreground mb-2">Content Creator Premium Benefits:</h4>
             <ul className="text-sm text-muted-foreground space-y-1">
               <li>• Detailed earnings analytics</li>
               <li>• View and engagement metrics</li>
               <li>• Withdrawal tracking</li>
               <li>• Performance insights</li>
+              <li>• Advanced creator tools</li>
             </ul>
           </div>
           <div className="flex gap-3">

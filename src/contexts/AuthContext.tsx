@@ -37,6 +37,8 @@ interface UserData {
   interests: Array<{ id: number; name: string; isPrimary: boolean }>;
   accessToken: string;
   is_premium: boolean;
+  content_creator_premium_status: number;
+  content_creator_premium_expires_at: string | null;
   channelId: string | null;
   wallet?: number; 
 }
