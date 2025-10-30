@@ -12,13 +12,13 @@ import ShareModal from "@/components/ShareModal";
 import CommentsModal from "@/components/modals/CommentsModal";
 import { getSafeImageUrl, handleImageError, createPlaceholderImage } from "../utils/imageUtils";
 import { contentAPI, userAPI } from "../services/api";
-import { useUIStore } from "../stores/ui.store";
+import { useAuthModal } from '../contexts/AuthModalContext';
 import BannerCarousel from "../components/BannerCarousel";
 import CategorySelector from "../components/CategorySelector";
 import WalletBalance from "../components/WalletBalance";
 import { popularCategories } from "../components/CategorySelector";
 import { usePosts, usePost, useLikePost } from "@/hooks/api";
-import { Heart, MessageCircle, Send, Bookmark } from "lucide-react";
+import { Heart, MessageCircle, Send } from "lucide-react";
 
 // Define TypeScript interfaces
 interface User {
@@ -78,7 +78,7 @@ interface ApiErrorResponse {
 }
 
 const Home = () => {
-  const openAuthModal = useUIStore((state) => state.openAuthModal);
+  const { openLoginModal } = useAuthModal();
   const { postId } = useParams<{ postId?: string }>();
   const [activeTab, setActiveTab] = useState<"for-you" | "following">("for-you");
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
@@ -103,13 +103,17 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
 };
 
   const handlePostComments = (post: { id: number; user_name: string; content: string }) => {
+    if (!user?.id) {
+      openLoginModal();
+      return;
+    }
     setSelectedPostForComments(post);
     setCommentsOpen(true);
   };
 
   const handlePostLike = async (post: Post) => {
     if (!user?.id) {
-      openAuthModal();
+      openLoginModal();
       return;
     }
 
@@ -492,13 +496,13 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
                           </button>
                         </div>
 
-                        {/* Bookmark */}
-                        <button className="group">
+                        {/* Bookmark - Hidden for now */}
+                        {/* <button className="group">
                           <Bookmark
                             className="w-6 h-6 text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-gray-100 transition-colors"
                             strokeWidth="1.5"
                           />
-                        </button>
+                        </button> */}
                       </div>
 
                       {/* Likes count */}
