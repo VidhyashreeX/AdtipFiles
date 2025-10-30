@@ -103,7 +103,7 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
 };
 
   const handlePostComments = (post: { id: number; user_name: string; content: string }) => {
-    if (!user) {
+    if (!isAuthenticated) {
       openLoginModal();
       return;
     }
@@ -112,7 +112,7 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
   };
 
   const handlePostLike = async (post: Post) => {
-    if (!user) {
+    if (!isAuthenticated) {
       openLoginModal();
       return;
     }
