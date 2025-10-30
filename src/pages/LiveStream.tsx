@@ -95,7 +95,7 @@ const StreamCard: React.FC<{
   stream: LiveStreamData;
   onPress: () => void;
 }> = ({ stream, onPress }) => {
-  const config = streamTypeConfig[stream.streamType];
+  const config = streamTypeConfig[stream.streamType] || streamTypeConfig.free;
 
   return (
     <Card className="overflow-hidden hover:shadow-lg transition-shadow cursor-pointer" onClick={onPress}>

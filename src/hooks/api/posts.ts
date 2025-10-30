@@ -78,13 +78,15 @@ export const usePosts = (params?: {
 };
 
 // Fetch single post by ID
-export const usePost = (id: number, enabled = true) => {
+export const usePost = (id: number, userId?: number, enabled = true) => {
   return useQuery({
     queryKey: postKeys.detail(id),
     queryFn: async () => {
-      // This endpoint might not exist, using a placeholder
-      const response = await api.get(`/api/post/${id}`);
-      return response.data.data;
+      const params = userId ? { loggined_user_id: userId } : {};
+      const response = await api.get(`/api/post/${id}`, { params });
+      // The API returns data as an array, so take the first item
+      const postData = response.data.data;
+      return Array.isArray(postData) ? postData[0] : postData;
     },
     enabled: enabled && !!id,
   });

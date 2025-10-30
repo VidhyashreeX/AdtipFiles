@@ -105,6 +105,30 @@ const [selectedShort, setSelectedShort] = useState<{ id: number } | null>(null);
 
     try {
       return shortsData.pages.flatMap(page => {
+        // Handle single short response
+        if (page.isSingleShort) {
+          const s = page;
+          if (!s || typeof s !== 'object' || !s.video_link) return [];
+          return [{
+            id: s.id,
+            user: {
+              name: s.channelName || "Unknown",
+              avatar: s.channel_profile && s.channel_profile !== "null" ? s.channel_profile : "/placeholder.svg",
+              isVerified: false,
+            },
+            content: {
+              video: s.video_link,
+              description: s.video_desciption || s.name || "No description",
+              likes: Number(s.total_likes || 0),
+              comments: Number(s.total_comments || 0),
+              shares: 0,
+              thumbnail: s.video_Thumbnail || s.channel_profile || "/placeholder.svg",
+            },
+            musicName: s.name || "Unknown",
+          }];
+        }
+
+        // Handle normal paginated response
         const rawShorts = Array.isArray(page.data) ? page.data : [];
         return rawShorts
           .map((s: any): TipShort | null => {

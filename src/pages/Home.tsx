@@ -79,7 +79,7 @@ interface ApiErrorResponse {
 
 const Home = () => {
   const openAuthModal = useUIStore((state) => state.openAuthModal);
-  const { id: postId } = useParams<{ id?: string }>();
+  const { postId } = useParams<{ postId?: string }>();
   const [activeTab, setActiveTab] = useState<"for-you" | "following">("for-you");
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
   const [showCopied, setShowCopied] = useState(false);
@@ -180,11 +180,12 @@ const [selectedPost, setSelectedPost] = useState<{ id: number } | null>(null);
   // Fetch single post if postId is provided
   const { data: singlePostData, isLoading: singlePostLoading } = usePost(
     postId ? parseInt(postId) : 0,
+    user?.id,
     !!postId
   );
 
   // Flatten posts data for easier handling
-  const feedData = postsData?.pages.flatMap(page => page.data) || [];
+  const feedData = postsData?.pages.flatMap(page => page.data).filter(post => post != null) || [];
   const error = postsError ? (postsError as Error).message : null;
 
   // Handle single post view
