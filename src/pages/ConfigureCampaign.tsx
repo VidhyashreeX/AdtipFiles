@@ -65,6 +65,7 @@ const ConfigureCampaign = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const selectedModel = location.state?.selectedModel;
+  const editMode = location.state?.editMode || false;
   
   // Detect dark mode
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -205,6 +206,24 @@ const ConfigureCampaign = () => {
     loadApiData();
   }, []);
 
+  // Load existing ad booking data if available
+  useEffect(() => {
+    const savedData = localStorage.getItem('adBookingData');
+    if (savedData) {
+      try {
+        const parsedData = JSON.parse(savedData);
+        if (parsedData.campaignData) {
+          setFormData(prev => ({
+            ...prev,
+            ...parsedData.campaignData
+          }));
+        }
+      } catch (error) {
+        console.error('Failed to load saved ad booking data:', error);
+      }
+    }
+  }, [editMode]);
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({
@@ -269,6 +288,15 @@ const ConfigureCampaign = () => {
     setIsLoading(true);
     
     try {
+      // Save campaign data to localStorage for persistence
+      const adBookingData = {
+        selectedModel,
+        campaignData: formData,
+        step: 'campaign-configured',
+        timestamp: new Date().toISOString()
+      };
+      localStorage.setItem('adBookingData', JSON.stringify(adBookingData));
+      
       const userData = JSON.parse(localStorage.getItem('UserData') || '{}');
       const companyData = JSON.parse(localStorage.getItem('selectedCompany') || '{}');
       

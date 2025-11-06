@@ -7,7 +7,7 @@ import { apiSaveThirdPageAdModel } from '@/api';
 const PreviewAd = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { selectedModel, campaignData, uploadedFile, uploadedFileUrl, contentData, adId, apiData } = location.state || {};
+  const { selectedModel, campaignData, uploadedFile, uploadedFileUrl, contentData, adId, apiData, editMode } = location.state || {};
 
   const [activePreviewDevice, setActivePreviewDevice] = useState('mobile');
   const [conversionGoal, setConversionGoal] = useState('Purchase');
@@ -20,6 +20,23 @@ const PreviewAd = () => {
     medium: selectedModel?.title?.toLowerCase().replace(/\s+/g, '_') || 'ad',
     campaign: campaignData?.campaignName?.toLowerCase().replace(/\s+/g, '_') || 'campaign'
   });
+
+  // Load existing ad booking data if available
+  React.useEffect(() => {
+    const savedData = localStorage.getItem('adBookingData');
+    if (savedData) {
+      try {
+        const parsedData = JSON.parse(savedData);
+        if (parsedData.conversionGoal) setConversionGoal(parsedData.conversionGoal);
+        if (parsedData.conversionValue) setConversionValue(parsedData.conversionValue);
+        if (parsedData.landingPageUrl) setLandingPageUrl(parsedData.landingPageUrl);
+        if (parsedData.facebookPixelId) setFacebookPixelId(parsedData.facebookPixelId);
+        if (parsedData.utmParameters) setUtmParameters(parsedData.utmParameters);
+      } catch (error) {
+        console.error('Failed to load saved ad booking data:', error);
+      }
+    }
+  }, []);
 
   const handleInputChange = (field: string, value: string) => {
     if (field.startsWith('utm_')) {
@@ -56,16 +73,25 @@ const PreviewAd = () => {
     setIsLoading(true);
     
     try {
+      // Save tracking data to localStorage for persistence
+      const adBookingData = JSON.parse(localStorage.getItem('adBookingData') || '{}');
+      const updatedData = {
+        ...adBookingData,
+        conversionGoal,
+        conversionValue,
+        landingPageUrl,
+        facebookPixelId,
+        utmParameters,
+        step: 'tracking-configured',
+        timestamp: new Date().toISOString()
+      };
+      localStorage.setItem('adBookingData', JSON.stringify(updatedData));
+      
       // Get user data
       const userData = JSON.parse(localStorage.getItem('UserData') || '{}');
       
-      // Calculate pricing
-      // Extract base price from selected model
-      const modelPrice = selectedModel?.price ? parseFloat(selectedModel.price.replace('₹', '').replace(',', '')) : 0.20;
-      
-      // Calculate total based on campaign duration or use model price
-      const campaignDuration = campaignData?.campaignDuration ? parseInt(campaignData.campaignDuration) : 1;
-      const baseOrderValue = modelPrice * campaignDuration;
+      // Calculate pricing using campaign data (amountPerCustomer * customersPerDay * duration)
+      const baseOrderValue = campaignData?.estimatedTotalAmount ? parseFloat(campaignData.estimatedTotalAmount) : 0;
       
       // Calculate tax (18% GST)
       const taxRate = 0.18;

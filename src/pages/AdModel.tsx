@@ -13,41 +13,65 @@ const AdModel: React.FC = () => {
   const adModels = [
     {
       id: 1,
-      title: 'Skip Video Ad',
+      title: 'Skip Ads',
       price: '₹0.20',
-      description: 'Engaging video ads that users can skip after 5 seconds',
+      description: 'Engaging video ads that users can skip after 5 seconds. Payout: ₹0.20 per view',
       image: '/api/placeholder/300/150',
       recommended: true
     },
     {
       id: 2,
-      title: 'Non-Skip Video Ad',
-      price: '₹0.50',
-      description: 'Compelling 15-30 second videos that guarantee full view',
+      title: 'Non-Skip Ads',
+      price: '₹0.40',
+      description: 'Compelling 20-second videos that guarantee full view. Payout: ₹0.40 per view',
       image: '/api/placeholder/300/150',
       recommended: false
     },
     {
       id: 3,
       title: 'Bumper Ads',
-      price: '₹0.30',
-      description: 'Short 6-second video ads for maximum impact',
+      price: '₹0.25',
+      description: 'Short 8-second video ads for maximum impact. Payout: ₹0.25 per view',
       image: '/api/placeholder/300/150',
       recommended: false
     },
     {
       id: 4,
-      title: 'Non-Skip Ad + Lead',
-      price: '₹1.50',
-      description: 'Non-skippable ads with integrated lead generation',
+      title: 'Brand Awareness Ads',
+      price: '₹0.20',
+      description: '8-second ads focused on brand recognition. Payout: ₹0.20 per view',
+      image: '/api/placeholder/300/150',
+      recommended: false
+    },
+    {
+      id: 5,
+      title: 'Business Status Ads',
+      price: '₹0.20',
+      description: 'Image or video ads for business promotion. Payout: ₹0.20 per view',
+      image: '/api/placeholder/300/150',
+      recommended: false
+    },
+    {
+      id: 6,
+      title: 'Non-Skip + Lead Ads',
+      price: '₹1.00',
+      description: 'Non-skippable ads with lead generation. Payout: ₹1.00 per engagement',
       image: '/api/placeholder/300/150',
       recommended: true
     },
     {
-      id: 5,
-      title: 'Non-Skip Ads',
-      price: '₹0.50',
-      description: 'Standard non-skippable video advertisements',
+      id: 7,
+      title: 'Brand Awareness + Question Ads',
+      price: '₹1.00',
+      description: '8-second ads with interactive questions. Payout: ₹1.00 per engagement',
+      image: '/api/placeholder/300/150',
+      recommended: false
+    },
+    {
+      id: 8,
+      title: 'Non-Skip + Question Ads',
+      price: '₹1.00',
+      description: '20-second ads with interactive questions. Payout: ₹1.00 per engagement',
       image: '/api/placeholder/300/150',
       recommended: false
     }
@@ -73,8 +97,8 @@ const AdModel: React.FC = () => {
         </div>
 
         {/* Ad Model Cards - First Row */}
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 mb-8">
-          {adModels.slice(0, 3).map((model) => (
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8 mb-8">
+          {adModels.slice(0, 4).map((model) => (
             <div key={model.id} className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl rounded-2xl shadow-lg overflow-hidden hover:shadow-2xl transition-all duration-300 relative max-w-sm mx-auto transform hover:scale-105">
               {model.recommended && (
                 <div className="absolute top-4 right-4 bg-gradient-to-r from-[#00dcaa] to-[#00b894] text-white px-3 py-1 rounded-full text-sm font-medium z-10 shadow-md">
@@ -108,8 +132,8 @@ const AdModel: React.FC = () => {
         </div>
 
         {/* Ad Model Cards - Second Row */}
-        <div className="grid md:grid-cols-2 gap-8 justify-center max-w-4xl mx-auto">
-          {adModels.slice(3).map((model) => (
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8 justify-center max-w-7xl mx-auto">
+          {adModels.slice(4).map((model) => (
             <div key={model.id} className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl rounded-2xl shadow-lg overflow-hidden hover:shadow-2xl transition-all duration-300 relative max-w-sm mx-auto transform hover:scale-105">
               {model.recommended && (
                 <div className="absolute top-4 right-4 bg-gradient-to-r from-[#00dcaa] to-[#00b894] text-white px-3 py-1 rounded-full text-sm font-medium z-10 shadow-md">

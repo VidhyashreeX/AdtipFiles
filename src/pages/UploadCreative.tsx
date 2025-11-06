@@ -4,11 +4,12 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from '@/hooks/use-toast';
 import { apiSaveSecondPageAdModel } from '@/api';
 import AIAdGenerator from '@/components/AIAdGenerator';
+import CloudflareUploadService from '@/services/CloudflareUploadService';
 
 const UploadCreative = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { selectedModel, campaignData, adId, apiData } = location.state || {};
+  const { selectedModel, campaignData, adId, apiData, editMode } = location.state || {};
 
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [uploadedFileUrl, setUploadedFileUrl] = useState<string>('');
@@ -22,27 +23,54 @@ const UploadCreative = () => {
     callToAction: ''
   });
 
+  // Load existing ad booking data if available
+  React.useEffect(() => {
+    const savedData = localStorage.getItem('adBookingData');
+    if (savedData) {
+      try {
+        const parsedData = JSON.parse(savedData);
+        if (parsedData.uploadedFileUrl) {
+          setUploadedFileUrl(parsedData.uploadedFileUrl);
+        }
+        if (parsedData.contentData) {
+          setContentData(parsedData.contentData);
+          setShowContentDetails(true);
+        }
+      } catch (error) {
+        console.error('Failed to load saved ad booking data:', error);
+      }
+    }
+  }, []);
+
   const uploadToCloudflare = async (file: File): Promise<string> => {
-    const formData = new FormData();
-    formData.append('file', file);
-    
     try {
-      // For ad creatives, we'll store the file locally first and get a URL
-      // The actual file will be sent with the second page API call
-      // For now, create a temporary URL for preview
-      const tempUrl = URL.createObjectURL(file);
+      console.log('Uploading file to Cloudflare R2:', file.name);
       
-      // In production, you would upload to Cloudflare/CDN here
-      // For now, return a constructed URL that will be replaced with actual upload
-      console.log('File prepared for upload:', file.name);
+      // Get user data for userId
+      const userData = JSON.parse(localStorage.getItem('UserData') || '{}');
+      const userId = userData.id?.toString();
       
-      return tempUrl; // Temporary blob URL for preview
+      // Create upload service instance
+      const uploadService = new CloudflareUploadService();
+      
+      // Upload to Cloudflare R2
+      const result = await uploadService.uploadAdCreative(file, userId, (progress) => {
+        console.log(`Upload progress: ${progress.percentage}%`);
+      });
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Upload failed');
+      }
+      
+      console.log('File uploaded successfully to Cloudflare:', result.url);
+      return result.url;
+      
     } catch (error: any) {
-      console.error('File preparation error:', {
+      console.error('Cloudflare upload error:', {
         message: error.message,
         error: error
       });
-      throw new Error(error.message || 'Failed to prepare file for upload.');
+      throw new Error(error.message || 'Failed to upload file to Cloudflare.');
     }
   };
 
@@ -170,12 +198,27 @@ const UploadCreative = () => {
     setIsLoading(true);
     
     try {
+      // Save creative data to localStorage for persistence
+      const adBookingData = JSON.parse(localStorage.getItem('adBookingData') || '{}');
+      const updatedData = {
+        ...adBookingData,
+        uploadedFile,
+        uploadedFileUrl,
+        contentData,
+        step: 'creative-uploaded',
+        timestamp: new Date().toISOString()
+      };
+      localStorage.setItem('adBookingData', JSON.stringify(updatedData));
+      
       // Get user data
       const userData = JSON.parse(localStorage.getItem('user') || '{}');
       
-      // Handle AI-generated content
+      // Handle AI-generated content or uploaded file
       let fileToUpload = uploadedFile;
+      let cloudflareUrl = uploadedFileUrl;
+      
       if (!uploadedFile && uploadedFileUrl) {
+        // AI-generated content - download and upload to Cloudflare
         toast({
           title: "Uploading AI Content",
           description: "Preparing your AI-generated creative...",
@@ -188,15 +231,27 @@ const UploadCreative = () => {
         fileToUpload = new File([blob], `ai-creative-${Date.now()}.${extension}`, { type: blob.type });
       }
       
+      // Upload file to Cloudflare first
+      if (fileToUpload) {
+        toast({
+          title: "Uploading to Cloudflare",
+          description: "Uploading your creative to secure storage...",
+        });
+        
+        cloudflareUrl = await uploadToCloudflare(fileToUpload);
+        console.log('File uploaded to Cloudflare:', cloudflareUrl);
+      }
+      
       // Determine if it's a video or image
       const fileType = fileToUpload?.type || '';
       const isVideo = fileType.startsWith('video/');
       const mediaType = isVideo ? 1 : 2; // 1 = video, 2 = image
       
-      // Prepare data for second page API call - matching backend structure
+      // Prepare data for second page API call - now include the Cloudflare URL
       const secondPageData = {
         id: adId, // The admodels.id from first page
         mediaType: mediaType,
+        adFile: cloudflareUrl, // Send the Cloudflare URL instead of the file
         adPerViewPercentage: 50, // Default value
         adPerPreviewPercentage: 30, // Default value
         adCommentsOn: 1, // Enable comments by default
@@ -204,14 +259,14 @@ const UploadCreative = () => {
         adButtonTextId: 1, // Default button
       };
 
-      console.log('Sending second page data with file:', secondPageData);
+      console.log('Sending second page data with Cloudflare URL:', secondPageData);
       
-      // Call API with file upload
-      const response = await apiSaveSecondPageAdModel(secondPageData, fileToUpload);
+      // Call API without file - URL is included in the data
+      const response = await apiSaveSecondPageAdModel(secondPageData);
       
       if (response.data?.status === 200) {
         // The backend returns the file path in the response
-        const uploadedFilePath = response.data.data?.[0]?.adFile || '';
+        const uploadedFilePath = response.data.data?.[0]?.adFile || cloudflareUrl;
         
         toast({
           title: "Success!",
@@ -224,7 +279,7 @@ const UploadCreative = () => {
             selectedModel,
             campaignData,
             uploadedFile: fileToUpload,
-            uploadedFileUrl: uploadedFilePath, // Use the server-returned file path
+            uploadedFileUrl: uploadedFilePath, // Use the server-returned file path or Cloudflare URL
             contentData,
             adId,
             apiData
