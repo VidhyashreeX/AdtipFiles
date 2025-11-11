@@ -17,7 +17,8 @@ import shareService from '../../../services/ShareService';
 import VideoErrorBoundary from '../../../components/common/VideoErrorBoundary';
 import Video from 'react-native-video';
 import {Logger} from '../../../utils/ProductionLogger';
-import { getSecureMediaUrl } from '../../../utils/mediaUtils';
+import { getSecureMediaUrl, getFallbackAvatarUrl } from '../../../utils/mediaUtils';
+import VideoPlaybackService from '../../../services/VideoPlaybackService';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -315,34 +316,80 @@ const EnhancedShortCard: React.FC<EnhancedShortCardProps> = memo(({
 
 
 
-  // State for secure video URL
-  const [secureVideoUrl, setSecureVideoUrl] = React.useState<string | null>(null);
+  // State for video URL (now determined by VideoPlaybackService)
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [secureThumbnailUrl, setSecureThumbnailUrl] = React.useState<string | null>(null);
   const [secureAvatarUrl, setSecureAvatarUrl] = React.useState<string | null>(null);
   const [videoLoadError, setVideoLoadError] = React.useState(false);
 
-  // Load secure video URL
+  // Determine optimal video URL using VideoPlaybackService
   React.useEffect(() => {
-    const loadSecureUrl = async () => {
-      if (item?.videoUrl) {
-        try {
-          const url = await getSecureMediaUrl(item.videoUrl);
-          console.log('[EnhancedShortCard] Loaded secure video URL:', {
+    const determineVideoUrl = async () => {
+      if (!item?.id || !item?.videoUrl) return;
+
+      try {
+        // Create video metadata for VideoPlaybackService
+        const videoMetadata = {
+          id: parseInt(item.id), // Convert string id to number
+          video_link: item.videoUrl,
+          stream_video_id: item.stream_video_id,
+          stream_status: item.stream_status,
+          adaptive_manifest_url: item.adaptive_manifest_url,
+          stream_ready_at: item.stream_ready_at,
+          isShot: true
+        };
+
+        // Get optimal playback configuration
+        const playbackConfig = VideoPlaybackService.getInstance().getPlaybackConfig(videoMetadata, {
+          preferStream: true,
+          quality: 'auto',
+          autoplay: isGloballyPlaying && isActive,
+          muted: isGloballyMuted
+        });
+
+        let finalVideoUrl: string;
+
+        if (playbackConfig.useStreamPlayer && playbackConfig.hlsUrl) {
+          // Use Stream HLS URL directly (no presigned URL needed)
+          finalVideoUrl = playbackConfig.hlsUrl;
+          console.log('[EnhancedShortCard] Using Cloudflare Stream for video:', {
+            shortId: item.id,
+            streamVideoId: item.stream_video_id,
+            hlsUrl: playbackConfig.hlsUrl
+          });
+        } else if (playbackConfig.videoUrl) {
+          // Use R2 video URL, but generate presigned URL for secure access
+          const secureUrl = await getSecureMediaUrl(playbackConfig.videoUrl);
+          finalVideoUrl = secureUrl || playbackConfig.videoUrl;
+          console.log('[EnhancedShortCard] Using R2 with presigned URL for video:', {
+            shortId: item.id,
+            originalUrl: playbackConfig.videoUrl?.substring(0, 100) + '...',
+            secureUrl: finalVideoUrl?.substring(0, 100) + '...',
+          });
+        } else {
+          // Fallback to original videoUrl with presigned URL
+          const secureUrl = await getSecureMediaUrl(item.videoUrl);
+          finalVideoUrl = secureUrl || item.videoUrl;
+          console.log('[EnhancedShortCard] Fallback: using original videoUrl with presigned URL:', {
             shortId: item.id,
             originalUrl: item.videoUrl?.substring(0, 100) + '...',
-            secureUrl: url?.substring(0, 100) + '...',
+            secureUrl: finalVideoUrl?.substring(0, 100) + '...',
           });
-          setSecureVideoUrl(url || item.videoUrl);
-          setVideoLoadError(false);
-        } catch (error) {
-          console.warn('[EnhancedShortCard] Failed to load secure URL for short:', item.id, error);
-          setSecureVideoUrl(item.videoUrl);
-          setVideoLoadError(false);
         }
+
+        setVideoUrl(finalVideoUrl);
+        setVideoLoadError(false);
+
+      } catch (error) {
+        console.warn('[EnhancedShortCard] Failed to determine video URL for short:', item.id, error);
+        // Fallback to original URL
+        setVideoUrl(item.videoUrl);
+        setVideoLoadError(false);
       }
     };
-    loadSecureUrl();
-  }, [item?.videoUrl, item?.id]);
+
+    determineVideoUrl();
+  }, [item?.id, item?.videoUrl, item?.stream_video_id, item?.stream_status, isGloballyPlaying, isActive, isGloballyMuted]);
 
   // Load secure thumbnail URL
   React.useEffect(() => {
@@ -377,7 +424,7 @@ const EnhancedShortCard: React.FC<EnhancedShortCardProps> = memo(({
   }, [item?.channel?.avatar]);
 
   // Validate video source
-  const hasValidSource = secureVideoUrl && secureVideoUrl.trim().length > 0;
+  const hasValidSource = videoUrl && videoUrl.trim().length > 0;
 
   return (
     <View style={styles.shortCardContainer}>
@@ -392,7 +439,7 @@ const EnhancedShortCard: React.FC<EnhancedShortCardProps> = memo(({
           >
             {hasValidSource ? (
               <OptimizedVideoPlayer
-                source={{ uri: secureVideoUrl }}
+                source={{ uri: videoUrl }}
                 isActive={isActive}
                 isPaused={!isGloballyPlaying}
                 isMuted={isGloballyMuted}

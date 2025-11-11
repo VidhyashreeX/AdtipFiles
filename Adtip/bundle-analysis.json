@@ -1,0 +1,763 @@
+{
+  "summary": {
+    "totalSize": 0,
+    "gzippedSize": 0,
+    "moduleCount": 0,
+    "chunkCount": 0,
+    "optimizationPotential": 0
+  },
+  "modules": [],
+  "dependencies": [
+    {
+      "name": "@aws-sdk/client-s3",
+      "version": "^3.839.0",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "@aws-sdk/s3-request-presigner",
+      "version": "^3.839.0",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "@d11/react-native-fast-image",
+      "version": "^8.11.0",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "@good-react-native/keyboard-avoider",
+      "version": "^1.1.4",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "@notifee/react-native",
+      "version": "^9.1.8",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "@nozbe/watermelondb",
+      "version": "^0.28.0",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "@nozbe/with-observables",
+      "version": "^1.6.0",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "@react-native-async-storage/async-storage",
+      "version": "^2.1.2",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "@react-native-clipboard/clipboard",
+      "version": "^1.16.3",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "@react-native-community/blur",
+      "version": "^4.4.1",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "@react-native-community/datetimepicker",
+      "version": "^8.4.1",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "@react-native-community/netinfo",
+      "version": "^11.4.1",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "@react-native-community/slider",
+      "version": "^5.1.0",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "@react-native-firebase/analytics",
+      "version": "^22.2.1",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "@react-native-firebase/app",
+      "version": "^22.2.1",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "@react-native-firebase/auth",
+      "version": "^22.2.1",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "@react-native-firebase/crashlytics",
+      "version": "^22.2.1",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "@react-native-firebase/database",
+      "version": "^22.2.1",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "@react-native-firebase/firestore",
+      "version": "^22.2.1",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "@react-native-firebase/messaging",
+      "version": "^22.2.1",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "@react-native-firebase/storage",
+      "version": "^22.2.1",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "@react-native-oh-tpl/react-native-image-zoom-viewer",
+      "version": "^3.0.1-0.0.1",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "@react-native-picker/picker",
+      "version": "^2.11.2",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "@react-navigation/bottom-tabs",
+      "version": "^7.3.14",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "@react-navigation/native",
+      "version": "^7.1.10",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "@react-navigation/native-stack",
+      "version": "^7.3.14",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "@react-navigation/stack",
+      "version": "^7.3.3",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "@tanstack/react-query",
+      "version": "^5.81.2",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "@types/lodash.debounce",
+      "version": "^4.0.9",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "@videosdk.live/react-native-sdk",
+      "version": "^0.3.7",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "@videosdk.live/react-native-webrtc",
+      "version": "^0.0.19",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "@xstate/react",
+      "version": "^6.0.0",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "axios",
+      "version": "^1.9.0",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "cpx-research-sdk-react-native",
+      "version": "^2.0.25",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "date-fns",
+      "version": "^4.1.0",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "immer",
+      "version": "^9.0.21",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "lottie-react-native",
+      "version": "^7.2.2",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "lucide-react-native",
+      "version": "^0.513.0",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "nativewind",
+      "version": "^4.1.23",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "react",
+      "version": "19.0.0",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "react-native",
+      "version": "0.79.2",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "react-native-callkeep",
+      "version": "4.3.16",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "react-native-compressor",
+      "version": "^1.11.0",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "react-native-country-codes-picker",
+      "version": "^2.3.5",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "react-native-create-thumbnail",
+      "version": "^2.1.1",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "react-native-date-picker",
+      "version": "^5.0.12",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "react-native-dropdown-picker",
+      "version": "^5.4.6",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "react-native-event-listeners",
+      "version": "^1.0.7",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "react-native-fs",
+      "version": "^2.20.0",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "react-native-geolocation-service",
+      "version": "^5.3.1",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "react-native-gesture-handler",
+      "version": "^2.26.0",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "react-native-get-random-values",
+      "version": "^1.11.0",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "react-native-google-mobile-ads",
+      "version": "^15.3.1",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "react-native-google-places-autocomplete",
+      "version": "^2.5.7",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "react-native-image-crop-picker",
+      "version": "^0.50.1",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "react-native-image-picker",
+      "version": "^8.2.1",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "react-native-linear-gradient",
+      "version": "^2.8.3",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "react-native-orientation-locker",
+      "version": "^1.7.0",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "react-native-otp-textinput",
+      "version": "^1.1.7",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "react-native-pager-view",
+      "version": "^6.8.1",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "react-native-permissions",
+      "version": "^5.4.1",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "react-native-progress",
+      "version": "^5.0.1",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "react-native-razorpay",
+      "version": "^2.3.0",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "react-native-reanimated",
+      "version": "^3.18.0",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "react-native-safe-area-context",
+      "version": "^5.4.1",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "react-native-screens",
+      "version": "^4.11.1",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "react-native-skeleton-placeholder",
+      "version": "^5.2.4",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "react-native-sound",
+      "version": "^0.12.0",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "react-native-svg",
+      "version": "^15.12.0",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "react-native-toast-message",
+      "version": "^2.3.0",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "react-native-url-polyfill",
+      "version": "^2.0.0",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "react-native-uuid",
+      "version": "^2.0.3",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "react-native-vector-icons",
+      "version": "^10.2.0",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "react-native-video",
+      "version": "^6.14.1",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "react-native-view-shot",
+      "version": "^4.0.3",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "react-native-vision-camera",
+      "version": "^4.7.0",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "react-native-webview",
+      "version": "^13.14.1",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "rxjs",
+      "version": "^7.8.2",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "socket.io-client",
+      "version": "^4.8.1",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "tailwindcss",
+      "version": "^3.4.17",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "xstate",
+      "version": "^5.20.2",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "zustand",
+      "version": "^5.0.5",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "@babel/core",
+      "version": "^7.25.2",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "@babel/plugin-proposal-decorators",
+      "version": "^7.28.0",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "@babel/preset-env",
+      "version": "^7.25.3",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "@babel/runtime",
+      "version": "^7.25.0",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "@react-native-community/cli",
+      "version": "18.0.0",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "@react-native-community/cli-platform-android",
+      "version": "18.0.0",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "@react-native-community/cli-platform-ios",
+      "version": "18.0.0",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "@react-native/babel-preset",
+      "version": "0.79.2",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "@react-native/eslint-config",
+      "version": "0.79.2",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "@react-native/metro-config",
+      "version": "0.79.2",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "@react-native/typescript-config",
+      "version": "0.79.2",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "@types/jest",
+      "version": "^29.5.13",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "@types/react",
+      "version": "^19.0.0",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "@types/react-native-vector-icons",
+      "version": "^6.4.18",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "@types/react-test-renderer",
+      "version": "^19.0.0",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "eslint",
+      "version": "^8.57.1",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "eslint-config-prettier",
+      "version": "^10.1.5",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "eslint-formatter-codeframe",
+      "version": "^7.32.1",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "eslint-plugin-prettier",
+      "version": "^5.4.1",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "jest",
+      "version": "^29.6.3",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "patch-package",
+      "version": "^8.0.0",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "prettier",
+      "version": "^3.5.3",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "react-test-renderer",
+      "version": "19.0.0",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "typescript",
+      "version": "^5.0.4",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    },
+    {
+      "name": "typescript-eslint",
+      "version": "^8.36.0",
+      "size": 0,
+      "isDuplicate": false,
+      "isUnused": false
+    }
+  ],
+  "suggestions": [],
+  "timestamp": "2025-11-11T09:19:35.235Z"
+}

@@ -27,6 +27,11 @@ export interface ShortVideo {
   comments: number;
   musicName?: string;
   isLiked?: boolean; // Add isLiked field to track like status
+  // Stream-related properties for Cloudflare Stream support
+  stream_video_id?: string;
+  stream_status?: 'uploading' | 'ready' | 'error' | 'inprogress';
+  adaptive_manifest_url?: string;
+  stream_ready_at?: string;
 }
 
 export interface PublicShot {
@@ -75,13 +80,13 @@ async function fetchShortsPage(pageParam: number, userId: string): Promise<Short
       id: shot.id?.toString() || Math.random().toString(),
       title: shot.name || 'Untitled Short',
       thumbnail: shot.video_Thumbnail && shot.video_Thumbnail !== 'undefined'
-        ? (await getSecureMediaUrl(shot.video_Thumbnail)) || null
+        ? await getSecureMediaUrl(shot.video_Thumbnail) || null
         : null,
       channel: {
         id: shot.channelId?.toString() || 'unknownChannel',
         name: shot.channelName || 'Unknown Channel',
         avatar: shot.channel_profile && shot.channel_profile !== 'null'
-          ? (await getSecureMediaUrl(shot.channel_profile)) || getFallbackAvatarUrl(shot.channelId || Math.random().toString())
+          ? await getSecureMediaUrl(shot.channel_profile) || getFallbackAvatarUrl(shot.channelId || Math.random().toString())
           : getFallbackAvatarUrl(shot.channelId || Math.random().toString()),
         verified: false,
         subscribers: shot.total_channel_followers || 0,
@@ -96,7 +101,7 @@ async function fetchShortsPage(pageParam: number, userId: string): Promise<Short
       description: shot.video_description && shot.video_description !== 'undefined'
         ? shot.video_description
         : 'No description available',
-      videoUrl: (await getSecureMediaUrl(shot.video_link || '')) || '',
+      videoUrl: await getSecureMediaUrl(shot.video_link || '') || '',
       comments: shot.total_comments || 0,
       musicName: shot.name || 'Original Sound',
     }))
@@ -319,14 +324,18 @@ export const useSingleShortQuery = (shortId: string | null, userId?: string) => 
           const rawShort = response.data[0];
 
           // Transform the raw data to match ShortVideo interface
+          const secureThumbnail = rawShort.video_Thumbnail ? await getSecureMediaUrl(rawShort.video_Thumbnail) : null;
+          const secureAvatar = rawShort.channel_profile ? await getSecureMediaUrl(rawShort.channel_profile) : null;
+          const secureVideoUrl = rawShort.video_link ? await getSecureMediaUrl(rawShort.video_link) : '';
+
           const transformedShort: ShortVideo = {
             id: rawShort.id.toString(),
             title: rawShort.name || '',
-            thumbnail: rawShort.video_Thumbnail ? getSecureMediaUrl(rawShort.video_Thumbnail) : null,
+            thumbnail: secureThumbnail || null,
             channel: {
               id: rawShort.channelId?.toString() || '',
               name: rawShort.channelName || 'Unknown Channel',
-              avatar: rawShort.channel_profile ? getSecureMediaUrl(rawShort.channel_profile) : getFallbackAvatarUrl(),
+              avatar: secureAvatar || getFallbackAvatarUrl(),
               verified: false,
               subscribers: rawShort.total_channel_followers || 0,
             },
@@ -338,7 +347,7 @@ export const useSingleShortQuery = (shortId: string | null, userId?: string) => 
             isPaidPromotional: rawShort.is_paid_promotional === 1,
             postedAt: rawShort.createddate || new Date().toISOString(),
             description: rawShort.video_desciption || '',
-            videoUrl: rawShort.video_link ? getSecureMediaUrl(rawShort.video_link) : '',
+            videoUrl: secureVideoUrl || '',
             comments: rawShort.total_comments || 0,
             isLiked: rawShort.is_like === 1,
           };
