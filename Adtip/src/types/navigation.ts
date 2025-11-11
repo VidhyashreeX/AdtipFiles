@@ -125,6 +125,11 @@ export type MainNavigatorParamList = {
   PlayToEarn: undefined;
   LudoGame: undefined;
   WatchToEarn: undefined;
+  AdView: {
+    adId: number;
+    userId: number;
+  };
+  AdHistory: undefined;
   AdPassbook: undefined;
   Earnings: undefined;
   EarnMoneyUser: undefined;
@@ -204,6 +209,7 @@ export type MainNavigatorParamList = {
   ContentCreatorSubscriptionScreen: undefined;
   PremiumUser: undefined;
   ContentCreatorPremium: undefined;
+  ContentCreatorPremiumApplication: undefined;
   UserPremiumBenefits: undefined;
   ContentCreatorPremiumBenefits: undefined;
   PrivacyPolicy: undefined; // Add this line

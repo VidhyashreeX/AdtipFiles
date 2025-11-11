@@ -30,6 +30,8 @@ import {useTheme} from '../../contexts/ThemeContext';
 
 // Services
 import ApiService from '../../services/ApiService';
+import { userDataManager } from '../../services/UserDataManager';
+import { navigationRef } from '../../navigation/NavigationService';
 
 // Types
 import {RootStackParamList} from '../../types/navigation';
@@ -62,7 +64,7 @@ const UserDetailsScreen = () => {
   // Navigation
   const navigation = useNavigation<UserDetailsScreenNavigationProp>();
   // Auth context
-  const {user, updateUserDetails, loading: authLoading, completeOnboarding, refreshUserData} = useAuth();
+    const {user, loading: authLoading, completeOnboarding, refreshUserData} = useAuth();
   
   // Local loading state for form submission
   const [loading, setLoading] = useState(false);
@@ -423,6 +425,12 @@ const UserDetailsScreen = () => {
             is_first_time: 0,
             isSaveUserDetails: 1,
           }));
+
+          // Update UserDataManager session data
+          await userDataManager.saveUserSession({
+            isSaveUserDetails: 1,
+            isFirstTime: 0,
+          });
         }
 
         // ✅ FIX: Update user data immediately to trigger navigation
@@ -435,23 +443,28 @@ const UserDetailsScreen = () => {
           isSaveUserDetails: 1, // Mark as completed
         };
 
-        // Update user in AuthContext using the proper method
-        await updateUserDetails(updatedUserData);
+        // Update user in AuthContext by setting the user state directly
+        // (avoiding updateUserDetails to prevent duplicate API calls)
+        if (user) {
+          const updatedUser = { ...user, ...updatedUserData, isSaveUserDetails: 1 };
+          // This will be handled by the context update
+        }
 
         // Also refresh from server to get any additional data
         await refreshUserData();
 
-        Alert.alert(
-          'Success',
-          'Profile completed successfully!',
-          [{
-            text: 'OK',
-            onPress: () => {
-              // The App.tsx logic will now see the updated user data and navigate properly
-              // No need for manual navigation as the state machine will handle it
-            }
-          }]
-        );
+        // Mark onboarding as completed
+        completeOnboarding();
+
+        // Navigate to main app immediately after successful profile completion
+        // Reset navigation to ensure clean state
+        setTimeout(() => {
+          navigation.reset({
+            index: 0,
+            routes: [{ name: 'Main' }],
+          });
+        }, 100); // Small delay to allow state updates to propagate
+
       } else {
         throw new Error(response.message || 'Failed to save user details');
       }

@@ -19,6 +19,8 @@ export interface UserSessionData {
   profileImageUrl?: string;
   isVerified: boolean;
   lastLoginTime: number;
+  isSaveUserDetails?: number; // 0 or 1
+  isFirstTime?: number; // 0 or 1
 }
 
 export interface UserPreferences {
@@ -112,6 +114,12 @@ class UserDataManager {
       }
       if (updatedData.channelId) {
         batchOperations.push(['channelId', updatedData.channelId.toString()]);
+      }
+      if (updatedData.isSaveUserDetails !== undefined) {
+        batchOperations.push(['isSaveUserDetails', updatedData.isSaveUserDetails.toString()]);
+      }
+      if (updatedData.isFirstTime !== undefined) {
+        batchOperations.push(['isFirstTime', updatedData.isFirstTime.toString()]);
       }
 
       // Perform batched write

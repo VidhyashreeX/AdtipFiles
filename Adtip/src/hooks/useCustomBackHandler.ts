@@ -1,21 +1,27 @@
 import { useCallback, useEffect } from 'react';
-import { BackHandler } from 'react-native';
+import { BackHandler, Alert } from 'react-native';
 import { useNavigation, useRoute, CommonActions } from '@react-navigation/native';
 
 interface BackHandlerOptions {
   screenType?: 'call' | 'profile' | 'chat' | 'default';
   fallbackRoute?: string;
   onCustomBack?: () => boolean; // Return true if handled, false to use default
+  disableExitConfirmation?: boolean; // Disable exit confirmation on root screens
 }
 
 /**
  * Custom back button handler that provides dynamic navigation based on screen type
- * and navigation source tracking
+ * and navigation source tracking. Prevents app exit and shows confirmation when at bottom of stack.
  */
 export const useCustomBackHandler = (options: BackHandlerOptions = {}) => {
   const navigation = useNavigation();
   const route = useRoute();
-  const { screenType = 'default', fallbackRoute = 'Home', onCustomBack } = options;
+  const { 
+    screenType = 'default', 
+    fallbackRoute = 'Home', 
+    onCustomBack,
+    disableExitConfirmation = false
+  } = options;
 
   const handleBackPress = useCallback(() => {
     // Allow custom handling first
@@ -30,7 +36,8 @@ export const useCustomBackHandler = (options: BackHandlerOptions = {}) => {
       screenType,
       currentRoute: route.name,
       navigationSource,
-      params
+      params,
+      canGoBack: navigation.canGoBack()
     });
 
     switch (screenType) {
@@ -40,7 +47,11 @@ export const useCustomBackHandler = (options: BackHandlerOptions = {}) => {
           if (navigationSource === 'contacts' || navigationSource === 'ContactsList') {
             navigation.navigate('TipCall' as never);
           } else if (navigationSource === 'profile' || navigationSource === 'UserProfile') {
-            navigation.goBack();
+            if (navigation.canGoBack()) {
+              navigation.goBack();
+            } else {
+              navigation.navigate('TabHome' as never);
+            }
           } else if (navigationSource === 'chat') {
             navigation.navigate('ChatList' as never);
           } else {
@@ -59,9 +70,17 @@ export const useCustomBackHandler = (options: BackHandlerOptions = {}) => {
           if (navigationSource === 'call' || navigationSource === 'TipCall') {
             navigation.navigate('TipCall' as never);
           } else if (navigationSource === 'chat' || navigationSource === 'ChatScreen') {
-            navigation.goBack();
+            if (navigation.canGoBack()) {
+              navigation.goBack();
+            } else {
+              navigation.navigate('TabHome' as never);
+            }
           } else if (navigationSource === 'search' || navigationSource === 'SearchResults') {
-            navigation.goBack();
+            if (navigation.canGoBack()) {
+              navigation.goBack();
+            } else {
+              navigation.navigate('TabHome' as never);
+            }
           } else if (navigationSource === 'home' || navigationSource === 'Home') {
             navigation.navigate('Home' as never);
           } else {
@@ -72,7 +91,7 @@ export const useCustomBackHandler = (options: BackHandlerOptions = {}) => {
           if (navigation.canGoBack()) {
             navigation.goBack();
           } else {
-            navigation.navigate(fallbackRoute as never);
+            navigation.navigate('TabHome' as never);
           }
         }
         return true;
@@ -83,27 +102,27 @@ export const useCustomBackHandler = (options: BackHandlerOptions = {}) => {
         if (navigationSource) {
           navigation.navigate(navigationSource as never);
         } else {
-          navigation.navigate('ChatList' as never);
+          if (navigation.canGoBack()) {
+            navigation.goBack();
+          } else {
+            navigation.navigate('TabHome' as never);
+          }
         }
         return true;
       }
 
       default: {
-        // Default behavior: go back if possible, otherwise to fallback
+        // Default behavior: go back if possible, otherwise don't exit app
         if (navigation.canGoBack()) {
           navigation.goBack();
         } else {
-          navigation.dispatch(
-            CommonActions.reset({
-              index: 0,
-              routes: [{ name: fallbackRoute }],
-            })
-          );
+          // At the bottom of stack - don't exit, return false to let global handler handle it
+          return false;
         }
         return true;
       }
     }
-  }, [navigation, route, screenType, fallbackRoute, onCustomBack]);
+  }, [navigation, route, screenType, fallbackRoute, onCustomBack, disableExitConfirmation]);
 
   useEffect(() => {
     const backHandler = BackHandler.addEventListener('hardwareBackPress', handleBackPress);

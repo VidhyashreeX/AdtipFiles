@@ -96,6 +96,19 @@ export const API_ENDPOINTS = {
     // Commented out PubScale integration - June 2, 2025
     // TRACK_REWARD: '/api/track-reward',
   },
+
+  // Ad Viewer (Watch to Earn)
+  AD_VIEWER: {
+    GET_ALL_ADS: '/api/getallads',
+    START_SESSION: '/api/ad-viewer/start',
+    UPDATE_WATCH_TIME: '/api/ad-viewer/watch-time',
+    SKIP_AD: '/api/ad-viewer/skip',
+    TRACK_WEBSITE_VISIT: '/api/ad-viewer/website-visit',
+    SUBMIT_ANSWER: '/api/ad-viewer/submit-answer',
+    COMPLETE_AD: '/api/ad-viewer/complete',
+    GET_HISTORY: '/api/ad-viewer/history',
+    GET_ANALYTICS: '/api/ad-viewer/analytics',
+  },
 };
 
 // Legacy flat endpoints structure for backward compatibility

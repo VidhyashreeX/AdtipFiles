@@ -479,7 +479,7 @@ const LiveStreamScreen: React.FC<LiveStreamScreenProps> = ({
             {
               text: 'Add Funds',
               onPress: () => {
-                (navigation as any).navigate('AddFunds');
+                (navigation as any).navigate('AddFundsScreen');
               }
             }
           ]

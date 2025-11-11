@@ -8,9 +8,8 @@
  * No loading screens, no blocking initialization - just immediate UI.
  */
 import React, { useEffect, useState, useRef } from 'react';
-import { View, StatusBar, BackHandler, Alert } from 'react-native';
+import { View, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -18,6 +17,7 @@ import { safeAreaStyles, statusBarConfig } from '../../utils/SafeAreaUtils';
 import { navigationRef, resetTo } from '../../navigation/NavigationService';
 import Sidebar from '../sidebar/Sidebar';
 import NavigationErrorBoundary from './NavigationErrorBoundary';
+import NavigationWithBackHandler from '../navigation/NavigationWithBackHandler';
 import { Logger } from '../../utils/ProductionLogger';
 
 // Import navigation screens
@@ -111,57 +111,8 @@ const UltraFastLoader: React.FC<UltraFastLoaderProps> = ({
   // Store onInitializationComplete in ref to avoid effect re-runs
   onInitializationCompleteRef.current = onInitializationComplete || null;
 
-  // Global back button handler
-  useEffect(() => {
-    const backAction = () => {
-      // Only handle back button when navigation is ready and initialized
-      if (!isNavReady || !isInitialized) {
-        return false;
-      }
-
-      // Check if navigation can go back
-      if (navigationRef.isReady() && navigationRef.canGoBack()) {
-        // Let the default back action happen
-        return false;
-      }
-
-      // Handle the case when there's no previous screen to go back to
-      if (currentState === 'mainApp') {
-        // For logged-in users: Show exit app alert
-        Alert.alert(
-          'Exit App',
-          'Do you want to exit the app?',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Exit', style: 'destructive', onPress: () => BackHandler.exitApp() }
-          ]
-        );
-        return true; // Prevent default back action
-      } else if (currentState === 'guestApp') {
-        // For guest users: Exit guest mode and navigate back to onboarding screens
-        try {
-          Logger.debug('UltraFastLoader', 'Guest mode back button - exiting guest mode and returning to onboarding');
-          exitGuestMode().then(() => {
-            resetTo('Auth');
-          }).catch((error) => {
-            Logger.error('UltraFastLoader', 'Error exiting guest mode:', error);
-            // Still try to navigate to onboarding even if exitGuestMode fails
-            resetTo('Auth');
-          });
-          return true; // Prevent default back action
-        } catch (error) {
-          Logger.error('UltraFastLoader', 'Error handling guest mode back button:', error);
-          return false;
-        }
-      }
-
-      // For other cases (like onboarding), allow default behavior
-      return false;
-    };
-
-    const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
-    return () => backHandler.remove();
-  }, [isNavReady, isInitialized, currentState, exitGuestMode]);
+  // Back button handling is now managed by NavigationWithBackHandler component
+  // which provides intelligent back button behavior based on navigation state
 
   // ✅ SIMPLIFIED: Log state changes using state machine
   useEffect(() => {
@@ -378,10 +329,10 @@ const UltraFastLoader: React.FC<UltraFastLoaderProps> = ({
       />
 
       <NavigationErrorBoundary>
-        <NavigationContainer
-          ref={navigationRef}
+        <NavigationWithBackHandler
+          navigationRef={navigationRef}
           initialState={initialState}
-          onStateChange={(state) => {
+          onStateChange={(state: any) => {
             // Save navigation state for persistence
             if (state && isStateRestored) {
               NavigationPersistenceService.saveNavigationState(state);
@@ -434,7 +385,7 @@ const UltraFastLoader: React.FC<UltraFastLoaderProps> = ({
         
         {/* ✅ SIMPLIFIED: Show sidebar using state machine */}
         {shouldShowSidebar && <Sidebar />}
-        </NavigationContainer>
+        </NavigationWithBackHandler>
       </NavigationErrorBoundary>
     </SafeAreaView>
   );

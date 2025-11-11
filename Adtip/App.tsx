@@ -8,8 +8,8 @@ import {
   Text,
 } from 'react-native';
 
-import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import NavigationWithBackHandler from './src/components/navigation/NavigationWithBackHandler';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   SafeAreaProvider,
@@ -648,12 +648,16 @@ const AppNavigator = () => {
 
   // Only show UserDetails screen if authenticated but missing user name
   return (
-    <NavigationContainer ref={navigationRef} linking={DEEP_LINK_CONFIG} fallback={<Text>Loading...</Text>}>
+    <NavigationWithBackHandler 
+      navigationRef={navigationRef} 
+      linking={DEEP_LINK_CONFIG} 
+      fallback={<Text>Loading...</Text>}
+    >
       <RootStack.Navigator screenOptions={{ headerShown: false }}>
         <RootStack.Screen name="UserDetails" component={UserDetailsScreen} />
         <RootStack.Screen name="Main" component={MainNavigator} />
       </RootStack.Navigator>
-    </NavigationContainer>
+    </NavigationWithBackHandler>
   );
 };
 
@@ -913,10 +917,10 @@ function App(): React.JSX.Element {
                               />
 
                               {/* Debug button for testing force updates (only in debug builds) */}
-                              <ForceUpdateDebugButton />
+                              {/* <ForceUpdateDebugButton /> */}
 
                               {/* Theme test modal for debugging dark mode issues (only in debug builds) */}
-                              <ThemeTestModal />
+                              {/* <ThemeTestModal /> */}
 
                               {/* CallKeep test buttons for triggering native UI (hidden per user request) */}
                               {/* <CallKeepTestButtons /> */}

@@ -51,6 +51,8 @@ import ReferralScreen from '../screens/referral/ReferralScreen';
 import LudoGameScreen from '../screens/playtoEarn/LudoGameScreen';
 import InstallToEarnScreen from '../screens/installToEarn/InstallToEarnScreen';
 import WatchToEarnScreen from '../screens/watchToEarn/WatchToEarnScreen';
+import AdViewScreen from '../screens/watchToEarn/AdViewScreen';
+import AdHistoryScreen from '../screens/watchToEarn/AdHistoryScreen';
 import AdPassbookScreen from '../screens/adPassbook/AdPassbookScreen';
 import SupportScreen from '../screens/support/SupportScreen';
 import ContactFormScreen from '../screens/support/ContactFormScreen';
@@ -464,6 +466,24 @@ const MainNavigator = () => {
       <Stack.Screen name="EarnMoneyCreator" component={EarnMoneyCreatorScreen} />
       <Stack.Screen name="Referral" component={ReferralScreen} />
       <Stack.Screen name="WatchToEarn" component={WatchToEarnScreen} />
+      <Stack.Screen
+        name="AdView"
+        component={AdViewScreen}
+        options={{
+          headerShown: false,
+          presentation: 'fullScreenModal',
+          animation: 'slide_from_bottom',
+        }}
+      />
+      <Stack.Screen
+        name="AdHistory"
+        component={AdHistoryScreen}
+        options={{
+          title: 'Ad History',
+          headerShown: true,
+          animation: 'slide_from_right',
+        }}
+      />
       <Stack.Screen name="AdPassbook" component={AdPassbookScreen} />
       <Stack.Screen name="Support" component={SupportScreen} />
       <Stack.Screen name="ContactForm" component={ContactFormScreen} />

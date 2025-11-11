@@ -47,6 +47,7 @@ type AuthContextType = {
     interests?: number;
   }) => Promise<void>;
   refreshUserData: () => Promise<void>;
+  updateUserLocally: (userData: Partial<User>) => void;
   hasChannel: boolean;
   createChannel: (name: string, description: string) => Promise<void>;
   completeOnboarding: () => void;
@@ -72,6 +73,7 @@ const AuthContext = createContext<AuthContextType>({
   exitGuestMode: async () => {}, // Default guest mode exit
   updateUserDetails: async () => {},
   refreshUserData: async () => {},
+  updateUserLocally: () => {},
   hasChannel: false,
   createChannel: async () => {},
   completeOnboarding: () => {},
@@ -137,17 +139,32 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
 
         // Check if user is authenticated first
         if (sessionData && sessionData.accessToken) {
-          // Convert UserSessionData to User format for compatibility
-          const userData: User = {
-            id: sessionData.userId,
-            name: sessionData.userName,
-            is_premium: sessionData.isPremium,
-            premium_plan_id: sessionData.premiumPlanId,
-            content_creator_plan_id: sessionData.contentCreatorPlanId,
-            isSaveUserDetails: 1, // Assume complete if stored in UserDataManager
-            is_first_time: 0, // Assume not first time if stored
-            // Add other required User fields with defaults
-          } as User;
+          // Try to load full user data from AsyncStorage first
+          let userData: User | null = null;
+          try {
+            const storedUserData = await AsyncStorage.getItem('user');
+            if (storedUserData) {
+              userData = JSON.parse(storedUserData) as User;
+              Logger.info('AuthContext', '✅ Loaded full user data from AsyncStorage');
+            }
+          } catch (error) {
+            Logger.warn('AuthContext', '⚠️ Failed to load user data from AsyncStorage:', error);
+          }
+
+          // If no stored user data, create minimal user data from session
+          if (!userData) {
+            userData = {
+              id: sessionData.userId,
+              name: sessionData.userName,
+              is_premium: sessionData.isPremium,
+              premium_plan_id: sessionData.premiumPlanId,
+              content_creator_plan_id: sessionData.contentCreatorPlanId,
+              isSaveUserDetails: sessionData.isSaveUserDetails ?? 0, // Use from session or default to 0
+              is_first_time: sessionData.isFirstTime ?? 1, // Use from session or default to 1
+              // Add other required User fields with defaults
+            } as User;
+            Logger.info('AuthContext', '📝 Created minimal user data from session');
+          }
 
           setUser(userData);
           setIsAuthenticated(true);
@@ -302,6 +319,8 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
           accessToken: response.accessToken,
           isVerified: Boolean(userData.isOtpVerified),
           lastLoginTime: Date.now(),
+          isSaveUserDetails: userData.isSaveUserDetails,
+          isFirstTime: userData.is_first_time,
         };
 
         await userDataManager.saveUserSession(sessionData);
@@ -550,6 +569,18 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
     }
   };
 
+  // Update user data locally without API call
+  const updateUserLocally = (userData: Partial<User>): void => {
+    if (user) {
+      const updatedUser = { ...user, ...userData };
+      setUser(updatedUser);
+      // Also update AsyncStorage
+      AsyncStorage.setItem('user', JSON.stringify(updatedUser)).catch(error => {
+        Logger.error('AuthContext', 'Failed to update user in AsyncStorage:', error);
+      });
+    }
+  };
+
   // Enter guest mode
   const enterGuestMode = async (): Promise<void> => {
     try {
@@ -650,6 +681,7 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({
     exitGuestMode,
     updateUserDetails,
     refreshUserData,
+    updateUserLocally,
     hasChannel,
     createChannel,
     completeOnboarding,
