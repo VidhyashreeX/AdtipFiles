@@ -1,7 +1,7 @@
 import { Routes, Route, Navigate, Outlet } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
-import Wallet from "../components/Wallet";
-import AddFunds from "../components/AddFunds";
+import EnhancedWallet from "../components/EnhancedWallet";
+import EnhancedAddFunds from "../components/EnhancedAddFunds";
 import UpgradePremium from "../components/UpgradePremium";
 import UpgradeContentPremium from "../components/UpgradeContentPremium";
 import HowToEarnCreator from "../pages/HowToEarnCreator";
@@ -27,6 +27,16 @@ import TipTube from "@/pages/TipTube";
 import WatchPage from "@/pages/WatchPage";
 import ChannelPage from "@/pages/ChannelPage";
 import TipCall from "../pages/TipCall";
+import LiveStream from "../pages/LiveStream";
+import LiveStreaming from "../pages/LiveStreaming";
+import StartStream from "../pages/StartStream";
+import EnhancedLiveStreaming from "../pages/EnhancedLiveStreaming";
+import EnhancedLiveStream from "../pages/EnhancedLiveStream";
+import LiveStreamComparison from "../pages/LiveStreamComparison";
+import EnhancedCreatePost from "../pages/EnhancedCreatePost";
+import CreateChannel from "../pages/CreateChannel";
+import EnhancedHome from "../pages/EnhancedHome";
+import CurrencyDemo from "../pages/CurrencyDemo";
 
 const ProtectedRoute = () => {
   const { isAuthenticated, authLoading } = useAuth();
@@ -53,18 +63,24 @@ const AppRoutes = () => {
       {/* Protected Routes */}
       <Route element={<ProtectedRoute />}>
         <Route path="/complete-profile" element={<CompleteProfile />} />
-          <Route path="/watch/:id" element={<WatchPage />} />
-          <Route path="/watch" element={<TipTube />} />
-          <Route path="/tiptube" element={<Navigate to="/watch" replace />} />
+        <Route path="/personal-details" element={<PersonalDetails />} />
+        <Route path="/interests" element={<Interests />} />
+        <Route path="/watch/:id" element={<WatchPage />} />
+        <Route path="/watch" element={<TipTube />} />
+        <Route path="/tiptube" element={<Navigate to="/watch" replace />} />
         <Route path="/short/:id?" element={<TipShorts />} />
-        {/* Optional: redirect old /tipshorts to new /short route */}
-<Route path="/tipshorts" element={<Navigate to="/short" replace />} />
- <Route path="/channel/:channelName" element={<ChannelPage />} />
+        <Route path="/tipshorts" element={<Navigate to="/short" replace />} />
+        <Route path="/channel/:channelName" element={<ChannelPage />} />
         <Route path="/tipcall" element={<TipCall />} />
+        <Route path="/livestream" element={<EnhancedLiveStream />} />
+        <Route path="/livestream-old" element={<LiveStream />} />
+        <Route path="/livestream-comparison" element={<LiveStreamComparison />} />
+        <Route path="/start-stream" element={<StartStream />} />
+        <Route path="/live-streaming" element={<EnhancedLiveStreaming />} />
+        <Route path="/streaming-old" element={<LiveStreaming />} />
         <Route path="/home" element={<Home />} />
-        <Route path="/wallet" element={<Wallet />} />
-        <Route path="/tipshorts" element={<TipShorts />} />
-        <Route path="/add-funds" element={<AddFunds />} />
+        <Route path="/wallet" element={<EnhancedWallet />} />
+        <Route path="/add-funds" element={<EnhancedAddFunds />} />
         <Route path="/upgrade-premium" element={<UpgradePremium />} />
         <Route path="/upgrade-content-premium" element={<UpgradeContentPremium />} />
         <Route path="/how-to-earn-creator" element={<HowToEarnCreator />} />
@@ -77,8 +93,11 @@ const AppRoutes = () => {
         <Route path="/settings" element={<Settings />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/edit-profile" element={<EditProfile />} />
-        <Route path="/personal-details" element={<PersonalDetails />} />
-        <Route path="/interests" element={<Interests />} />
+        <Route path="/create-post" element={<EnhancedCreatePost />} />
+        <Route path="/create-channel" element={<CreateChannel />} />
+        <Route path="/enhanced-home" element={<EnhancedHome />} />
+        <Route path="/currency-demo" element={<CurrencyDemo />} />
+        <Route path="/engagement-demo" element={<div className="p-4"><div className="max-w-6xl mx-auto"><h1 className="text-2xl font-bold mb-4">Engagement Demo</h1><p>Demo component would go here</p></div></div>} />
       </Route>
 
       {/* Fallback Routes */}

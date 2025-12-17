@@ -30,18 +30,31 @@ api.interceptors.response.use(
       data: error.response?.data
     });
     
-    // Only redirect on actual 401 (unauthorized) errors
-    if (error.response?.status === 401) {
-      console.log('🚫 401 Unauthorized - clearing auth data and opening login modal');
+    const status = error.response?.status;
+    const url = error.config?.url || '';
+    
+    // Handle different error types with user-friendly messages
+    if (status === 401) {
+      console.log('🚫 401 Unauthorized - clearing auth data');
       localStorage.removeItem('UserLoggedIn');
       localStorage.removeItem('user');
       localStorage.removeItem('UserId');
       
-      // Only trigger login modal if we're not already on the login page
-      if (window.location.pathname !== '/login') {
+      // Only trigger login modal if we're not already on auth pages
+      const authPages = ['/login', '/verify-otp', '/onboarding'];
+      const isAuthPage = authPages.some(page => window.location.pathname.includes(page));
+      
+      if (!isAuthPage) {
         triggerLoginModal();
       }
+    } else if (status === 404 && url.includes('otp')) {
+      // Handle OTP-specific 404 errors
+      console.log('🔍 OTP not found - likely expired');
+    } else if (status >= 500) {
+      // Handle server errors
+      console.log('🚨 Server error occurred');
     }
+    
     return Promise.reject(error);
   }
 );

@@ -15,6 +15,8 @@ const OTPVerification = () => {
   const [loading, setLoading] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
   const [countdown, setCountdown] = useState(0);
+  const [resendAttempts, setResendAttempts] = useState(0);
+  const [maxResendAttempts] = useState(3);
   const [mobileNumber, setMobileNumber] = useState("");
   const [email, setEmail] = useState("");
   const [verificationType, setVerificationType] = useState<"phone" | "email">("phone");
@@ -51,6 +53,12 @@ const OTPVerification = () => {
     if (storedCountdown) {
       const timeLeft = parseInt(storedCountdown) - Math.floor(Date.now() / 1000);
       if (timeLeft > 0) setCountdown(timeLeft);
+    }
+
+    // Get resend attempts from localStorage
+    const storedAttempts = localStorage.getItem("resendAttempts");
+    if (storedAttempts) {
+      setResendAttempts(parseInt(storedAttempts));
     }
   }, [navigate]);
 
@@ -99,6 +107,7 @@ const OTPVerification = () => {
         localStorage.removeItem("mobile_number");
         localStorage.removeItem("email");
         localStorage.removeItem("otpCountdown");
+        localStorage.removeItem("resendAttempts");
         
         toast.success("OTP verified successfully");
 
@@ -122,13 +131,52 @@ const OTPVerification = () => {
       }
     } catch (error: any) {
       console.error("OTP verification error:", error);
-      toast.error(error.message || "Failed to verify OTP");
+      
+      // Handle different error types with user-friendly messages
+      let errorMessage = "Failed to verify OTP";
+      
+      if (error.response?.status === 400) {
+        const responseMessage = error.response?.data?.message || "";
+        if (responseMessage.toLowerCase().includes('otp') && responseMessage.toLowerCase().includes('invalid')) {
+          errorMessage = "Invalid OTP. Please check and try again.";
+        } else if (responseMessage.toLowerCase().includes('expired')) {
+          errorMessage = "OTP has expired. Please request a new one.";
+        } else if (responseMessage.toLowerCase().includes('not found')) {
+          errorMessage = "OTP not found. Please request a new one.";
+        } else {
+          errorMessage = "Invalid OTP. Please check and try again.";
+        }
+      } else if (error.response?.status === 404) {
+        errorMessage = "OTP not found or expired. Please request a new one.";
+      } else if (error.response?.status === 429) {
+        errorMessage = "Too many attempts. Please try again later.";
+      } else if (error.response?.status >= 500) {
+        errorMessage = "Server error. Please try again later.";
+      } else if (!error.response) {
+        errorMessage = "Network error. Please check your connection.";
+      } else {
+        errorMessage = error.message || "Failed to verify OTP. Please try again.";
+      }
+      
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
   };
 
   const handleResendOTP = async () => {
+    // Check if user has exceeded resend attempts
+    if (resendAttempts >= maxResendAttempts) {
+      toast.error(`Maximum resend attempts (${maxResendAttempts}) reached. Please try logging in again.`);
+      return;
+    }
+
+    // Check if countdown is still active
+    if (countdown > 0) {
+      toast.error(`Please wait ${countdown} seconds before requesting another OTP`);
+      return;
+    }
+
     setResendLoading(true);
     try {
       let response;
@@ -141,18 +189,28 @@ const OTPVerification = () => {
       if (response.status === 200) {
         const userData = response.data.data[0];
         localStorage.setItem("tempUserId", String(userData.id));
-        localStorage.setItem(
-          "otpCountdown",
-          (Math.floor(Date.now() / 1000) + 30).toString()
-        );
+        
+        // Set 30-second countdown
+        const newCountdownTime = Math.floor(Date.now() / 1000) + 30;
+        localStorage.setItem("otpCountdown", newCountdownTime.toString());
         setCountdown(30);
-        toast.success("OTP resent successfully");
+        
+        // Increment and store resend attempts
+        const newAttempts = resendAttempts + 1;
+        setResendAttempts(newAttempts);
+        localStorage.setItem("resendAttempts", newAttempts.toString());
+        
+        // Clear the OTP input field for new input
+        setOtp("");
+        
+        toast.success(`New OTP sent! (${newAttempts}/${maxResendAttempts} attempts used)`);
       } else {
         toast.error("Failed to resend OTP");
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Resend OTP error:", error);
-      toast.error("Failed to resend OTP");
+      const errorMessage = error.response?.data?.message || "Failed to resend OTP. Please try again.";
+      toast.error(errorMessage);
     } finally {
       setResendLoading(false);
     }
@@ -194,14 +252,15 @@ const OTPVerification = () => {
           >
             <div className="space-y-6">
               <InputOTP
-                value={otp}                onChange={val => {
+                value={otp}
+                onChange={val => {
                   setOtp(val);
                   if (val.length === 6 && /^\d{6}$/.test(val) && !loading) {
                     handleVerifyOTP();
                   }
                 }}
                 maxLength={6}
-                disabled={loading}
+                disabled={loading || resendLoading}
               />
 
               <Button
@@ -233,10 +292,10 @@ const OTPVerification = () => {
                   )}
                 >
                   {resendLoading
-                    ? "Sending..."
+                    ? "Sending new OTP..."
                     : countdown > 0
-                    ? `Resend code in ${countdown}s`
-                    : "Resend code"}
+                    ? `Resend in ${countdown}s`
+                    : `Resend OTP${resendAttempts > 0 ? ` (${resendAttempts}/${maxResendAttempts})` : ""}`}
                 </button>
               </div>
             </div>

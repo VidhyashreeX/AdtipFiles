@@ -1,191 +1,120 @@
-import React from 'react';
+import { Button } from "@/components/ui/button";
+import { ArrowLeft } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { EnhancedSubscriptionPlan } from "../utils/EnhancedSubscriptionPlan";
+import { usePremiumState } from "../stores/wallet-premium.store";
 
-interface Plan {
-  id: number;
-  name: string;
-  amount: number;
-}
-
-const plans: Plan[] = [
-  { id: 1, name: '1 Month Plan', amount: 2500 },
-  { id: 2, name: '3 Month Plan', amount: 6000 },
-  { id: 3, name: '6 Month Plan', amount: 12000 },
-  { id: 4, name: '12 Month Plan', amount: 22000 },
-];
-
-const UpgradeContentPremium: React.FC = () => {
-  const API_BASE_URL = `${import.meta.env.VITE_API_URL}/api`;
-  const AUTH_TOKEN =
-    'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjo1MDgxNiwiZW1haWwiOiJ2aXZla0BnbWFpbC5jb20iLCJpYXQiOjE3NDUyNDg2NzUsImV4cCI6MTc3Njc4NDY3NX0.CP2hoyHw7dOjB8A6uIifbdfNsztf0Pt1BSw8pEdM92Q';
-  const USER_ID = 50816;
-  const RAZORPAY_KEY = 'rzp_test_ojNkCSTYuUL3w9';
-
-  const loadRazorpayScript = (): Promise<boolean> => {
-    return new Promise((resolve) => {
-      const script = document.createElement('script');
-      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-      script.onload = () => resolve(true);
-      script.onerror = () => resolve(false);
-      document.body.appendChild(script);
-    });
-  };
-
-  const handlePlanSelect = async (plan: Plan) => {
-    const isLoaded = await loadRazorpayScript();
-    if (!isLoaded) {
-      alert('Failed to load Razorpay SDK.');
-      return;
-    }
-
-    try {
-      // Step 1: Create Razorpay order
-      const orderRes = await fetch(`${API_BASE_URL}/razorpay-order`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: AUTH_TOKEN
-        },
-        body: JSON.stringify({
-          amount: plan.amount,
-          currency: 'INR',
-          user_id: USER_ID
-        })
-      });
-
-      const orderData = await orderRes.json();
-
-      if (!orderData.status) {
-        alert('Order creation failed: ' + orderData.message);
-        return;
-      }
-
-      // Step 2: Configure Razorpay options
-      const options = {
-        key: RAZORPAY_KEY,
-        amount: orderData.data.amount,
-        currency: 'INR',
-        name: 'Your Business Name',
-        description: `Content Premium - ${plan.name}`,
-        order_id: orderData.data.id,
-        handler: async function (response: any) {
-          try {
-            // Step 3: Verify payment
-            const verificationRes = await fetch(`${API_BASE_URL}/razorpay-verification`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                Authorization: AUTH_TOKEN
-              },
-              body: JSON.stringify({
-                transaction_for: 'content_creator_premium',
-                order_id: response.razorpay_order_id,
-                razorpay_payment_id: response.razorpay_payment_id,
-                razorpay_signature: response.razorpay_signature,
-                amount: plan.amount,
-                currency: 'INR',
-                user_id: USER_ID,
-                payment_status: 'success',
-                plan_id: plan.id
-              })
-            });
-
-            const verificationData = await verificationRes.json();
-            if (!verificationData.status) {
-              alert('Payment verification failed: ' + verificationData.message);
-              return;
-            }
-
-            // Step 4: Activate Premium Plan
-            const upgradeRes = await fetch(`${API_BASE_URL}/upgrade-content-premium`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                Authorization: AUTH_TOKEN
-              },
-              body: JSON.stringify({
-                payment_status: 'success',
-                user_id: USER_ID,
-                plan_id: plan.id,
-                order_id: response.razorpay_order_id,
-                payment_id: response.razorpay_payment_id,
-                coupon_code: null,
-                isCron: false
-              })
-            });
-
-            const upgradeData = await upgradeRes.json();
-
-            if (upgradeData.status) {
-              alert('Content Premium plan activated successfully!');
-            } else {
-              alert('Activation failed: ' + upgradeData.message);
-            }
-          } catch (err: any) {
-            console.error('Verification/Upgrade Error:', err);
-            alert('Error processing payment: ' + err.message);
-          }
-        },
-        prefill: {
-          name: 'Test User',
-          email: 'test@example.com',
-          contact: '9999999999'
-        },
-        theme: {
-          color: '#F37254'
-        }
-      };
-
-      const razorpay = new (window as any).Razorpay(options);
-      razorpay.open();
-    } catch (err: any) {
-      console.error('Order Error:', err);
-      alert('Something went wrong: ' + err.message);
-    }
-  };
+const UpgradeContentPremium = () => {
+  const navigate = useNavigate();
+  const premiumState = usePremiumState();
 
   return (
-    <div style={styles.page}>
-      <h1>Choose Your Content Premium Plan</h1>
-      <div style={styles.container}>
-        {plans.map((plan) => (
-          <div key={plan.id} style={styles.card}>
-            <h3>{plan.name}</h3>
-            <p>₹{plan.amount}</p>
-            <button onClick={() => handlePlanSelect(plan)}>Select Plan</button>
+    <div className="pb-20 md:pb-0 bg-background min-h-screen">
+      <div className="bg-gradient-to-r from-adtip-teal to-[#13b799] text-white dark:from-teal-700 dark:to-teal-800">
+        <div className="max-w-screen-md mx-auto p-6">
+          <div className="flex items-center mb-8">
+            <button onClick={() => navigate("/wallet")}>
+              <ArrowLeft className="h-6 w-6" />
+            </button>
+            <h1 className="text-xl font-bold ml-2">
+              {premiumState.isContentCreatorPremium ? "Manage Creator Plan" : "Upgrade to Content Creator"}
+            </h1>
           </div>
-        ))}
+          
+          {premiumState.isContentCreatorPremium && (
+            <div className="text-center mb-4">
+              <p className="text-white/90">
+                Current Plan: {premiumState.contentCreatorPlanName || "Content Creator Premium"}
+              </p>
+              {premiumState.contentCreatorExpiresAt && (
+                <p className="text-white/70 text-sm">
+                  Expires: {new Date(premiumState.contentCreatorExpiresAt).toLocaleDateString()}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="max-w-screen-md mx-auto p-4">
+        <h2 className="text-2xl font-bold mb-2 text-foreground">
+          {premiumState.isContentCreatorPremium ? "Upgrade Your Creator Plan" : "Choose Your Content Creator Plan"}
+        </h2>
+        <p className="text-muted-foreground mb-6">
+          Unlock enhanced content creation tools, higher earnings, and advanced analytics
+        </p>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <EnhancedSubscriptionPlan
+            duration="1 Month"
+            price={2500}
+            planId={1}
+            transactionFor="upgrade_content_premium"
+            upgradeEndpoint="upgrade-content-premium"
+            planType="content_creator"
+            features={[
+              "Enhanced creation tools",
+              "Higher earnings rate",
+              "Basic analytics",
+              "Priority review"
+            ]}
+          />
+          <EnhancedSubscriptionPlan
+            duration="3 Months"
+            price={6000}
+            planId={2}
+            transactionFor="upgrade_content_premium"
+            upgradeEndpoint="upgrade-content-premium"
+            planType="content_creator"
+            features={[
+              "All 1-month features",
+              "20% savings",
+              "Advanced analytics",
+              "Faster withdrawals"
+            ]}
+          />
+          <EnhancedSubscriptionPlan
+            duration="6 Months"
+            price={12000}
+            planId={3}
+            transactionFor="upgrade_content_premium"
+            upgradeEndpoint="upgrade-content-premium"
+            planType="content_creator"
+            isPopular
+            features={[
+              "All 3-month features",
+              "40% savings",
+              "Premium analytics",
+              "Lower platform fees"
+            ]}
+          />
+          <EnhancedSubscriptionPlan
+            duration="12 Months"
+            price={22000}
+            planId={4}
+            transactionFor="upgrade_content_premium"
+            upgradeEndpoint="upgrade-content-premium"
+            planType="content_creator"
+            features={[
+              "All 6-month features",
+              "Maximum savings",
+              "VIP creator support",
+              "Exclusive features"
+            ]}
+          />
+        </div>
+        
+        <div className="text-center">
+          <Button
+            className="teal-button"
+            onClick={() => navigate("/upgrade-premium")}
+          >
+            View Premium Plans
+          </Button>
+        </div>
       </div>
     </div>
   );
-};
-
-const styles: { [key: string]: React.CSSProperties } = {
-  page: {
-    fontFamily: 'Arial, sans-serif',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '40px',
-    backgroundColor: '#f4f4f4',
-    minHeight: '100vh'
-  },
-  container: {
-    display: 'flex',
-    flexWrap: 'wrap',
-    gap: '20px',
-    justifyContent: 'center'
-  },
-  card: {
-    background: '#fff',
-    border: '1px solid #ddd',
-    borderRadius: '8px',
-    padding: '20px',
-    width: '200px',
-    textAlign: 'center' as const,
-    boxShadow: '0 2px 5px rgba(0,0,0,0.1)',
-    cursor: 'pointer'
-  }
 };
 
 export default UpgradeContentPremium;

@@ -140,10 +140,15 @@ class LiveStreamService {
 
       console.log('[LiveStreamService] Successfully joined stream:', response.data);
 
+      // Return the response with token for VideoSDK
       return {
         success: true,
         message: 'Joined stream successfully',
-        data: response.data.data,
+        data: {
+          ...response.data.data,
+          token: response.data.data?.token || response.data.token,
+          meetingId: meetingId,
+        },
       };
     } catch (error: any) {
       console.error('[LiveStreamService] Failed to join stream:', error);
@@ -151,6 +156,60 @@ class LiveStreamService {
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to join stream',
+      };
+    }
+  }
+
+  /**
+   * Get VideoSDK token for joining a stream
+   */
+  static async getStreamToken(meetingId: string, userId: number): Promise<LiveStreamResponse> {
+    try {
+      console.log('[LiveStreamService] Getting stream token:', { meetingId, userId });
+
+      const response = await api.post('/api/live-stream/token', {
+        meeting_id: meetingId,
+        user_id: userId,
+      });
+
+      return {
+        success: true,
+        message: 'Token retrieved successfully',
+        data: {
+          token: response.data.token,
+          meetingId: meetingId,
+        },
+      };
+    } catch (error: any) {
+      console.error('[LiveStreamService] Failed to get token:', error);
+
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Failed to get stream token',
+      };
+    }
+  }
+
+  /**
+   * Validate if a stream is still active
+   */
+  static async validateStream(meetingId: string): Promise<LiveStreamResponse> {
+    try {
+      console.log('[LiveStreamService] Validating stream:', meetingId);
+
+      const response = await api.get(`/api/live-stream/validate/${meetingId}`);
+
+      return {
+        success: true,
+        message: 'Stream validation successful',
+        data: response.data.data,
+      };
+    } catch (error: any) {
+      console.error('[LiveStreamService] Stream validation failed:', error);
+
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Stream not found or inactive',
       };
     }
   }

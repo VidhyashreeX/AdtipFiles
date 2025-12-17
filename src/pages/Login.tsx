@@ -22,15 +22,13 @@ const Login = () => {
       return;
     }
     setIsLoading(true);
-    // Set tempUserId and other required values before redirect
+    
+    // Clear previous session data
     localStorage.removeItem("email");
     localStorage.removeItem("mobile_number");
     localStorage.removeItem("tempUserId");
     localStorage.removeItem("otpCountdown");
-    localStorage.setItem("mobile_number", phoneNumber);
-    localStorage.setItem("tempUserId", "pending");
-    localStorage.setItem("otpCountdown", (Math.floor(Date.now() / 1000) + 30).toString());
-    navigate("/verify-otp");
+    localStorage.removeItem("resendAttempts");
     try {
       // Use the correct API integration for phone OTP
       const response = await login(phoneNumber);
@@ -45,8 +43,12 @@ const Login = () => {
       }
       if (userData && userData.id) {
         localStorage.setItem("tempUserId", userData.id.toString());
+        localStorage.setItem("mobile_number", phoneNumber);
+        localStorage.setItem("otpCountdown", (Math.floor(Date.now() / 1000) + 30).toString());
+        localStorage.setItem("resendAttempts", "0");
       }
       toast.success("OTP sent successfully");
+      navigate("/verify-otp");
     } catch (err: any) {
       // Show backend error message if available
       let errorMsg = err?.response?.data?.message || err.message || "Could not send OTP. Please try again.";

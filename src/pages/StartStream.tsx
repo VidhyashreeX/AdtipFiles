@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import LiveStreamService from '@/services/liveStreamService';
+import { useStreamActions } from '@/stores/livestream.store';
 import { Video, ArrowLeft, IndianRupee, Sparkles, Users, Lock, Unlock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -47,6 +48,7 @@ const StartStream: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { toast } = useToast();
+  const { startStream } = useStreamActions();
 
   const [streamType, setStreamType] = useState<StreamType>('free');
   const [title, setTitle] = useState('');
@@ -71,31 +73,33 @@ const StartStream: React.FC = () => {
     setError(null);
 
     try {
-      const response = await LiveStreamService.startStream(user.id, {
+      const streamConfig = {
         title: title.trim(),
         cost_per_minute: streamType === 'influencer' ? costPerMinute : 0,
         viewer_reward_per_minute: streamType === 'promotional' ? viewerReward : 0,
         is_private: isPrivate,
-      });
+      };
 
-      if (response.success && response.data) {
+      // Use the enhanced store to start stream
+      const meetingId = await startStream(streamConfig, user.id);
+
+      if (meetingId) {
         toast({
           title: 'Stream Started!',
           description: 'Your live stream has been created successfully.',
         });
 
-        // Navigate to streaming screen
+        // Navigate to enhanced streaming screen
         navigate('/live-streaming', {
           state: {
-            meetingId: response.data.meeting_id,
-            token: response.data.token,
+            meetingId,
             isHost: true,
             streamTitle: title,
             streamType,
           },
         });
       } else {
-        setError(response.message || 'Failed to start stream');
+        setError('Failed to start stream');
       }
     } catch (err: any) {
       console.error('[StartStream] Error:', err);

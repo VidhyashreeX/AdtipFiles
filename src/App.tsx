@@ -15,6 +15,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import { AuthModalProvider } from './contexts/AuthModalContext';
 import { LoginModal } from './components/modals/LoginModal';
 import { OTPModal } from './components/modals/OTPModal';
+// import { WalletPremiumProvider } from './components/WalletPremiumProvider';
 
 // Enhanced React Query configuration with proper caching and error handling
 const queryClient = new QueryClient({
@@ -69,25 +70,25 @@ const App = () => {
       <QueryClientProvider client={queryClient}>
         <ThemeProvider>
           <AuthProvider>
-            <AuthModalProvider>
-              <UserProvider>
-                <ShoppingProvider>
-                  <SidebarProvider>
-                    <TooltipProvider>
-                      {isAuthPage ? (
-                        <Outlet />
-                      ) : (
-                        <AppLayout />
-                      )}
-                      <LoginModal />
-                      <OTPModal />
-                      <Toaster />
-                      <Sonner />
-                    </TooltipProvider>
-                  </SidebarProvider>
-                </ShoppingProvider>
-              </UserProvider>
-            </AuthModalProvider>
+              <AuthModalProvider>
+                <UserProvider>
+                  <ShoppingProvider>
+                    <SidebarProvider>
+                      <TooltipProvider>
+                        {isAuthPage ? (
+                          <Outlet />
+                        ) : (
+                          <AppLayout />
+                        )}
+                        <LoginModal />
+                        <OTPModal />
+                        <Toaster />
+                        <Sonner />
+                      </TooltipProvider>
+                    </SidebarProvider>
+                  </ShoppingProvider>
+                </UserProvider>
+              </AuthModalProvider>
           </AuthProvider>
         </ThemeProvider>
       </QueryClientProvider>
